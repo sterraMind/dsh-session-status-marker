@@ -9,6 +9,7 @@ import { describe, it, expect } from './vitest-shim.mjs'
 // Canonical imports are through contracts.ts so they compile without DSH deps.
 import { STATUS_VALUES, STATUS_META, AUTO_REASON_VALUES, MARK_SOURCES, DEFAULT_MAX_NOTE_LENGTH } from '../lib/contracts.js'
 import { ICONS, ICON_PIXEL_SIZE } from '../lib/client/icons.js'
+import { DICTIONARIES, zh } from '../lib/client/locales.js'
 
 describe('i18n consistency', () => {
   it('has a metadata entry for every status value', () => {
@@ -69,5 +70,38 @@ describe('i18n consistency', () => {
 
   it('carries no icon the statuses do not use', () => {
     expect(Object.keys(ICONS).length).toBe(STATUS_VALUES.length)
+  })
+})
+
+describe('locale dictionaries', () => {
+  const shellLanguages = ['zh', 'en', 'ja', 'es', 'fr', 'de', 'ru', 'pt']
+
+  // Regression: only zh/en were registered, so switching the shell to one of
+  // the six other languages it offers left this namespace's copy in English.
+  it('ships a dictionary for every language the shell offers', () => {
+    for (const language of shellLanguages) {
+      expect(DICTIONARIES[language]).toBeDefined()
+    }
+    expect(Object.keys(DICTIONARIES).length).toBe(shellLanguages.length)
+  })
+
+  it('keeps every dictionary key-identical to the canonical zh dictionary', () => {
+    const canonical = Object.keys(zh)
+    for (const [language, dict] of Object.entries(DICTIONARIES)) {
+      expect(Object.keys(dict).sort()).toEqual([...canonical].sort())
+      for (const key of canonical) {
+        expect(typeof dict[key]).toBe('string')
+        expect(dict[key].length).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  it('preserves the substitution placeholders in every dictionary', () => {
+    for (const dict of Object.values(DICTIONARIES)) {
+      expect(dict['hover.auto']).toContain('{status}')
+      expect(dict['hover.auto']).toContain('{reason}')
+      expect(dict['hover.note']).toContain('{note}')
+      expect(dict['hover.manual']).toContain('{status}')
+    }
   })
 })
