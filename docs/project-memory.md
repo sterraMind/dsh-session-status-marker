@@ -51,7 +51,7 @@
 
 - `pnpm run typecheck` → EXIT=0，无输出。
 - `pnpm run build` → EXIT=0，`[session-status-marker:client] built lib/client.js`；`node --check lib/client.js` EXIT=0。
-- `pnpm run test` → EXIT=0，`tests 52 / suites 14 / pass 52 / fail 0 / duration_ms ~313`。
+- `pnpm run test` → EXIT=0，`tests 58 / suites 15 / pass 58 / fail 0 / duration_ms ~246`。
 - 测试分布：inference 16 例（10 规则 + 3 优先序 + 3 过期）、types 7 例、service 14 例、smoke 1 例（`turn/end:interrupted` → `effectiveMark` 与 GET state route 同一行）、i18n 6 例（STATUS_META/tone/schema/defaults + 图标尺寸契约）、theme 4 例（样式只用 `--dsw-*` token、图标盒尺寸、active 格不覆盖 color）。
 - `pnpm pack` → `dsh-session-status-marker-1.0.0.tgz`（39,386 B；r8 的 0.1.0 为 32,600 B）。
 - dev4090 真实集成（2026-11-11）：`dsh plugin add` 装载成功、`--dump-config` 第 1244–1249 行显示行与 config、web 宿主起 3099、三条 route 的 401/400/200 与跨进程冷读、落盘 `storages/session_status_marker/marks/<sid>.json`、boot graph 含本插件 entry、`/plugins/??…&rev=…` 200。全部细节见 `docs/acceptance-and-regression.md` §3。
