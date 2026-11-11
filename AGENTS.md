@@ -61,11 +61,11 @@ tests/*.test.mjs   canonical 断言（node:test + shim），*.test.ts 为薄壳
 
 ## 开发回路与可靠命令
 
-1. `pnpm run typecheck` / `pnpm run build` / `pnpm run test` 三条裸命令已验证 EXIT=0（60 项测试全绿）。前提是 `pnpm-workspace.yaml` 里 `storeDir: ./.pnpm-store` + `verifyDepsBeforeRun: false` 生效。
+1. `pnpm run typecheck` / `pnpm run build` / `pnpm run test` 三条裸命令已验证 EXIT=0（66 项测试全绿）。前提是 `pnpm-workspace.yaml` 里 `storeDir: ./.pnpm-store` + `verifyDepsBeforeRun: false` 生效。
 2. 若 pnpm 全局 store 又报 SQLite 错，退回 `pnpm --config.verify-deps-before-run=false --config.store-dir="<workspace>/.pnpm-store" run <script>`，或直接调 `node_modules/.bin/tsc` / `node scripts/build-client.mjs` / `node --test --test-isolation=none tests/*.test.mjs`。
 3. 安装依赖一律带 `--ignore-scripts --store-dir "<workspace>/.pnpm-store" --node-linker=hoisted`（本机 npm 日志目录 EPERM、pnpm isolated 传递依赖解析不到）。
 4. scratch 本地开发：生成绝对路径 `cordis.yml`，`pnpm dsh web --patch <generated>` → 独立实例端口 **3080**；现有 Web GUI 是 **55101**，不要替换。
-5. 发布：`pnpm pack` 出 tarball（1.0.1 为 39,838 B）→ `dsh plugin --profile <name> add ./dsh-session-status-marker-*.tgz`；或 0.2 世代 `plugin_manager install_bundle`（需 danger-full-access）。
+5. 发布：`pnpm pack` 出 tarball（1.0.2 为 47,148 B）→ `dsh plugin --profile <name> add ./dsh-session-status-marker-*.tgz`；或 0.2 世代 `plugin_manager install_bundle`（需 danger-full-access）。
 6. 运行时自检：`cordis_inspect_query` 查服务/tool/route/slot；`dsh --profile <name> --dump-config` 核 `application: applied`。不要手写 profile 的 `package.json` / `cordis.patch.yml` 绕过验证。
 7. **真实集成测试走 dev4090**（`ssh dev4090`，Windows/PowerShell）：打包版没有 `dsh` shim，用 `DeepSeek Harness.exe` + `ELECTRON_RUN_AS_NODE=1 --expose-internals` 跑 asar 内 `@deepseek-ai/dsh-desktop-host/lib/cli.js`；`DSH_HOME` 指向 `%TEMP%\.drafts\dsh-session-marker\dsh-home` 做隔离。`--from-default-profile web` 会覆盖 profile 且丢掉已装 bundle，之后必须重装；起服务用 `--profile <name> --no-open --port <n>`（`web` 是 profile 名不是子命令，`--web-port` 不存在）。远程命令分隔用 `;` 不用 `&`；诊断脚本先落 .ps1 再 scp 执行，别内联 `$node -e`。
 8. **前端改动必须在真实页面复核**：只跑 typecheck/单测不算验收。改 client 侧要走一遍「`pnpm pack` → scp → 停 3099（按端口找 PID，进程名是 `DeepSeek Harness.exe`）→ `dsh plugin add` → 本地后台作业跑 `ssh dev4090 "cmd /c start-web2.cmd"` → 刷新页面 → 读 `getBoundingClientRect()` 与截图」。远程 Edge 必须带 `--blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4`，否则 `sidebar.session.row.hover` 不展开。CDP 对「切换开关」型按钮会重复投递 click，这类按钮用页面内单次 `element.click()`。
@@ -78,7 +78,7 @@ tests/*.test.mjs   canonical 断言（node:test + shim），*.test.ts 为薄壳
 - `Waterfall listeners MUST call next()`（`framework/events.md:23-106`）。
 - `Switch on discriminant tags`（closed union 用 assertNever，merge-extensible 走 documented default；`inferStatus` 的 default 返回 `null`）。
 - `Misconfiguration fails loud`；Config 字段用 `z` 的 `.required()`，**不硬编码默认值**（`config.md:76-94`）。
-- Client 组件所有文案走 typed locale dictionary + `t`（`src/client/locales.ts` 的 zh/en key-identical）；样式只用 `--dsw-*` tokens，零字面颜色。
+- Client 组件所有文案走 typed locale dictionary + `t`（`src/client/locales.ts` 的 8 种语言 key-identical，新增语言必须补齐全部键，否则按 `FALLBACK_LOCALE='en'` 回退成英文）；样式只用 `--dsw-*` tokens，零字面颜色。
 - `window.__ModuleLoader__.load({id, factory})` 的 Browser bundle 里，裸 `require()` 只能取 `packages/client/web/src/platform.ts:8-15` 的 `PLATFORM_MODULES` 白名单。
 
 ## 已知环境约束（本机实测）
@@ -94,7 +94,16 @@ tests/*.test.mjs   canonical 断言（node:test + shim），*.test.ts 为薄壳
 ## 任务进度看板
 
 Phase 1 Core 已完成：Host + Client 源码、`lib/client.js`、全套 docs 修订、AGENTS/README/项目记忆同步。
-Phase 2 已完成：8 个官方风格 inline SVG 图标 + locale 一致性断言 + 样式契约断言；测试合计 60 项全绿（含 `tests/marks.test.mjs` 的共享读取器 5 例、`tests/theme.test.mjs` 的浮层配色 2 例）。
+Phase 2 已完成：8 个官方风格 inline SVG 图标 + locale 一致性断言 + 样式契约断言；测试合计 66 项全绿（含 `tests/marks.test.mjs` 的共享读取器 5 例、`tests/theme.test.mjs` 的浮层配色 9 例、`tests/i18n.test.mjs` 的 8 语言字典 3 例）。
 Phase 3 部分完成（真实 GUI 前端验收，2026-11-11）：侧栏行尾标记、hover card 8 格选择、状态改写与清除、连续三次重启后标记仍在、模型通过 `set_session_status` 自主标记，全部在 dev4090 的真实页面上用 CDP 复核并截图。这一轮修掉三个只在真实页面上暴露的缺陷：exact route 未注册（`ctx.get('connection')` 时机问题 → 改 `ctx.inject`）、图标查表键与 glyph id 不一致、未标记会话没有可点的状态格 + 图标 0×0 + active 格前景色吃掉图标。
 Phase 4 已完成（1.0.0）：`src/client/marks.ts` 全页共享列表定时读取（`Config.refreshIntervalMs` 默认 2000ms）+ 本地写透，标记写入后无需刷新页面；客户端订阅统一走 `useMark()`。
-未完成：`cordis_inspect_query` 自检（属 Creator mode 能力）；TUI 端 UI 接入（无 slot 体系）；fork 继承策略。桌面端走同一套 Web UI，可直接用。详见 `docs/implementation-plan.md` §2 与 `docs/acceptance-and-regression.md` §3.4、§3.6。
+Phase 4.1 已完成（1.0.1）：悬停卡文字与按钮改用 `--dsw-static-*` 静态色板。DSH 官方悬停浮层在浅色和深色主题下都用同一个固定深色底，主题别名在浅色主题下会解析成接近黑色，文字因此看不清。徽标仍用 `--dsw-alias-state-*` 主题别名跟随主题切换。
+Phase 5 已完成（1.0.2，用户 2026-11-12 反馈）：① 复制误触 — 内容区根节点接管 `onClick`/`onKeyDown` 并 `stopPropagation()`，不再冒泡到官方 HoverCard 的复制处理器（`packages/client/ui-primitives/src/HoverCard.tsx:293-303` 在 `onClick` 复制、`:304` 在 Enter/Space 也复制）；② 鼠标挪开点不到 — 内容区加透明命中区 `.root::before` 跨过锚点到浮层的 8px 间隙，指针经过它冒泡到宿主 `onPointerEnter` 取消 200ms 宽限关闭（`pointer-grace.ts:8` + `HoverCard.tsx:326-336`）；③ 语言不同步 — `src/client/locales.ts` 补齐 Shell 全部 8 种语言并以 `DICTIONARIES` 一次注册（此前只有 zh/en，切到其余 6 种按 `FALLBACK_LOCALE='en'` 回退）；④ 主题不同步 — 卡片表面是官方固定深色，文字与状态色保持静态，改由交互面响应主题（悬停/选中格与按钮悬停底色用随主题变化的 `--dsw-alias-tooltip-key-bg`）；⑤ 图标内边距 — 格子 22px `border-box` + 2px 内边距 + 2px 间距 = 190px，稳定单行。根容器自身还有 6px/8px 内边距，官方卡 212px 内容宽扣掉后可用约 196px，dev4090 真实页面复核发现 197px（3px 间距）会让第八格换行，故收窄到 2px。真实页面已复核八格同一行、点按钮不再误触复制。测试 66 项全绿。调研见 `docs/research/08-hover-interaction.md`。
+未完成：`cordis_inspect_query` 自检（属 Creator mode 能力）；TUI 端 UI 接入（无 slot 体系）；fork 继承策略；英文界面真实页面复核；不依赖悬停的触屏入口（官方通道 `sidebar.workspaces.session.menu.item` + `row.action`，见 `contract/slots.ts:176-212`）。桌面端走同一套 Web UI，可直接用。详见 `docs/implementation-plan.md` §2 与 `docs/acceptance-and-regression.md` §3.4、§3.6。
+
+## 悬停卡交互约束（Phase 5，勿回退）
+
+- 内容区**根节点**必须接管 `onClick` 与 `onKeyDown` 并 `stopPropagation()`（当前实现是 `HoverCard.tsx` 里的 `guard` 对象 spread 到每个根 div）。官方 HoverCard 把整张卡注册成 `role="button"` 并在 `onClick` 与 Enter/Space `onKeyDown` 里复制会话标题（`packages/client/ui-primitives/src/HoverCard.tsx:290-304`），复制后整卡内容被替换成提示文字，所以只给单个 `button` 加 stop 不够，点标签/备注同样会误触。
+- 官方 `onPointerDownCapture` 与 `onClickCapture` 由卡片持有（`HoverCard.tsx:343-344`），组件不能靠 `onPointerEnter` 维持打开；跨间隙保持打开靠 `.root::before` 命中区冒泡到宿主 `onPointerEnter` 触发 `cancelClose()`。不要删掉这条规则。
+- 悬停卡文字与八个状态图标必须用静态色板，不能改回主题别名（官方固定深色浮层 + 浅色主题别名解析成近黑 = 不可读，1.0.0 已踩过）。主题响应只能放在交互面的**背景**上（`--dsw-alias-tooltip-key-bg`，随主题变化且坐在静态色内容之下）。
+- compact 悬停卡宿主不注册 Escape（`HoverCard.tsx:156-167` 只为 preview/inline 注册），WCAG 1.4.13 的 Dismissible 在这个分支不可达，只能做到 Hoverable 与 Persistent，不要在文档里声称已满足 Dismissible。
