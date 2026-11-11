@@ -1,6 +1,6 @@
 # Host 端插件可用扩展点调研
 
-> **文档版本**：v1.0.0 · 2026-11-11（对应插件 1.0.0）
+> **文档版本**：v1.0.1 · 2026-11-11（对应插件 1.0.1）
 
 > **V2 修订（重要）**：本文记录的是官方 API 的客观存在性，但「结论速览」里把 `SessionEventMap` declaration merging / `ignorable?: true` / `PluginRecordMap` 列为本插件**可直接用**的扩展点是 V1 误判。深入读持久化源码后确认：**仓库外（out-of-tree）bundle 没有任何合规途径写出带 `ignorable: true` 的自定义会话事件**——`Session.append` 无该参数（`packages/core/session/src/index.ts:806-837`），`appendPluginRecord` 被明禁（`packages/core/session/README.md:70-74`），而读路径对未知 required 事件 fail-closed（`packages/session/session-persistence/src/storage-contract.ts:75-80`）。本插件最终实现改走 `ctx.storageDomain` + `ctx.connection.fetch` + `ctx.slots.inject`，详见 `docs/architecture.md` §3。下面 §5/§6 的事实描述保留作为「为什么不能用」的证据，但不再作为选型建议。
 

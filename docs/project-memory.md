@@ -1,6 +1,6 @@
 # 项目记忆 · dsh-session-status-marker
 
-> **文档版本**：v1.0.0 · 2026-11-11（对应插件 1.0.0）
+> **文档版本**：v1.0.1 · 2026-11-11（对应插件 1.0.1）
 
 > 本文件是「项目记忆」的落盘载体，供后续会话 / Agent 续接时读取。记录决策沿革、硬约束、已验证事实与教训；不放临时日志。与 `AGENTS.md`（standing orders）、`docs/architecture.md`（当前架构）、`docs/implementation-plan.md`（执行顺序）、`docs/acceptance-and-regression.md`（验收证据）分工明确。
 
@@ -51,9 +51,9 @@
 
 - `pnpm run typecheck` → EXIT=0，无输出。
 - `pnpm run build` → EXIT=0，`[session-status-marker:client] built lib/client.js`；`node --check lib/client.js` EXIT=0。
-- `pnpm run test` → EXIT=0，`tests 58 / suites 15 / pass 58 / fail 0 / duration_ms ~246`。
+- `pnpm run test` → EXIT=0，`tests 60 / suites 15 / pass 60 / fail 0 / duration_ms ~281`。
 - 测试分布：inference 16 例（10 规则 + 3 优先序 + 3 过期）、types 7 例、service 14 例、smoke 1 例（`turn/end:interrupted` → `effectiveMark` 与 GET state route 同一行）、i18n 6 例（STATUS_META/tone/schema/defaults + 图标尺寸契约）、theme 4 例（样式只用 `--dsw-*` token、图标盒尺寸、active 格不覆盖 color）。
-- `pnpm pack` → `dsh-session-status-marker-1.0.0.tgz`（39,387 B；r8 的 0.1.0 为 32,600 B）。
+- `pnpm pack` → `dsh-session-status-marker-1.0.1.tgz`（39,838 B；1.0.0 为 39,387 B，r8 的 0.1.0 为 32,600 B）。
 - dev4090 真实集成（2026-11-11）：`dsh plugin add` 装载成功、`--dump-config` 第 1244–1249 行显示行与 config、web 宿主起 3099、三条 route 的 401/400/200 与跨进程冷读、落盘 `storages/session_status_marker/marks/<sid>.json`、boot graph 含本插件 entry、`/plugins/??…&rev=…` 200。全部细节见 `docs/acceptance-and-regression.md` §3。
 - dev4090 前端视觉验收（2026-11-11，真实 GUI + CDP 驱动）：侧栏行尾标记渲染 16×16 SVG 且颜色取 `--dsw-alias-state-*-primary`；未标记会话经 hover card 的 8 格可手动标记；已标记会话可改写状态、可清除；**连续三次杀掉 3099 进程重启后标记仍在**；模型通过 `set_session_status` 工具自主标记（新增 `{status:"done",source:"manual",note:"ai-self-mark"}`）。截图见 `.drafts/shots/`。
 - fake Cordis ctx 必须有 `reflect: { provide: () => {} }`（`cordis/lib/index.js:1854` 的 `Service` 构造器会调它）与可调用的 `inject(deps, callback)`（路由注册改用 `ctx.inject(['connection'], …)` 之后）；`defineTool.execute` 会先校验参数，`subjectId: null` 被拒，测试须省略该字段。
@@ -68,7 +68,7 @@
 - **测试机 dev4090**（`ssh dev4090`，Windows / PowerShell，`测试主机地址`，密钥 `本机 SSH 密钥（走 SSH 配置，不在文档中记录）`）：scoop `versions/deepseek-harness-pre` 0.2.2-rc.1，**无 `dsh` shim**；CLI 需用 `DeepSeek Harness.exe` 以 `ELECTRON_RUN_AS_NODE=1 --expose-internals` 跑 asar 内 `dsh-desktop-host/lib/cli.js`。测试 home 固定为 `%TEMP%\.drafts\dsh-session-marker\dsh-home`，不碰真实配置。远程 `npm view @deepseek-ai/dsh` 可达（返回 0.2.2-rc.1），本机 npm `_cacache` 报 EPERM，查 registry 走远程。
 - **远程 GUI 自动化链路**：dev4090 上 Edge 常驻 `--remote-debugging-port=9333`，本机 `ssh -L 9333:127.0.0.1:9333 dev4090` 转发；本机 `.drafts/cdp.mjs` 提供 `targets|eval|evalfile|shot|mouse|nav|text|key|desktop` 子命令，`shot` 支持 `--clip=x,y,w,h,scale` 放大取证。JS 探针放 `.drafts/js/`。
 - **远程模型接入**：本机 magpie 在 `127.0.0.1:3425`；dev4090 侧用反向隧道 `ssh -N -R 13425:127.0.0.1:3425 dev4090` 映射到远程 loopback。smoke profile 的 `cordis.patch.yml` 里加 `llm-pi-ai`（`baseURL: http://127.0.0.1:13425/v1`、`apiKeyEnv: MAGPIE_API_KEY`、`api: openai-completions`、`compat.supportsDeveloperRole=false`、模型 `group/free`）与 `agent-default-model` 即可让远程会话跑起来。远程还须绕开系统代理（`127.0.0.1:7897` 会 502）。
-- **部署回路**（改一次客户端要走的全过程）：`pnpm run typecheck` → `pnpm pack` → 复制成 `.drafts/dsh-session-status-marker-1.0.0-rN.tgz` → `scp` 到远程 → `kill-port.ps1 -Port 3099` 停服务 → `dsh plugin --profile smoke add <tgz>` → 用**本地后台作业**跑 `ssh dev4090 "cmd /c start-web2.cmd"` 起服务（普通 ssh 前台命令会随会话退出而杀死服务）→ 刷新页面 → 读几何/截图复核。
+- **部署回路**（改一次客户端要走的全过程）：`pnpm run typecheck` → `pnpm pack` → 复制成 `.drafts/dsh-session-status-marker-<version>-rN.tgz` → `scp` 到远程 → `kill-port.ps1 -Port 3099` 停服务 → `dsh plugin --profile smoke add <tgz>` → 用**本地后台作业**跑 `ssh dev4090 "cmd /c start-web2.cmd"` 起服务（普通 ssh 前台命令会随会话退出而杀死服务）→ 刷新页面 → 读几何/截图复核。
 
 ## 6. 教训（避免重犯）
 
@@ -87,11 +87,15 @@
 13. **无头浏览器 hover 能力要显式开启**：无头 Edge 上报 `(hover: none)`，DSH 按触屏处理导致 `sidebar.session.row.hover` 永不展开；`Emulation.setEmulatedMedia` 覆盖不了，必须用 Edge 启动参数 `--blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4`。
 14. **CDP `Input.dispatchMouseEvent` 的一次按压在该页面上会被 React 收到两次 click**：对「切换开关」型按钮会开了又关，表现为点了没反应。判断这类按钮请用页面内单次 `element.click()`，或改读 `aria-expanded` 区分。这是测试工具偏差，不是产品缺陷。
 15. **杀掉 web 服务必须按端口找 PID**：Electron 版进程名是 `DeepSeek Harness.exe`，`taskkill /IM node.exe` 无效；用 `Get-NetTCPConnection -LocalPort 3099 -State Listen` 拿 PID 再 `Stop-Process`。
+16. **浮层的底色不一定跟随主题**：DSH 的悬停浮层在两个主题下都固定深色（`ui-primitives/src/HoverCard.module.css:9-19`、`ui-workspace/src/client/rows/Rows.module.css:410-444`）。浮层里的文字若用 `--dsw-alias-label-primary` 这类随主题变化的别名，浅色主题下会变成近黑色，落在深色底上读不出来。浮层内容应改用静态色板（`--dsw-static-*`），只有放在主题表面上的元素（侧栏徽标）才跟随主题别名。
+17. **`Emulation.setEmulatedMedia` 是会话级设置**：用 `theme` 与 `shot` 两条独立命令分别设置与截图，截图会回到浅色。要一次性完成「设置媒体特性 → 悬停 → 截图」，必须在同一个 CDP 连接里做（`.drafts/dark-shot.mjs`）。
+18. **tsc 在受限内存下会 `Zone Allocation failed`**：默认堆不够时改用 `node --max-old-space-size=4096 node_modules/typescript/bin/tsc -p tsconfig.json`；pwsh 自身偶尔报 `Failed to create CoreCLR, HRESULT: 0x8007000E`，重开命令或改用 node 直接执行即可。
 
 ## 7. 仍开放的事项
 
 - Phase 2（已完成）：8 个官方风格 inline SVG 图标 + `currentColor` 跟随主题；locale 一致性断言；状态切换用 hover card 状态网格。
 - Phase 4（1.0.0 已完成）：Host→Client 变更可见性用「全页共享列表定时读取 + 本地写透」（`src/client/marks.ts`，`Config.refreshIntervalMs` 默认 2000ms）实现，标记后无需刷新页面。
+- 1.0.1（已完成）：修正悬停浮层配色——浮层固定深色，内容改用 `--dsw-static-*` 静态色板，`StatusMeta` 新增 `hoverTone`；浅色与深色主题下均实测可读。
 - 仍开放：fork 继承策略；`cordis_inspect_query` 运行时自检（Creator mode 能力）；TUI 端 UI 接入；GUI 回归 `test:gui` / `DSH_SNAPSHOT=replay test:web`。
 - Phase 4（已完成）：tarball 内容、profile 装载、`--dump-config`、跨进程持久化、client bundle 组合与投递、前端视觉与交互（含 AI 自主标记）都在 dev4090 验过。**仍未执行**：`cordis_inspect_query` 运行时自检——该工具属 Creator mode 能力，测试 home 里没有对应开关；替代证据是真实页面对三条 route 的直接调用（`docs/acceptance-and-regression.md` §3.4）。
 - 桌面端 / TUI 端 UI 接入：Host service 与 route 已通用（headless 与 web profile 都能装载），但 `sidebar.session.row.trailing` / `.hover` 是 Web client 的 slot，桌面端走同一套 Web UI（Electron 窗口内是同一个 web 面，可用）；**TUI 端没有 slot 体系，标记只能由 AI 工具写、按文本呈现**，需另做接入。

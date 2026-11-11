@@ -56,15 +56,16 @@ tests/*.test.mjs   canonical 断言（node:test + shim），*.test.ts 为薄壳
 | Client 构建 | TypeScript compiler API 进程内 `transpileModule` | 绕开 Windows 沙箱 `spawn EPERM` |
 | 测试 | `node --test --test-isolation=none` + 自建 Vitest 风格 shim | Vitest/Vite 配置加载同样触发 esbuild spawn |
 | 前端验收 | CDP（`.drafts/cdp.mjs`）+ 真实 GUI 几何/截图断言 | 只看 DOM 字符串会漏掉 0×0 布局缺陷 |
+| 浮层配色 | 悬停卡用 `--dsw-static-*` 静态色板，徽标用主题别名 | 官方悬停浮层两个主题都固定深色（`ui-workspace/src/client/rows/Rows.module.css:410-444`） |
 | Rust | 不引入 | 见 `docs/research/05-rust-feasibility.md` |
 
 ## 开发回路与可靠命令
 
-1. `pnpm run typecheck` / `pnpm run build` / `pnpm run test` 三条裸命令已验证 EXIT=0（58 项测试全绿）。前提是 `pnpm-workspace.yaml` 里 `storeDir: ./.pnpm-store` + `verifyDepsBeforeRun: false` 生效。
+1. `pnpm run typecheck` / `pnpm run build` / `pnpm run test` 三条裸命令已验证 EXIT=0（60 项测试全绿）。前提是 `pnpm-workspace.yaml` 里 `storeDir: ./.pnpm-store` + `verifyDepsBeforeRun: false` 生效。
 2. 若 pnpm 全局 store 又报 SQLite 错，退回 `pnpm --config.verify-deps-before-run=false --config.store-dir="<workspace>/.pnpm-store" run <script>`，或直接调 `node_modules/.bin/tsc` / `node scripts/build-client.mjs` / `node --test --test-isolation=none tests/*.test.mjs`。
 3. 安装依赖一律带 `--ignore-scripts --store-dir "<workspace>/.pnpm-store" --node-linker=hoisted`（本机 npm 日志目录 EPERM、pnpm isolated 传递依赖解析不到）。
 4. scratch 本地开发：生成绝对路径 `cordis.yml`，`pnpm dsh web --patch <generated>` → 独立实例端口 **3080**；现有 Web GUI 是 **55101**，不要替换。
-5. 发布：`pnpm pack` 出 tarball（1.0.0 为 39,387 B）→ `dsh plugin --profile <name> add ./dsh-session-status-marker-*.tgz`；或 0.2 世代 `plugin_manager install_bundle`（需 danger-full-access）。
+5. 发布：`pnpm pack` 出 tarball（1.0.1 为 39,838 B）→ `dsh plugin --profile <name> add ./dsh-session-status-marker-*.tgz`；或 0.2 世代 `plugin_manager install_bundle`（需 danger-full-access）。
 6. 运行时自检：`cordis_inspect_query` 查服务/tool/route/slot；`dsh --profile <name> --dump-config` 核 `application: applied`。不要手写 profile 的 `package.json` / `cordis.patch.yml` 绕过验证。
 7. **真实集成测试走 dev4090**（`ssh dev4090`，Windows/PowerShell）：打包版没有 `dsh` shim，用 `DeepSeek Harness.exe` + `ELECTRON_RUN_AS_NODE=1 --expose-internals` 跑 asar 内 `@deepseek-ai/dsh-desktop-host/lib/cli.js`；`DSH_HOME` 指向 `%TEMP%\.drafts\dsh-session-marker\dsh-home` 做隔离。`--from-default-profile web` 会覆盖 profile 且丢掉已装 bundle，之后必须重装；起服务用 `--profile <name> --no-open --port <n>`（`web` 是 profile 名不是子命令，`--web-port` 不存在）。远程命令分隔用 `;` 不用 `&`；诊断脚本先落 .ps1 再 scp 执行，别内联 `$node -e`。
 8. **前端改动必须在真实页面复核**：只跑 typecheck/单测不算验收。改 client 侧要走一遍「`pnpm pack` → scp → 停 3099（按端口找 PID，进程名是 `DeepSeek Harness.exe`）→ `dsh plugin add` → 本地后台作业跑 `ssh dev4090 "cmd /c start-web2.cmd"` → 刷新页面 → 读 `getBoundingClientRect()` 与截图」。远程 Edge 必须带 `--blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4`，否则 `sidebar.session.row.hover` 不展开。CDP 对「切换开关」型按钮会重复投递 click，这类按钮用页面内单次 `element.click()`。
@@ -93,7 +94,7 @@ tests/*.test.mjs   canonical 断言（node:test + shim），*.test.ts 为薄壳
 ## 任务进度看板
 
 Phase 1 Core 已完成：Host + Client 源码、`lib/client.js`、全套 docs 修订、AGENTS/README/项目记忆同步。
-Phase 2 已完成：8 个官方风格 inline SVG 图标 + locale 一致性断言 + 样式契约断言；测试合计 58 项全绿（含 `tests/marks.test.mjs` 的共享读取器 5 例）。
+Phase 2 已完成：8 个官方风格 inline SVG 图标 + locale 一致性断言 + 样式契约断言；测试合计 60 项全绿（含 `tests/marks.test.mjs` 的共享读取器 5 例、`tests/theme.test.mjs` 的浮层配色 2 例）。
 Phase 3 部分完成（真实 GUI 前端验收，2026-11-11）：侧栏行尾标记、hover card 8 格选择、状态改写与清除、连续三次重启后标记仍在、模型通过 `set_session_status` 自主标记，全部在 dev4090 的真实页面上用 CDP 复核并截图。这一轮修掉三个只在真实页面上暴露的缺陷：exact route 未注册（`ctx.get('connection')` 时机问题 → 改 `ctx.inject`）、图标查表键与 glyph id 不一致、未标记会话没有可点的状态格 + 图标 0×0 + active 格前景色吃掉图标。
 Phase 4 已完成（1.0.0）：`src/client/marks.ts` 全页共享列表定时读取（`Config.refreshIntervalMs` 默认 2000ms）+ 本地写透，标记写入后无需刷新页面；客户端订阅统一走 `useMark()`。
 未完成：`cordis_inspect_query` 自检（属 Creator mode 能力）；TUI 端 UI 接入（无 slot 体系）；fork 继承策略。桌面端走同一套 Web UI，可直接用。详见 `docs/implementation-plan.md` §2 与 `docs/acceptance-and-regression.md` §3.4、§3.6。

@@ -75,7 +75,9 @@ docs/             architecture / research 01..07 / 规划与验收
 
 ## 当前状态与已知限制
 
-Phase 4 已完成（1.0.0，真实 GUI 前端验收）：58 项测试全绿；标记写入后无需刷新页面即可在侧栏看到（全页共享的列表定时读取 + 本地写透）；在 dev4090 的真实 DSH 进程与真实页面上验证了 tarball 装载、`--dump-config` 生效、三条 route、跨进程持久化、侧栏标记、hover card 选择状态、改写与清除、连续三次重启后标记仍在、模型通过 `set_session_status` 自主标记。截图与命令见 [验收与回归](./docs/acceptance-and-regression.md) §3.4。
+Phase 4 已完成（1.0.1，真实 GUI 前端验收）：60 项测试全绿；标记写入后无需刷新页面即可在侧栏看到（全页共享的列表定时读取 + 本地写透）；在 dev4090 的真实 DSH 进程与真实页面上验证了 tarball 装载、`--dump-config` 生效、三条 route、跨进程持久化、侧栏标记、hover card 选择状态、改写与清除、连续三次重启后标记仍在、模型通过 `set_session_status` 自主标记。截图与命令见 [验收与回归](./docs/acceptance-and-regression.md) §3.4。
+
+1.0.1 修掉一个只在浅色主题下暴露的配色缺陷：DSH 的悬停浮层在两个主题下都固定使用深色底，而 1.0.0 的悬停卡用随主题变化的颜色别名取色，浅色主题下文字与按钮几乎看不见。现在浮层内容改用固定深色底可用的静态色板，侧栏徽标仍跟随主题；浅色与深色两种主题都在真实页面上复核并截图（见 §3.7）。
 
 已知限制：浏览器侧用轮询（`refreshIntervalMs`，默认 2000ms）接收外部变更，不是服务端推送；`cordis_inspect_query` 运行时自检属 Creator mode 能力，测试环境未执行；TUI 端没有 slot 体系，标记只能由 AI 工具写入并以文本呈现，UI 接入待做；桌面端与 Web 端共用同一套 slot UI。
 
