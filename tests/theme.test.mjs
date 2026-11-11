@@ -8,6 +8,7 @@
 
 import { readFileSync } from 'node:fs'
 import { describe, it, expect } from './vitest-shim.mjs'
+import { STATUS_META, STATUS_VALUES } from '../lib/contracts.js'
 
 const BADGE_CSS = readFileSync(new URL('../src/client/badge.module.css', import.meta.url), 'utf8')
 const HOVER_CSS = readFileSync(new URL('../src/client/hover.module.css', import.meta.url), 'utf8')
@@ -49,5 +50,21 @@ describe('stylesheet contract', () => {
     const badge = block(BADGE_CSS, '\\.badge')
     expect(badge).toMatch(/width:\s*16px/)
     expect(badge).toMatch(/height:\s*16px/)
+  })
+
+  // Regression: the hover slot renders inside DSH's own hover card, whose
+  // surface is a fixed dark color in both themes. Theme aliases resolve to
+  // near-black in the light theme, so the buttons and the label were readable
+  // on paper and invisible on screen.
+  it('keeps hover card text on the static palette, not theme aliases', () => {
+    expect(HOVER_CSS).not.toMatch(/--dsw-alias-label-primary/)
+    expect(HOVER_CSS).not.toMatch(/--dsw-alias-interactive-bg-hover/)
+    expect(HOVER_CSS).toMatch(/--dsw-static-neutral-00/)
+  })
+
+  it('gives every status a hover color from the static palette', () => {
+    for (const status of STATUS_VALUES) {
+      expect(STATUS_META[status].hoverTone).toMatch(/^var\(--dsw-static-[a-z0-9-]+\)$/)
+    }
   })
 })

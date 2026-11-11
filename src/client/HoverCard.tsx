@@ -59,7 +59,7 @@ export function SessionStatusHover({ sessionId, t }: HoverProps) {
   // change button left brand-new sessions with no way to be marked manually.
   const showGrid = picking || mark === null
   return (
-    <div className={css.root} style={meta ? { color: meta.tone } : undefined} data-mark={mark ? 'present' : 'absent'}>
+    <div className={css.root} data-mark={mark ? 'present' : 'absent'}>
       <div className={css.label}>
         {mark === null
           ? t('hover.empty')
@@ -82,7 +82,7 @@ export function SessionStatusHover({ sessionId, t }: HoverProps) {
                 key={s}
                 className={[css.cell, active && css.active].filter(Boolean).join(' ')}
                 title={t(m.labelKey)}
-                style={{ color: m.tone }}
+                style={{ color: m.hoverTone }}
                 onClick={() => { setPicking(false); void handleSet(s, null) }}
               >
                 <span className={css.iconCell} dangerouslySetInnerHTML={{ __html: ICONS[m.icon] ?? '' }} />
