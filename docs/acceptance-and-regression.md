@@ -1,6 +1,6 @@
 # Acceptance & Regression
 
-> **文档版本**：v1.0.0 · 2026-11-11（对应插件 1.0.0）
+> **文档版本**：v1.0.1 · 2026-11-11（对应插件 1.0.1）
 
 > 记录验收标准、已通过证据、待执行集成 smoke 与回归清单。
 > 对应实现进度见 `docs/implementation-plan.md` §2，风险优先级见 `docs/feasibility-and-risks.md`。
@@ -15,9 +15,9 @@
 | 纯推理测试 | `node --test --test-isolation=none tests/inference.test.mjs` | 16 项全绿 |
 | Schema 契约测试 | `tests/types.test.mjs` | 7 项全绿 |
 | Service 集成测试 | `tests/service.test.mjs` | 14 项全绿 |
-| i18n / 图标 / 样式契约 | `tests/i18n.test.mjs`、`tests/theme.test.mjs` | 12 项全绿 |
-| **合计** | `pnpm run test` | `tests 58 / suites 15 / pass 58 / fail 0 / duration_ms ~246ms` |
-| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.0.0.tgz`（39,387 B），含 `cordis.patch.yml`、`locale/en.json`、`icon.svg`、`lib/`、`package.json`、`README.md` |
+| i18n / 图标 / 样式契约 | `tests/i18n.test.mjs`、`tests/theme.test.mjs` | 14 项全绿 |
+| **合计** | `pnpm run test` | `tests 60 / suites 15 / pass 60 / fail 0 / duration_ms ~281ms` |
+| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.0.1.tgz`（39,838 B），含 `cordis.patch.yml`、`locale/en.json`、`icon.svg`、`lib/`、`package.json`、`README.md` |
 | 真实装载 | `dsh plugin --profile smoke add <tgz>`（dev4090） | profile 初始化成功并安装插件，详见 §3 |
 | **前端视觉与交互** | 真实 GUI 上操作（dev4090 + CDP） | sidebar 行尾标记、hover card、状态改写/清除、跨进程持久化全部实测通过，见 §3.4 与 §4 |
 
@@ -89,7 +89,7 @@ set DSH_DESKTOP_NODE_EXECUTABLE=<...>\DeepSeek Harness.exe
 | 清除标记 | hover 有标记的行 → 点「清除」 | `…list` 中该会话消失，`…state` 返回 `{"mark":null}`，行尾 SVG 消失 |
 | 跨进程持久化 | 杀掉 3099 进程 → 重新 `dsh --profile smoke --no-open --port 3099` → 刷新页面 | 重启后行尾标记仍渲染原状态下标，未丢数据（连续三次重启复验） |
 | AI 自主标记 | 新建会话 → 提示 `请调用 set_session_status 工具，把当前会话标记为 completed，备注写 ai-self-mark，然后只回复 DONE` | 模型确实调用工具，`…list` 新增 `{status:"done",source:"manual",note:"ai-self-mark"}`；侧栏出现对应标记 |
-| 主题同步 | 同一页面读取 token 计算值 | 图标颜色来自 `--dsw-alias-state-*-primary`，未出现字面色值；样式契约测试禁止 CSS 里出现 hex/rgb |
+| 主题同步 | 同一页面分别用浅色与深色 `prefers-color-scheme` 读取徽标颜色 | 浅色下为 500/600 级、深色下切到 400 级（done `rgb(167,139,250)`、todo `rgb(122,170,255)`），尺寸始终 16×16，见 §3.7 |
 
 截图（随会话产出，路径为工作区相对路径）：`.drafts/shots/acceptance-sidebar.png`（侧栏标记）、`.drafts/shots/hover-card-full.png`（hover card 全景）、`.drafts/shots/hover-card-picker.png`（8 格放大）、`.drafts/shots/badge-zoom.png`（标记放大）。
 
@@ -121,6 +121,22 @@ set DSH_DESKTOP_NODE_EXECUTABLE=<...>\DeepSeek Harness.exe
 
 截图：`.drafts/shots/v1-sidebar.png`（行尾标记）、`.drafts/shots/v1-picker.png`、`.drafts/shots/v1-picker-zoom.png`（8 格选择器放大，同一行内显示）。
 
+### 3.7 主题同步与悬停浮层配色（1.0.1）
+
+DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-repo/packages/client/ui-primitives/src/HoverCard.module.css:9-19` 的 `--dsw-hovercard-bg`，以及 `.research/dsh-repo/packages/client/ui-workspace/src/client/rows/Rows.module.css:410-444` 的说明「dark surface, fixed colors both themes」）。1.0.0 的悬停卡用 `--dsw-alias-label-primary` 这类随主题变化的别名取色，浅色主题下解析成接近黑色，落在深色浮层上几乎不可读。1.0.1 把浮层文字与格子颜色改为固定深色底可用的静态色板（`--dsw-static-neutral-00`、`--dsw-static-neutral-bluish-300`，以及每个状态各自的 `--dsw-static-*-400`），侧栏徽标仍用主题别名，因此徽标继续跟随主题。
+
+| 检查项 | 操作 | 实测证据 |
+|---|---|---|
+| 浅色主题徽标 | 浅色页面读行尾标记 | done `title="已完成"`、todo `title="待办"`，16×16，颜色为主题 500/600 级别名 |
+| 浅色主题悬停卡 | hover 有标记的行，读文字与按钮计算样式 | 标题与「手动标记」为 `rgb(255,255,255)`，按钮为 `rgb(207,211,214)`，边框 `color(srgb 1 1 1 / 0.24)`，浮层底 `rgb(44,44,46)`；8 格图标颜色分别为蓝/紫/红/琥珀/蓝/绿/浅灰/绿 |
+| 深色主题徽标 | `Emulation.setEmulatedMedia` 设 `prefers-color-scheme: dark` 后读同一页面 | `color-scheme: dark`、body `rgb(21,21,23)`，徽标切到 400 级（done `rgb(167,139,250)`、todo `rgb(122,170,255)`），尺寸不变 |
+| 深色主题悬停卡 | 同一会话内 hover 后读样式并截图 | 标题白、按钮 `rgb(207,211,214)`、浮层底 `rgb(44,44,46)`，与浅色主题完全一致（符合官方两个主题共用深色浮层） |
+| 写入与清除回路无回归 | 1.0.1 页面上 `POST mutate` 设为 `blocked`，等 3 秒读徽标；再 `clear`，等 3 秒读徽标 | `data-status` 先变 `blocked/受阻` 再回到空态，`…list` 计数随之变化，全程未刷新页面；`refreshIntervalMs: 2000` |
+
+截图：`.drafts/shots/v101-hover-light.png`（浅色悬停卡，640×480，34,253 B）、`.drafts/shots/v101-picker-light.png`（浅色 8 格，660×440，26,937 B）、`.drafts/shots/v101-dark-page.png`（深色整页，1576×861，72,037 B）、`.drafts/shots/v101-dark-hover.png`（深色悬停卡，660×500，39,558 B）。
+
+工具说明：`Emulation.setEmulatedMedia` 是会话级设置，因此深色截图由 `.drafts/dark-shot.mjs` 在同一个连接里完成设置、悬停与截图；分开调用会各自回到浅色。
+
 ## 4. Phase 2 – Smoke & icon round-trip（已完成）
 
 ### 新增文件
@@ -136,9 +152,9 @@ set DSH_DESKTOP_NODE_EXECUTABLE=<...>\DeepSeek Harness.exe
 | `tests/service.test.mjs` | 15 | `getMark`/`clearMark`/`listAll`/`putMark`；state route 400 与命中；mutate set→clear 往返；unsupported-action；两个 tool 注册与 execute；note 超长抛错；`turn/end interrupted` auto inference + manual mark not overwritten |
 | `tests/smoke.test.mjs` | 1 | 完整 inference round-trip + GET state route read-back + neutral-event no-op |
 | `tests/i18n.test.mjs` | 6 | STATUS_META/tone/schema/defaults 跨模块一致性 + 图标尺寸契约 |
-| `tests/theme.test.mjs` | 4 | 样式只用 `--dsw-*` token、图标盒尺寸、active 格不覆盖 color、badge 盒尺寸 |
+| `tests/theme.test.mjs` | 6 | 样式只用 `--dsw-*` token、图标盒尺寸、active 格不覆盖 color、badge 盒尺寸、悬停卡不得用随主题变化的别名取色、每个状态的 `hoverTone` 必须是静态色板变量 |
 | `tests/marks.test.mjs` | 5 | 共享读取器：快照分发、本地写透、消失的会话分发 `null`、采纳 Host 下发的读取间隔、读取失败保留上一次结果 |
-| **合计** | **58** | suites 15 / pass 58 / fail 0 / ~256 ms |
+| **合计** | **60** | suites 15 / pass 60 / fail 0 / ~281 ms |
 
 ## 5. 升级回归清单
 

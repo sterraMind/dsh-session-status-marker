@@ -1,6 +1,6 @@
 # Implementation Plan & Progress
 
-> **文档版本**：v1.0.0 · 2026-11-11（对应插件 1.0.0）
+> **文档版本**：v1.0.1 · 2026-11-11（对应插件 1.0.1）
 
 > 本文件记录「开发框架 → 实现逻辑 → 测试验收 → 回归」的实际执行顺序、每一步的证据与当前状态。选型依据与风险见 `docs/feasibility-and-risks.md`，架构见 `docs/architecture.md`。
 
