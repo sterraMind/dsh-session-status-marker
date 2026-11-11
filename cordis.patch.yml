@@ -1,0 +1,8 @@
+- insert:
+    - id: session-status-marker
+      name: dsh-session-status-marker
+      config:
+        autoInfer: true
+        maxNoteLength: 200
+        autoExpireMs: 0
+        refreshIntervalMs: 2000

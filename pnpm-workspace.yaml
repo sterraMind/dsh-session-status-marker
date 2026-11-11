@@ -1,0 +1,5 @@
+# pnpm 11 reads project-level settings from pnpm-workspace.yaml, not .npmrc.
+# Keep the store inside the workspace: the Scoop-wide store has an unreadable
+# index.db (ERR_SQLITE_ERROR) and `pnpm run` re-checks dependencies there.
+storeDir: ./.pnpm-store
+verifyDepsBeforeRun: false
