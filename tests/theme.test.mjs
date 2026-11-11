@@ -67,4 +67,38 @@ describe('stylesheet contract', () => {
       expect(STATUS_META[status].hoverTone).toMatch(/^var\(--dsw-static-[a-z0-9-]+\)$/)
     }
   })
+
+  // The card surface is a fixed dark color, so text and status icons stay on the
+  // static palette. The card should still answer a theme switch somewhere, and
+  // the hover/selected backgrounds are the safe place: `--dsw-alias-tooltip-key-bg`
+  // is derived from `--dsw-alias-tooltip-bg`, which differs between the light and
+  // dark blocks of the theme stylesheet, and it sits behind static-colored content.
+  it('answers theme switches through the tooltip background token', () => {
+    expect(HOVER_CSS).toMatch(/\.cell:hover\s*\{[^}]*background:\s*var\(--dsw-alias-tooltip-key-bg\)/)
+    expect(HOVER_CSS).toMatch(/\.cell\.active\s*\{[^}]*background:\s*var\(--dsw-alias-tooltip-key-bg\)/)
+  })
+
+  // The compact hover card spans the anchor gap with a 200 ms grace and no bridge
+  // element, so a pointer crossing from the row to the content could lose the
+  // card. A transparent strip inside this content keeps the pointer inside the
+  // host card's pointerenter, cancelling the close.
+  it('bridges the anchor-to-card gap so the card stays open on approach', () => {
+    const bridge = block(HOVER_CSS, '\\.root::before')
+    expect(bridge).toBeDefined()
+    expect(bridge).toMatch(/content:\s*''/)
+    expect(bridge).toMatch(/position:\s*absolute/)
+    expect(bridge).toMatch(/left:\s*-24px/)
+    expect(bridge).toMatch(/width:\s*24px/)
+  })
+
+  it('keeps the eight picker cells inside the card content box', () => {
+    const cell = block(HOVER_CSS, '\\.cell')
+    expect(cell).toMatch(/box-sizing:\s*border-box/)
+    expect(cell).toMatch(/width:\s*22px/)
+    expect(cell).toMatch(/padding:\s*2px/)
+    // 8 * 22 + 7 * 2 = 190px, inside the ~196px left after this root's own
+    // 6px/8px padding is taken out of the official 212px content box. A 3px
+    // gap measured 197px and wrapped the eighth cell onto a second line.
+    expect(block(HOVER_CSS, '\\.grid')).toMatch(/gap:\s*2px/)
+  })
 })
