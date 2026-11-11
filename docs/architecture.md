@@ -1,6 +1,6 @@
 # Architecture Design · dsh-session-status-marker
 
-> **文档版本**：v1.0.1 · 2026-11-11（对应插件 1.0.1）
+> **文档版本**：v1.0.2 · 2026-11-12（对应插件 1.0.2）
 
 > V2（最终实现版）。V1 曾计划用 `SessionEventMap` declaration merging + `TypertRemoteService`；深入读官方持久化源码后证实该方案对仓库外 bundle 是**延迟失败**：写入当场成功，重启 / resume / fork 时整份会话日志被拒读。本版记录已落地的合规架构与全部取舍依据。
 
