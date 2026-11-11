@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "title": "Session Status Marker",
+    "description": "Mark and infer session status (TODO / DONE / STOP / REVIEW) with client-side badges."
+  },
+  "status": {
+    "todo": "TODO",
+    "done": "Done",
+    "stopped": "Stopped",
+    "blocked": "Blocked",
+    "review": "Review",
+    "pending-subagent": "Subagent Todo",
+    "awaiting-answer": "Waiting",
+    "feedback": "Feedback"
+  },
+  "tooltip": {
+    "clear": "Clear status",
+    "mark": "Mark as {{status}}",
+    "note-placeholder": "Add a note…"
+  },
+  "inference": {
+    "auto-marked": "Auto-marked by plugin"
+  }
+}
