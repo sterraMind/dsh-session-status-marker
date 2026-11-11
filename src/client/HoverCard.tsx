@@ -3,9 +3,22 @@
  * Shows the current mark, a quick-status picker, and a clear button. Clicking an
  * item calls the Host's mutation exact route, then writes the result through the
  * shared cache so the sidebar badge updates immediately.
+ *
+ * Two host contracts shape this component:
+ * - DSH's own hover card copies the session title on any click inside the card
+ *   (`packages/client/ui-primitives/src/HoverCard.tsx:293-303`) and on Enter or
+ *   Space (`:304`). Every interactive surface here stops click and key
+ *   propagation so a status change never reports "已复制".
+ * - The compact hover card spans the eight-pixel anchor gap with a 200 ms pointer
+ *   grace and no bridge element (`pointer-grace.ts:8`, `HoverCard.tsx:222-224`),
+ *   so a pointer travelling from the row to this content could lose the card on
+ *   the way. The stylesheet adds a transparent strip across that gap
+ *   (`.root::before`) whose pointer events bubble to the host card's
+ *   `onPointerEnter` (`:326-336`), cancelling the pending close.
  */
 
 import { useState } from 'react'
+import type { SyntheticEvent } from 'react'
 import css from './hover.module.css'
 import type { PropsRuntime, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
@@ -51,15 +64,23 @@ export function SessionStatusHover({ sessionId, t }: HoverProps) {
     }
   }
 
-  if (loading) return <div className={css.root}>{t('hover.loading')}</div>
-  if (error) return <div className={css.root}>{error}</div>
+  /** Stop pointer and keyboard events from reaching the card's copy handler. */
+  function stop(event: SyntheticEvent) {
+    event.stopPropagation()
+  }
+
+  /** Spread onto every interactive root so the card never reports "已复制". */
+  const guard = { onClick: stop, onKeyDown: stop }
+
+  if (loading) return <div className={css.root} {...guard}>{t('hover.loading')}</div>
+  if (error) return <div className={css.root} {...guard}>{error}</div>
 
   const meta = mark ? STATUS_META[mark.status] : null
   // A session without a mark gets the picker straight away: hiding it behind the
   // change button left brand-new sessions with no way to be marked manually.
   const showGrid = picking || mark === null
   return (
-    <div className={css.root} data-mark={mark ? 'present' : 'absent'}>
+    <div className={css.root} data-mark={mark ? 'present' : 'absent'} {...guard}>
       <div className={css.label}>
         {mark === null
           ? t('hover.empty')
@@ -70,7 +91,7 @@ export function SessionStatusHover({ sessionId, t }: HoverProps) {
       {mark?.note && <div className={css.note}>{t('hover.note', { note: mark.note.slice(0, 64) })}</div>}
       <div className={css.actions}>
         <button className={css.btn} aria-expanded={showGrid} onClick={() => setPicking((v) => !v)}>{t('hover.setBtn')}</button>
-        {mark && <button className={css.clearBtn} onClick={handleClear}>{t('hover.clearBtn')}</button>}
+        {mark && <button className={css.clearBtn} onClick={() => void handleClear()}>{t('hover.clearBtn')}</button>}
       </div>
       {showGrid && (
         <div className={css.grid}>
@@ -82,6 +103,8 @@ export function SessionStatusHover({ sessionId, t }: HoverProps) {
                 key={s}
                 className={[css.cell, active && css.active].filter(Boolean).join(' ')}
                 title={t(m.labelKey)}
+                aria-label={t(m.labelKey)}
+                aria-pressed={active}
                 style={{ color: m.hoverTone }}
                 onClick={() => { setPicking(false); void handleSet(s, null) }}
               >
