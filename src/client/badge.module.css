@@ -1,0 +1,45 @@
+/** @module CSS Modules for SessionStatusBadge (trailing seat).
+ *
+ * Minimal single-icon indicator shown when the row is idle (leading seat is
+ * reserved for schedule marks per ui-workspace slots contract).
+ */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--dsw-radius-sm);
+  opacity: 0.85;
+  transition: opacity 0.15s ease;
+}
+
+/* The glyph wrapper must be a flex box, otherwise the inline SVG collapses and
+   the indicator renders blank even though the markup is present. */
+.glyph,
+.badge > span {
+  display: flex;
+}
+
+.badge svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.badge:hover {
+  opacity: 1;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
