@@ -17,7 +17,7 @@
 | Service 集成测试 | `tests/service.test.mjs` | 14 项全绿 |
 | i18n / 图标 / 样式契约 | `tests/i18n.test.mjs`、`tests/theme.test.mjs` | 12 项全绿 |
 | **合计** | `pnpm run test` | `tests 58 / suites 15 / pass 58 / fail 0 / duration_ms ~246ms` |
-| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.0.0.tgz`（39,386 B），含 `cordis.patch.yml`、`locale/en.json`、`icon.svg`、`lib/`、`package.json`、`README.md` |
+| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.0.0.tgz`（39,387 B），含 `cordis.patch.yml`、`locale/en.json`、`icon.svg`、`lib/`、`package.json`、`README.md` |
 | 真实装载 | `dsh plugin --profile smoke add <tgz>`（dev4090） | profile 初始化成功并安装插件，详见 §3 |
 | **前端视觉与交互** | 真实 GUI 上操作（dev4090 + CDP） | sidebar 行尾标记、hover card、状态改写/清除、跨进程持久化全部实测通过，见 §3.4 与 §4 |
 

@@ -53,7 +53,7 @@
 - `pnpm run build` → EXIT=0，`[session-status-marker:client] built lib/client.js`；`node --check lib/client.js` EXIT=0。
 - `pnpm run test` → EXIT=0，`tests 58 / suites 15 / pass 58 / fail 0 / duration_ms ~246`。
 - 测试分布：inference 16 例（10 规则 + 3 优先序 + 3 过期）、types 7 例、service 14 例、smoke 1 例（`turn/end:interrupted` → `effectiveMark` 与 GET state route 同一行）、i18n 6 例（STATUS_META/tone/schema/defaults + 图标尺寸契约）、theme 4 例（样式只用 `--dsw-*` token、图标盒尺寸、active 格不覆盖 color）。
-- `pnpm pack` → `dsh-session-status-marker-1.0.0.tgz`（39,386 B；r8 的 0.1.0 为 32,600 B）。
+- `pnpm pack` → `dsh-session-status-marker-1.0.0.tgz`（39,387 B；r8 的 0.1.0 为 32,600 B）。
 - dev4090 真实集成（2026-11-11）：`dsh plugin add` 装载成功、`--dump-config` 第 1244–1249 行显示行与 config、web 宿主起 3099、三条 route 的 401/400/200 与跨进程冷读、落盘 `storages/session_status_marker/marks/<sid>.json`、boot graph 含本插件 entry、`/plugins/??…&rev=…` 200。全部细节见 `docs/acceptance-and-regression.md` §3。
 - dev4090 前端视觉验收（2026-11-11，真实 GUI + CDP 驱动）：侧栏行尾标记渲染 16×16 SVG 且颜色取 `--dsw-alias-state-*-primary`；未标记会话经 hover card 的 8 格可手动标记；已标记会话可改写状态、可清除；**连续三次杀掉 3099 进程重启后标记仍在**；模型通过 `set_session_status` 工具自主标记（新增 `{status:"done",source:"manual",note:"ai-self-mark"}`）。截图见 `.drafts/shots/`。
 - fake Cordis ctx 必须有 `reflect: { provide: () => {} }`（`cordis/lib/index.js:1854` 的 `Service` 构造器会调它）与可调用的 `inject(deps, callback)`（路由注册改用 `ctx.inject(['connection'], …)` 之后）；`defineTool.execute` 会先校验参数，`subjectId: null` 被拒，测试须省略该字段。
