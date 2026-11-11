@@ -13,7 +13,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { SessionStatusBadge } from './Badge.js'
 import { SessionStatusHover } from './HoverCard.js'
-import { NS, zh, en } from './locales.js'
+import { NS, DICTIONARIES } from './locales.js'
 import type { MarkerKey } from './locales.js'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -28,7 +28,10 @@ export const inject = ['slots', 'locale']
 
 /** Client plugin body: register dictionaries and the two slot occupants. */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'sessionStatus.marker: dictionaries')
+  // Ship every language the shell offers (`locale/src/client/index.ts:23` lists
+  // en, ja, es, fr, de, ru, pt, zh). Registering only zh/en made the six others
+  // fall back to English, which read as "the language never switches".
+  ctx.effect(() => ctx.locale.register(NS, DICTIONARIES), 'sessionStatus.marker: dictionaries')
 
   ctx.slots.inject('sidebar.session.row.trailing', () =>
     ctx.slots.register(
