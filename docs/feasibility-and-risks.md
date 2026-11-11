@@ -1,6 +1,6 @@
 # Feasibility, Risk & Priority Assessment
 
-> **文档版本**：v1.0.1 · 2026-11-11（对应插件 1.0.1）
+> **文档版本**：v1.0.2 · 2026-11-12（对应插件 1.0.2）
 
 > 评估对象：仓库外独立 npm bundle `dsh-session-status-marker`，目标 DSH `0.2.2-rc.1`。评估依据为 `.research/dsh-repo/` 官方镜像（文件:行号）与本机实测；外部网页只用于竞品对照。
 

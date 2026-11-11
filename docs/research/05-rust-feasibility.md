@@ -1,6 +1,6 @@
 # 05 · Rust 可行性预研
 
-> **文档版本**：v1.0.1 · 2026-11-11（对应插件 1.0.1）
+> **文档版本**：v1.0.2 · 2026-11-12（对应插件 1.0.2）
 
 > **V2 修订**：本文结论（不引入 Rust）不变，但 workload 描述基于 V1 的「SessionEvent fold / projection / Typert Remote」草案，已按 V2 实现（`storageDomain` + 纯函数推断 + `ctx.connection.fetch`）更新。
 
