@@ -45,6 +45,26 @@ export function expect(actual) {
       assert.throws(actual, pattern instanceof RegExp ? { message: pattern } : undefined)
       return api
     },
+    /** Negated matchers: `expect(value).not.toMatch(pattern)`. */
+    get not() {
+      return {
+        toMatch(pattern) {
+          assert.ok(typeof actual === 'string', 'expected string')
+          const re = pattern instanceof RegExp ? pattern : new RegExp(pattern)
+          assert.ok(!re.test(actual), `expected ${JSON.stringify(actual)} not to match ${re}`)
+        },
+        toContain(expected) {
+          assert.ok(Array.isArray(actual) || typeof actual === 'string', 'expected array or string')
+          assert.ok(!actual.includes(expected), `expected not to contain ${JSON.stringify(expected)}`)
+        },
+        toBe(expected) {
+          assert.notStrictEqual(actual, expected)
+        },
+        toEqual(expected) {
+          assert.notDeepStrictEqual(actual, expected)
+        },
+      }
+    },
     get rejects() {
       return {
         async toThrow(pattern) {
