@@ -1,6 +1,6 @@
 # Acceptance & Regression
 
-> **文档版本**：v1.0.1 · 2026-11-11（对应插件 1.0.1）
+> **文档版本**：v1.0.2 · 2026-11-12（对应插件 1.0.2）
 
 > 记录验收标准、已通过证据、待执行集成 smoke 与回归清单。
 > 对应实现进度见 `docs/implementation-plan.md` §2，风险优先级见 `docs/feasibility-and-risks.md`。
@@ -16,8 +16,8 @@
 | Schema 契约测试 | `tests/types.test.mjs` | 7 项全绿 |
 | Service 集成测试 | `tests/service.test.mjs` | 14 项全绿 |
 | i18n / 图标 / 样式契约 | `tests/i18n.test.mjs`、`tests/theme.test.mjs` | 14 项全绿 |
-| **合计** | `pnpm run test` | `tests 60 / suites 15 / pass 60 / fail 0 / duration_ms ~281ms` |
-| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.0.1.tgz`（39,838 B），含 `cordis.patch.yml`、`locale/en.json`、`icon.svg`、`lib/`、`package.json`、`README.md` |
+| `pnpm run test` | `tests 66 / suites 16 / pass 66 / fail 0 / duration_ms ~383ms` |
+| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.0.2.tgz`（47,148 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md` |
 | 真实装载 | `dsh plugin --profile smoke add <tgz>`（dev4090） | profile 初始化成功并安装插件，详见 §3 |
 | **前端视觉与交互** | 真实 GUI 上操作（dev4090 + CDP） | sidebar 行尾标记、hover card、状态改写/清除、跨进程持久化全部实测通过，见 §3.4 与 §4 |
 
@@ -137,6 +137,23 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 
 工具说明：`Emulation.setEmulatedMedia` 是会话级设置，因此深色截图由 `.drafts/dark-shot.mjs` 在同一个连接里完成设置、悬停与截图；分开调用会各自回到浅色。
 
+### 3.8 Phase 5 四项修复的真实页面复核（1.0.2）
+
+1.0.2 针对五项反馈的实现在 §3.4 与 §3.7 之外还需要单独复核「复制误触」「八格单行与内边距」「跨间隙命中区」「主题响应的交互面」「八语言字典」。驱动脚本 `.drafts/hover-verify.mjs`、`.drafts/theme-picker.mjs`、`.drafts/lang-diag.mjs`（均为一次性诊断脚本，留在工作区 `.drafts/`）。
+
+| 验收点 | 操作 | 实测证据 |
+|---|---|---|
+| 复制误触已修 | 悬停有标记的行 → 点 hover card 内的「修改状态」按钮 | `copiedLabelShown: false`、`pickerCells: 10`、`cardStillOpen: true`（1.0.1 及更早版本此处会把整卡内容替换成「已复制」） |
+| 八格单行 | 点开选择器后逐个读 `button[aria-pressed]` 的 `getBoundingClientRect()` | `count: 8`、`distinctRows: 1`、`singleRow: true`，8 格 x=304/328/352/376/400/424/448/472 全部 y=458，无换行 |
+| 图标内边距 | 读格子计算样式 | 22×22px、`padding: 2px`、`box-sizing: border-box`，16px SVG 有 3px 视觉留白 |
+| 跨间隙命中区 | 读插件内容根节点的 `::before` | `content: ""`、`position: absolute`、`left: -24px`、`width: 24px`、`top: -12px`、`bottom: -12px`；指针经此区域冒泡到官方 `onPointerEnter`，抵消 `pointer-grace.ts:8` 的 200ms 关闭宽限 |
+| 主题响应的交互面 | 同一页面分别用浅色与深色 `prefers-color-scheme`，点开选择器后用探针元素解析 `--dsw-alias-tooltip-key-bg` | 浅色 `--dsw-alias-tooltip-bg = #2c2c2e`（neutral-bluish-850），解析为 `color(srgb 0.32149 0.32149 0.327922)`；深色 `#43454a`（neutral-bluish-750），解析为 `color(srgb 0.395451 0.401882 0.417961)`。格子与按钮的悬停/选中底色随主题变化，而文字与状态图标保持静态色板（两个主题下浮层底色同为 `rgb(44,44,46)`、active 格「反馈」同为 `rgb(78,209,126)`） |
+| 八语言字典 | 点击「账号菜单 → 设置 → 语言胶囊 → English」后按 0/80/250/600/1500ms 采样 `document.documentElement.lang`，再 `Page.navigate` 重载复查 | `T+0` 为 `en`、胶囊显示 `English`，证明 `locale/change` 事件与插件字典通路正常；随后 80ms 起回到 `zh-CN`，重载后仍是 `zh-CN`。定位为 Host 配置 `LOCALE_PREFERENCE_FIELD` 写在 dev4090 上不落盘（`locale/src/client/index.ts:261` 的 `void this.host?.set(...)` 被 adopt 读回旧值覆盖），**属环境限制而非插件缺陷**；单元测试用 `DICTIONARIES` 覆盖 Shell 全部 8 种语言且与 zh 键集合一致 |
+
+截图：`.drafts/shots/v102-light-picker.png`（浅色 8 格，1576×861）与 `.drafts/shots/v102-dark-picker.png`（深色 8 格，1576×861）；`.drafts/shots/v102-light-hover.png` 与 `.drafts/shots/v102-dark-hover.png` 为选择器打开前的悬停卡整页。
+
+> 未在真实页面验证的点：切换到 ja/es/fr/de/ru/pt 后的插件文案渲染（受上表最后一行的 Host 持久化限制，只能验证 `en` 的瞬时切换）；英文以外的字典键集合由 `tests/i18n.test.mjs` 的断言保证。
+
 ## 4. Phase 2 – Smoke & icon round-trip（已完成）
 
 ### 新增文件
@@ -151,10 +168,10 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 | `tests/types.test.mjs` | 7 | `MarkRecordSchema.strict`、超长 note 拒绝、默认值填充、`STATUS_META` 全覆盖、route 派生一致性 |
 | `tests/service.test.mjs` | 15 | `getMark`/`clearMark`/`listAll`/`putMark`；state route 400 与命中；mutate set→clear 往返；unsupported-action；两个 tool 注册与 execute；note 超长抛错；`turn/end interrupted` auto inference + manual mark not overwritten |
 | `tests/smoke.test.mjs` | 1 | 完整 inference round-trip + GET state route read-back + neutral-event no-op |
-| `tests/i18n.test.mjs` | 6 | STATUS_META/tone/schema/defaults 跨模块一致性 + 图标尺寸契约 |
-| `tests/theme.test.mjs` | 6 | 样式只用 `--dsw-*` token、图标盒尺寸、active 格不覆盖 color、badge 盒尺寸、悬停卡不得用随主题变化的别名取色、每个状态的 `hoverTone` 必须是静态色板变量 |
+| `tests/i18n.test.mjs` | 9 | STATUS_META/tone/schema/defaults 跨模块一致性 + 图标尺寸契约 + Shell 8 语言字典键集合与占位符 |
+| `tests/theme.test.mjs` | 9 | 样式只用 `--dsw-*` token、图标盒尺寸、active 格不覆盖 color、badge 盒尺寸、悬停卡不得用随主题变化的别名取色、每个状态的 `hoverTone` 必须是静态色板变量、格子底色用 `--dsw-alias-tooltip-key-bg`、`.root::before` 桥接命中区、格子 22px border-box + 2px 内边距 + 2px 间距 |
 | `tests/marks.test.mjs` | 5 | 共享读取器：快照分发、本地写透、消失的会话分发 `null`、采纳 Host 下发的读取间隔、读取失败保留上一次结果 |
-| **合计** | **60** | suites 15 / pass 60 / fail 0 / ~281 ms |
+| **合计** | **66** | suites 16 / pass 66 / fail 0 / ~383 ms |
 
 ## 5. 升级回归清单
 
