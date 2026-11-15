@@ -56,7 +56,7 @@ tests/*.test.mjs   canonical 断言（node:test + shim），*.test.ts 为薄壳
 | Client 构建 | TypeScript compiler API 进程内 `transpileModule` | 绕开 Windows 沙箱 `spawn EPERM` |
 | 测试 | `node --test --test-isolation=none` + 自建 Vitest 风格 shim | Vitest/Vite 配置加载同样触发 esbuild spawn |
 | 前端验收 | CDP（`.drafts/cdp.mjs`）+ 真实 GUI 几何/截图断言 | 只看 DOM 字符串会漏掉 0×0 布局缺陷 |
-| 浮层配色 | 悬停卡用 `--dsw-static-*` 静态色板，徽标用主题别名 | 官方悬停浮层两个主题都固定深色（`ui-workspace/src/client/rows/Rows.module.css:410-444`） |
+| 浮层配色 | 悬停卡表面与文字用主题别名（`--dsw-alias-bg-layer-2` / `--dsw-alias-label-*`），徽标用主题别名 | 1.0.3 起内容区覆盖官方固定深色底并自绘主题背景；1.0.1 曾用静态色板，1.0.3 改回主题别名 |
 | Rust | 不引入 | 见 `docs/research/05-rust-feasibility.md` |
 
 ## 开发回路与可靠命令
@@ -99,11 +99,12 @@ Phase 3 部分完成（真实 GUI 前端验收，2026-11-11）：侧栏行尾标
 Phase 4 已完成（1.0.0）：`src/client/marks.ts` 全页共享列表定时读取（`Config.refreshIntervalMs` 默认 2000ms）+ 本地写透，标记写入后无需刷新页面；客户端订阅统一走 `useMark()`。
 Phase 4.1 已完成（1.0.1）：悬停卡文字与按钮改用 `--dsw-static-*` 静态色板。DSH 官方悬停浮层在浅色和深色主题下都用同一个固定深色底，主题别名在浅色主题下会解析成接近黑色，文字因此看不清。徽标仍用 `--dsw-alias-state-*` 主题别名跟随主题切换。
 Phase 5 已完成（1.0.2，用户 2026-11-12 反馈）：① 复制误触 — 内容区根节点接管 `onClick`/`onKeyDown` 并 `stopPropagation()`，不再冒泡到官方 HoverCard 的复制处理器（`packages/client/ui-primitives/src/HoverCard.tsx:293-303` 在 `onClick` 复制、`:304` 在 Enter/Space 也复制）；② 鼠标挪开点不到 — 内容区加透明命中区 `.root::before` 跨过锚点到浮层的 8px 间隙，指针经过它冒泡到宿主 `onPointerEnter` 取消 200ms 宽限关闭（`pointer-grace.ts:8` + `HoverCard.tsx:326-336`）；③ 语言不同步 — `src/client/locales.ts` 补齐 Shell 全部 8 种语言并以 `DICTIONARIES` 一次注册（此前只有 zh/en，切到其余 6 种按 `FALLBACK_LOCALE='en'` 回退）；④ 主题不同步 — 卡片表面是官方固定深色，文字与状态色保持静态，改由交互面响应主题（悬停/选中格与按钮悬停底色用随主题变化的 `--dsw-alias-tooltip-key-bg`）；⑤ 图标内边距 — 格子 22px `border-box` + 2px 内边距 + 2px 间距 = 190px，稳定单行。根容器自身还有 6px/8px 内边距，官方卡 212px 内容宽扣掉后可用约 196px，dev4090 真实页面复核发现 197px（3px 间距）会让第八格换行，故收窄到 2px。真实页面已复核八格同一行、点按钮不再误触复制。测试 66 项全绿。调研见 `docs/research/08-hover-interaction.md`。
+Phase 6 已完成（1.0.3，用户 2026-11-12 反馈「主题还是黑色没有同步 dsh 本身主题」）：悬停卡表面改为覆盖整张卡片并自绘 `--dsw-alias-bg-layer-2`（浅色主题白色、深色主题深灰），文字与状态图标颜色改回主题别名（`--dsw-alias-label-primary` / `--dsw-alias-label-secondary` / `--dsw-alias-state-*-primary`，与徽标一致），交互面改用 `--dsw-alias-interactive-bg-hover` / `--dsw-alias-interactive-bg-active`。桥接命中区因根节点负边距外扩收窄为 8px。测试 66 项全绿（theme 套件 9 例）。前端真实页面验收待完成。
 未完成：`cordis_inspect_query` 自检（属 Creator mode 能力）；TUI 端 UI 接入（无 slot 体系）；fork 继承策略；英文界面真实页面复核；不依赖悬停的触屏入口（官方通道 `sidebar.workspaces.session.menu.item` + `row.action`，见 `contract/slots.ts:176-212`）。桌面端走同一套 Web UI，可直接用。详见 `docs/implementation-plan.md` §2 与 `docs/acceptance-and-regression.md` §3.4、§3.6。
 
-## 悬停卡交互约束（Phase 5，勿回退）
+## 悬停卡交互约束（Phase 5–6，勿回退）
 
 - 内容区**根节点**必须接管 `onClick` 与 `onKeyDown` 并 `stopPropagation()`（当前实现是 `HoverCard.tsx` 里的 `guard` 对象 spread 到每个根 div）。官方 HoverCard 把整张卡注册成 `role="button"` 并在 `onClick` 与 Enter/Space `onKeyDown` 里复制会话标题（`packages/client/ui-primitives/src/HoverCard.tsx:290-304`），复制后整卡内容被替换成提示文字，所以只给单个 `button` 加 stop 不够，点标签/备注同样会误触。
 - 官方 `onPointerDownCapture` 与 `onClickCapture` 由卡片持有（`HoverCard.tsx:343-344`），组件不能靠 `onPointerEnter` 维持打开；跨间隙保持打开靠 `.root::before` 命中区冒泡到宿主 `onPointerEnter` 触发 `cancelClose()`。不要删掉这条规则。
-- 悬停卡文字与八个状态图标必须用静态色板，不能改回主题别名（官方固定深色浮层 + 浅色主题别名解析成近黑 = 不可读，1.0.0 已踩过）。主题响应只能放在交互面的**背景**上（`--dsw-alias-tooltip-key-bg`，随主题变化且坐在静态色内容之下）。
+- 悬停卡表面与文字必须跟随主题：`.root` 用负边距覆盖整张卡片（`-12px -16px`）后自绘 `background: var(--dsw-alias-bg-layer-2)`，文字用 `--dsw-alias-label-primary` / `--dsw-alias-label-secondary`，状态图标用 `--dsw-alias-state-*-primary`，交互面用 `--dsw-alias-interactive-bg-hover` / `--dsw-alias-interactive-bg-active`。官方卡片底色在 `ui-primitives/HoverCard.module.css:9-19` 里硬编码为深色，插件内容区通过覆盖表面来让卡片真正跟随主题。**不要改回静态色板**——用户明确要求主题同步。
 - compact 悬停卡宿主不注册 Escape（`HoverCard.tsx:156-167` 只为 preview/inline 注册），WCAG 1.4.13 的 Dismissible 在这个分支不可达，只能做到 Hoverable 与 Persistent，不要在文档里声称已满足 Dismissible。
