@@ -2,6 +2,22 @@
 
 本文件记录 `dsh-session-status-marker` 的对外可见变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.3] - 2026-11-12
+
+针对用户反馈「主题还是黑色没有同步 dsh 本身主题」的修复轮。
+
+### 修复
+
+- **悬停卡表面跟随主题**：官方 HoverCard 的 `.card` 背景色在 `ui-primitives/src/HoverCard.module.css:9-19` 里硬编码为深色常量，浅色和深色主题解析结果相同。内容区 `.root` 通过负边距 `-12px -16px` 覆盖整张卡片面积，自绘 `background: var(--dsw-alias-bg-layer-2)`（浅色主题白色、深色主题深灰），再以 `padding: 18px 24px` 恢复视觉缩进。
+- **文字与图标跟随主题**：`.root` 前景色改用 `--dsw-alias-label-primary`（浅色近黑、深色近白）；状态图标 `hoverTone` 从静态色板改回 `--dsw-alias-state-*-primary`（与侧栏徽标一致，随主题切换）。
+- **交互面响应主题**：悬停格、选中格、按钮悬停底色分别改用 `--dsw-alias-interactive-bg-hover` 与 `--dsw-alias-interactive-bg-active`（浅色主题半透明深色叠加、深色主题半透明白色叠加），两主题下均有明确视觉反馈。
+- **桥接命中区收窄**：根节点已用负边距外扩至卡片边缘，`.root::before` 宽度从 24px 收窄为 8px（仅覆盖锚点间隙）。
+
+### 变更
+
+- `tests/theme.test.mjs`：三条断言改为主题化——要求 CSS 含 `--dsw-alias-label-primary` 与 `--dsw-alias-bg-layer-2` 且不含 `--dsw-static-neutral-00`；`hoverTone` 匹配 `^var\(--dsw-alias-(state|label)-[a-z0-9-]+\)$`；`.cell:hover` / `.cell.active` 分别使用 `--dsw-alias-interactive-bg-hover` / `--dsw-alias-interactive-bg-active`；桥接断言从 `left: -24px; width: 24px` 改为 `left: -8px; width: 8px`。
+- 测试合计 66 项（16 套件）全绿，其中 theme 套件 9 例。
+
 ## [1.0.2] - 2026-11-12
 
 针对 2026-11-12 用户验收反馈的修复轮，详见 `docs/research/08-hover-interaction.md`。

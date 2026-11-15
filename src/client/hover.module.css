@@ -1,19 +1,19 @@
 /** @module CSS Modules for SessionStatusHover.
  *
- * The hover slot renders inside DSH's own hover card, and that card is painted
- * with a fixed dark surface in both themes (the official stylesheet declares a
- * dark `--dsw-hovercard-bg` constant). Theme aliases for the primary label
- * resolve to near-black in the light theme, which is unreadable on that
- * surface, so text and the per-status icon colors stay on the static palette,
- * exactly like the official hover body does.
+ * The hover slot renders inside DSH's own hover card. The official HoverCard
+ * paints its surface with a fixed dark background that does not follow the DSH
+ * theme (`--dsw-hovercard-bg` in `ui-primitives/HoverCard.module.css`). To make
+ * the card theme-aware, `.root` covers the full card area using negative
+ * margins (`-12px -16px` matches the card's `padding: 12px 16px`) and paints
+ * its own background with `--dsw-alias-bg-layer-2`, which is white in the light
+ * theme and dark gray in the dark theme. The root then adds its own padding
+ * (`18px 24px`) to restore the visual inset.
  *
- * The card still answers a theme switch through its interactive surfaces: the
- * hover and selected backgrounds use `--dsw-alias-tooltip-key-bg`, which the
- * theme stylesheet derives from `--dsw-alias-tooltip-bg` and which differs
- * between the light block (neutral-bluish-850) and the dark block
- * (neutral-bluish-750) of `design-platform.css`. That token is a background
- * behind static-colored content, so it cannot reproduce the invisible-text
- * regression, while still giving visible feedback when the theme changes.
+ * Text and icons use theme aliases (`--dsw-alias-label-primary`,
+ * `--dsw-alias-label-secondary`) which resolve to dark colors in the light
+ * theme and light colors in the dark theme, ensuring readability on the
+ * theme-aware surface. Interactive surfaces use `--dsw-alias-interactive-bg-*`
+ * which also responds to the theme.
  *
  * `.root::before` is the anchor-to-card bridge: the compact hover card offers
  * only a 200 ms pointer grace across the eight-pixel gap and no bridge element,
@@ -27,8 +27,11 @@
   position: relative;
   font-size: 12px;
   line-height: 1.4;
-  color: var(--dsw-static-neutral-00);
-  padding: 6px 8px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-2);
+  margin: -12px -16px;
+  padding: 18px 24px;
+  border-radius: var(--dsw-radius-lg);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -37,10 +40,10 @@
 .root::before {
   content: '';
   position: absolute;
-  left: -24px;
-  top: -12px;
-  bottom: -12px;
-  width: 24px;
+  left: -8px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
 }
 
 .label {
@@ -48,7 +51,7 @@
 }
 
 .note {
-  color: var(--dsw-static-neutral-bluish-300);
+  color: var(--dsw-alias-label-secondary);
   font-style: italic;
   word-break: break-word;
 }
@@ -61,11 +64,11 @@
 .btn,
 .clearBtn {
   background: transparent;
-  border: 1px solid color-mix(in srgb, var(--dsw-static-neutral-00) 24%, transparent);
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 24%, transparent);
   border-radius: var(--dsw-radius-sm);
   padding: 2px 6px;
   font: inherit;
-  color: var(--dsw-static-neutral-bluish-300);
+  color: var(--dsw-alias-label-secondary);
   cursor: pointer;
   opacity: 0.85;
 }
@@ -73,8 +76,8 @@
 .btn:hover,
 .clearBtn:hover {
   opacity: 1;
-  color: var(--dsw-static-neutral-00);
-  background: var(--dsw-alias-tooltip-key-bg);
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .clearBtn {
@@ -88,10 +91,10 @@
   margin-top: 4px;
 }
 
-/* The official card content box is 212px (244px minus 16px padding on each
- * side), and this root adds its own 6px/8px padding, leaving 196px for the
- * picker. Eight 22px cells plus seven 2px gaps = 190px, so the row stays on
- * one line. `box-sizing: border-box` keeps the 2px padding inside each cell. */
+/* The card content box is 244px wide (border-box). With this root's 24px
+ * horizontal padding, 196px is left for the picker. Eight 22px cells plus
+ * seven 2px gaps = 190px, so the row stays on one line.
+ * `box-sizing: border-box` keeps the 2px padding inside each cell. */
 .cell {
   box-sizing: border-box;
   display: inline-flex;
@@ -124,7 +127,7 @@
 
 .cell:hover {
   opacity: 1;
-  background: var(--dsw-alias-tooltip-key-bg);
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 /* The active cell must not repaint `color`: `background: currentColor` resolves
@@ -133,6 +136,6 @@
    a ring. */
 .cell.active {
   opacity: 1;
-  background: var(--dsw-alias-tooltip-key-bg);
+  background: var(--dsw-alias-interactive-bg-active);
   box-shadow: inset 0 0 0 1px currentColor;
 }
