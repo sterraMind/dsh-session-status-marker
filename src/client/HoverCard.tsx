@@ -71,16 +71,18 @@ export function SessionStatusHover({ sessionId, t }: HoverProps) {
 
   /** Spread onto every interactive root so the card never reports "已复制". */
   const guard = { onClick: stop, onKeyDown: stop }
+  /** Anchors the host-card theme takeover in hover.module.css (`:has` selector). */
+  const slotAnchor = { 'data-status-slot': '' } as const
 
-  if (loading) return <div className={css.root} {...guard}>{t('hover.loading')}</div>
-  if (error) return <div className={css.root} {...guard}>{error}</div>
+  if (loading) return <div className={css.root} data-mark="loading" {...slotAnchor} {...guard}>{t('hover.loading')}</div>
+  if (error) return <div className={css.root} data-mark="error" {...slotAnchor} {...guard}>{error}</div>
 
   const meta = mark ? STATUS_META[mark.status] : null
   // A session without a mark gets the picker straight away: hiding it behind the
   // change button left brand-new sessions with no way to be marked manually.
   const showGrid = picking || mark === null
   return (
-    <div className={css.root} data-mark={mark ? 'present' : 'absent'} {...guard}>
+    <div className={css.root} data-mark={mark ? 'present' : 'absent'} {...slotAnchor} {...guard}>
       <div className={css.label}>
         {mark === null
           ? t('hover.empty')
