@@ -1,33 +1,51 @@
 /** @module CSS Modules for SessionStatusHover.
  *
- * The hover slot renders inside DSH's own session-row hover card. That card's
- * surface is a fixed dark surface in BOTH themes (`--dsw-hovercard-bg` in
- * `ui-primitives/HoverCard.module.css`; "dark surface, fixed colors both themes"
- * in `ui-workspace/.../rows/Rows.module.css:410`), and the host renders the
- * session title / path / time / status line inside the same card with
- * light-on-dark colors. Our panel is only one section of that card, so it must
- * blend into the fixed dark surface instead of painting its own theme-aware
- * surface — otherwise the light theme shows a white block wedged between the
- * host's dark title block and dark status line.
+ * Theme integration: the host renders our slot inside its own session-row hover
+ * card. That card is authored with a hard-coded dark surface in BOTH themes and
+ * its title/path/time/status lines with hard-coded light text
+ * (`ui-primitives/HoverCard.module.css:9-19` and
+ * `ui-workspace/.../rows/Rows.module.css:410-444`). Painting only our panel with
+ * a theme surface produces a white block wedged between dark host text (the
+ * 1.0.3–1.1.0 defect), and leaving everything dark ignores the DSH theme (the
+ * 1.1.1 defect). The fix is to retarget the WHOLE host card from our scoped slot:
+ * the `:has([data-status-slot])` rules below recolor the host surface and text
+ * lines with the same theme aliases the rest of DSH uses, so light shows a light
+ * card and dark a dark one. Attribute selectors survive the CSS-module build
+ * (which only rewrites `.class` selectors), letting us address the host's hashed
+ * class names by stable substring. Only the card that actually contains our
+ * slot is touched; other HoverCards are unaffected.
  *
- * Text uses the fixed white neutral token (same value in both themes), matching
- * the host's own card content. Status icons use 400-level static colors that
- * stay legible on the fixed dark card. Interactive surfaces use translucent
- * white derived from the same token, reading as hover/active on the dark card.
+ * Our panel keeps a transparent background and uses theme-alias text and status
+ * colors, so it sits on the single themed card surface without a seam.
  *
  * `.root::before` is the anchor-to-card bridge: the compact hover card offers
  * only a 200 ms pointer grace across the eight-pixel gap and no bridge element,
- * so a pointer crossing from the row to this content could lose the card. The
- * transparent strip sits inside this content (a React descendant of the host
- * card's root span), so pointer events over it bubble to the card's
+ * so a pointer crossing from the row to this content could lose the card on the
+ * way. The transparent strip sits inside this content (a React descendant of the
+ * host card's root span), so pointer events over it bubble to the card's
  * `onPointerEnter` and cancel the pending close.
  */
+
+/* Retarget the host card that contains our slot, not any other HoverCard. */
+[class*='card']:has([data-status-slot]) {
+  --dsw-hovercard-bg: var(--dsw-alias-bg-layer-2) !important;
+}
+
+[class*='card']:has([data-status-slot]) [class*='hoverTitle'] {
+  color: var(--dsw-alias-label-primary) !important;
+}
+
+[class*='card']:has([data-status-slot]) [class*='hoverPath'],
+[class*='card']:has([data-status-slot]) [class*='hoverTime'],
+[class*='card']:has([data-status-slot]) [class*='hoverStatus'] {
+  color: var(--dsw-alias-label-secondary) !important;
+}
 
 .root {
   position: relative;
   font-size: 12px;
   line-height: 1.4;
-  color: var(--dsw-static-neutral-00);
+  color: var(--dsw-alias-label-primary);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -44,11 +62,11 @@
 
 .label {
   font-weight: 600;
-  color: var(--dsw-static-neutral-00);
+  color: var(--dsw-alias-label-primary);
 }
 
 .note {
-  color: var(--dsw-static-neutral-bluish-300);
+  color: var(--dsw-alias-label-secondary);
   font-style: italic;
   word-break: break-word;
 }
@@ -61,11 +79,11 @@
 .btn,
 .clearBtn {
   background: transparent;
-  border: 1px solid color-mix(in srgb, var(--dsw-static-neutral-00) 24%, transparent);
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 24%, transparent);
   border-radius: var(--dsw-radius-sm);
   padding: 2px 6px;
   font: inherit;
-  color: var(--dsw-static-neutral-bluish-300);
+  color: var(--dsw-alias-label-secondary);
   cursor: pointer;
   opacity: 0.85;
 }
@@ -73,8 +91,8 @@
 .btn:hover,
 .clearBtn:hover {
   opacity: 1;
-  color: var(--dsw-static-neutral-00);
-  background: color-mix(in srgb, var(--dsw-static-neutral-00) 12%, transparent);
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .clearBtn {
@@ -123,7 +141,7 @@
 
 .cell:hover {
   opacity: 1;
-  background: color-mix(in srgb, var(--dsw-static-neutral-00) 12%, transparent);
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 /* The active cell must not repaint `color`: `background: currentColor` resolves
@@ -132,6 +150,6 @@
    a ring. */
 .cell.active {
   opacity: 1;
-  background: color-mix(in srgb, var(--dsw-static-neutral-00) 18%, transparent);
+  background: var(--dsw-alias-interactive-bg-active);
   box-shadow: inset 0 0 0 1px currentColor;
 }
