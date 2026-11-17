@@ -13,6 +13,10 @@ import { Service, type Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
+// Type-only: pull the `sessions` Context merge so the overview route can join
+// marks with session titles. `sessionTitle` is merged onto Context locally
+// below (the `@deepseek-ai/dsh-session-title` package is not installed here).
+import type {} from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-client-connection'
 import { MARKER_TABLE_NAME, MarkerDomainSpec, type MarkerDomain } from './domain.js'
 import {
@@ -22,10 +26,13 @@ import {
   MARKER_STATE_PATH,
   MARKER_LIST_PATH,
   MARKER_MUTATE_PATH,
+  MARKER_OVERVIEW_PATH,
   SetMarkBodySchema,
   ClearMarkBodySchema,
   type MarkRecord,
   type StatusEnum,
+  type StatusGroup,
+  type OverviewEntry,
 } from './types.js'
 import { inferStatus, shouldApplyInference, isAutoMarkExpired } from './inference.js'
 
@@ -52,6 +59,12 @@ export const Config = z.object({
 declare module '@deepseek-ai/cordis' {
   interface Context {
     sessionStatus: SessionStatusService
+    /**
+     * Session-title service (from `@deepseek-ai/dsh-session-title`, not
+     * installed here). `get` returns the latest folded title snapshot for a
+     * live session, or `undefined` before eligible input.
+     */
+    sessionTitle: { get(session: Session): { readonly title: string } | undefined }
   }
 }
 
@@ -68,7 +81,7 @@ export class SessionStatusService extends Service {
    * `pending (waiting for service: connection)`), which also disables the AI
    * tools and inference. The routes register only when a bridge exists.
    */
-  static inject = ['storageDomain', 'tools']
+  static inject = ['storageDomain', 'tools', 'sessions', 'sessionTitle']
 
   static Config = Config
 
@@ -110,18 +123,25 @@ export class SessionStatusService extends Service {
       requestBody: 'buffered' as const,
       fetch: (request: Request) => this.#handleMutate(request),
     }
+    const overviewRoute = {
+      path: MARKER_OVERVIEW_PATH,
+      methods: ['GET'] as const,
+      requestBody: 'buffered' as const,
+      fetch: () => this.#handleOverview(),
+    }
     // The HTTP bridge is injected lazily instead of declared as a dependency:
     // see the note on `inject` above — headless and TUI compositions mount no
     // bridge. `ctx.get('connection')` is not a substitute: a sibling row may
     // still be mounting when this initializer runs, and the undefined result
-    // silently drops all three routes (observed on dev4090 as 404 `not found`
+    // silently drops all four routes (observed on dev4090 as 404 `not found`
     // for every marker path while `/api/changes.summary` answered normally).
     this.ctx.inject(['connection'], (connectionCtx: Context) => {
       connectionCtx.effect(() => {
         const disposeState = connectionCtx.connection.fetch.register(stateRoute)
         const disposeList = connectionCtx.connection.fetch.register(listRoute)
         const disposeMutate = connectionCtx.connection.fetch.register(mutateRoute)
-        return () => { void disposeState(); void disposeList(); void disposeMutate() }
+        const disposeOverview = connectionCtx.connection.fetch.register(overviewRoute)
+        return () => { void disposeState(); void disposeList(); void disposeMutate(); void disposeOverview() }
       }, 'sessionStatus.fetchRoutes')
     })
 
@@ -229,6 +249,56 @@ export class SessionStatusService extends Service {
     const marks: MarkRecord[] = []
     for (const [, row] of this.listAll()) marks.push(row)
     return Response.json({ marks, refreshIntervalMs: this.config.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS })
+  }
+
+  /**
+   * Group every mark by status and join each with its session title. Only
+   * non-empty groups are returned, in `STATUS_VALUES` order; group members are
+   * sorted by `updatedAtMs` descending. Titles come from the session-title
+   * projection; a missing session or a throwing title read yields `null`.
+   */
+  async #handleOverview(): Promise<Response> {
+    const sessions = new Map<string, Session>()
+    try {
+      for (const session of this.ctx.sessions.list()) sessions.set(session.id, session)
+    } catch { /* sessions unavailable — every title falls back to null */ }
+
+    const byStatus = new Map<StatusEnum, OverviewEntry[]>()
+    let totalMarked = 0
+    for (const [, row] of this.listAll()) {
+      let title: string | null = null
+      const session = sessions.get(row.sessionId)
+      if (session !== undefined) {
+        try { title = this.ctx.sessionTitle.get(session)?.title ?? null } catch { title = null }
+      }
+      const entry: OverviewEntry = {
+        sessionId: row.sessionId,
+        title,
+        status: row.status,
+        note: row.note,
+        source: row.source,
+        autoReason: row.autoReason,
+        updatedAtMs: row.insertedAtMs,
+      }
+      totalMarked++
+      const bucket = byStatus.get(row.status) ?? []
+      bucket.push(entry)
+      byStatus.set(row.status, bucket)
+    }
+
+    const groups: StatusGroup[] = []
+    for (const status of STATUS_VALUES) {
+      const entries = byStatus.get(status)
+      if (entries !== undefined && entries.length > 0) {
+        entries.sort((a, b) => b.updatedAtMs - a.updatedAtMs)
+        groups.push({ status, count: entries.length, entries })
+      }
+    }
+    return Response.json({
+      groups,
+      totalMarked,
+      refreshIntervalMs: this.config.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS,
+    })
   }
 
   async #handleMutate(request: Request): Promise<Response> {

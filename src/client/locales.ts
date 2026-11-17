@@ -40,6 +40,14 @@ export const zh = {
 
   // General
   'badge.aria': '会话状态标记',
+
+  // Status overview settings page
+  'overview.nav': '会话状态',
+  'overview.title': '会话状态总览',
+  'overview.empty': '暂无已标记的会话',
+  'overview.count': '{count}',
+  'overview.updatedAt': '更新于 {time}',
+  'overview.noTitle': '未命名会话',
 } as const
 
 /** English dictionary. */
@@ -63,6 +71,13 @@ export const en: MarkerDict = {
   'hover.error': 'Load failed, try again',
 
   'badge.aria': 'Session status marker',
+
+  'overview.nav': 'Session status',
+  'overview.title': 'Session status overview',
+  'overview.empty': 'No marked sessions',
+  'overview.count': '{count}',
+  'overview.updatedAt': 'Updated {time}',
+  'overview.noTitle': 'Untitled session',
 }
 
 /** Japanese dictionary. */
@@ -86,6 +101,13 @@ export const ja: MarkerDict = {
   'hover.error': '読み込みに失敗しました。再試行してください',
 
   'badge.aria': 'セッション状態マーカー',
+
+  'overview.nav': 'セッション状態',
+  'overview.title': 'セッション状態の概要',
+  'overview.empty': 'マークされたセッションはありません',
+  'overview.count': '{count}',
+  'overview.updatedAt': '更新: {time}',
+  'overview.noTitle': '無題セッション',
 }
 
 /** Spanish dictionary. */
@@ -109,6 +131,13 @@ export const es: MarkerDict = {
   'hover.error': 'Error al cargar, inténtelo de nuevo',
 
   'badge.aria': 'Marcador de estado de sesión',
+
+  'overview.nav': 'Estado de sesión',
+  'overview.title': 'Resumen de estado de sesiones',
+  'overview.empty': 'No hay sesiones marcadas',
+  'overview.count': '{count}',
+  'overview.updatedAt': 'Actualizado {time}',
+  'overview.noTitle': 'Sesión sin título',
 }
 
 /** French dictionary. */
@@ -132,6 +161,13 @@ export const fr: MarkerDict = {
   'hover.error': 'Échec du chargement, réessayez',
 
   'badge.aria': 'Marqueur d’état de session',
+
+  'overview.nav': 'État des sessions',
+  'overview.title': 'Aperçu de l’état des sessions',
+  'overview.empty': 'Aucune session marquée',
+  'overview.count': '{count}',
+  'overview.updatedAt': 'Mis à jour {time}',
+  'overview.noTitle': 'Session sans titre',
 }
 
 /** German dictionary. */
@@ -155,6 +191,13 @@ export const de: MarkerDict = {
   'hover.error': 'Laden fehlgeschlagen, erneut versuchen',
 
   'badge.aria': 'Sitzungsstatus-Markierung',
+
+  'overview.nav': 'Sitzungsstatus',
+  'overview.title': 'Übersicht des Sitzungsstatus',
+  'overview.empty': 'Keine markierten Sitzungen',
+  'overview.count': '{count}',
+  'overview.updatedAt': 'Aktualisiert {time}',
+  'overview.noTitle': 'Sitzung ohne Titel',
 }
 
 /** Russian dictionary. */
@@ -178,6 +221,13 @@ export const ru: MarkerDict = {
   'hover.error': 'Не удалось загрузить, попробуйте ещё раз',
 
   'badge.aria': 'Маркер статуса сессии',
+
+  'overview.nav': 'Статус сессий',
+  'overview.title': 'Обзор статуса сессий',
+  'overview.empty': 'Нет отмеченных сессий',
+  'overview.count': '{count}',
+  'overview.updatedAt': 'Обновлено {time}',
+  'overview.noTitle': 'Сессия без названия',
 }
 
 /** Portuguese dictionary. */
@@ -201,6 +251,13 @@ export const pt: MarkerDict = {
   'hover.error': 'Falha ao carregar, tente novamente',
 
   'badge.aria': 'Marcador de status da sessão',
+
+  'overview.nav': 'Status da sessão',
+  'overview.title': 'Visão geral do status das sessões',
+  'overview.empty': 'Nenhuma sessão marcada',
+  'overview.count': '{count}',
+  'overview.updatedAt': 'Atualizado {time}',
+  'overview.noTitle': 'Sessão sem título',
 }
 
 /** Every dictionary registered by the Client half, in the shell's display order. */

@@ -13,8 +13,12 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { SessionStatusBadge } from './Badge.js'
 import { SessionStatusHover } from './HoverCard.js'
+import { StatusOverview } from './StatusOverview.js'
+import type { StatusOverviewInjected } from './StatusOverview.js'
 import { NS, DICTIONARIES } from './locales.js'
 import type { MarkerKey } from './locales.js'
+import { MARKER_OVERVIEW_ROUTE } from '../contracts.js'
+import type { OverviewResponse } from '../contracts.js'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -54,6 +58,29 @@ export function apply(ctx: ClientContext): void {
         locale: NS,
       },
       SessionStatusHover,
+    ),
+  )
+
+  // Status-overview settings page: one read-only section grouping every marked
+  // session by status. Data arrives through `fetchOverview`; copy through the
+  // bound `t` (fresh on every locale switch, so the nav label stays current).
+  const t = ctx.locale.bind(NS) as (key: string, params?: Record<string, string>) => string
+  const fetchOverview = async (): Promise<OverviewResponse> => {
+    const resp = await fetch(MARKER_OVERVIEW_ROUTE)
+    if (!resp.ok) throw new Error('overview fetch failed')
+    return (await resp.json()) as OverviewResponse
+  }
+  const overviewInjected = (): StatusOverviewInjected => ({ t, fetchOverview })
+  ctx.slots.inject('settings.section', () =>
+    ctx.slots.register(
+      {
+        name: 'settings.section',
+        id: 'session-status',
+        order: 60,
+        label: () => t('overview.nav'),
+        inject: overviewInjected,
+      },
+      StatusOverview,
     ),
   )
 }

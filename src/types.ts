@@ -18,6 +18,9 @@ import {
   type ClearMarkBody,
   type MarkSnapshot,
   type AllMarksResponse,
+  type OverviewEntry,
+  type StatusGroup,
+  type OverviewResponse,
   type MutationOk,
   type MutationError,
   type StatusMeta,
@@ -28,9 +31,11 @@ import {
   MARKER_STATE_PATH,
   MARKER_LIST_PATH,
   MARKER_MUTATE_PATH,
+  MARKER_OVERVIEW_PATH,
   MARKER_STATE_ROUTE,
   MARKER_LIST_ROUTE,
   MARKER_MUTATE_ROUTE,
+  MARKER_OVERVIEW_ROUTE,
 } from './contracts.js'
 
 export {
@@ -48,6 +53,9 @@ export {
   type ClearMarkBody,
   type MarkSnapshot,
   type AllMarksResponse,
+  type OverviewEntry,
+  type StatusGroup,
+  type OverviewResponse,
   type MutationOk,
   type MutationError,
   STATUS_META,
@@ -55,9 +63,11 @@ export {
   MARKER_STATE_PATH,
   MARKER_LIST_PATH,
   MARKER_MUTATE_PATH,
+  MARKER_OVERVIEW_PATH,
   MARKER_STATE_ROUTE,
   MARKER_LIST_ROUTE,
   MARKER_MUTATE_ROUTE,
+  MARKER_OVERVIEW_ROUTE,
 }
 
 /** Zod schema for one durable row. This is the single runtime validation boundary. */
