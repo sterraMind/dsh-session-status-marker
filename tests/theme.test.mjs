@@ -53,21 +53,30 @@ describe('stylesheet contract', () => {
     expect(badge).toMatch(/height:\s*16px/)
   })
 
-  // Regression: the hover slot renders inside DSH's own hover card, whose
-  // official surface is a fixed dark color in both themes while the host draws
-  // its title/time/status line light-on-dark in the same card. Our panel is one
-  // section of that card, so it must blend into the dark surface with fixed
-  // light text instead of painting a theme-aware (white-in-light) surface —
-  // that produced a white block wedged between the host's dark blocks.
-  it('blends the hover panel into the host fixed dark card with light text', () => {
-    expect(HOVER_CSS).toMatch(/--dsw-static-neutral-00/)
-    expect(HOVER_CSS).not.toMatch(/--dsw-alias-label-primary/)
-    expect(HOVER_CSS).not.toMatch(/--dsw-alias-bg-layer-2/)
+  // Regression: the DSH host card is authored with a hard-coded dark surface
+  // and hard-coded light text in BOTH themes. Painting only our panel (1.0.3)
+  // wedged a white block between dark host text; blending into the fixed dark
+  // card (1.1.1) left the light theme showing a black card. The fix retargets
+  // the whole host card from our slot with theme aliases, gated by :has() so
+  // other HoverCards are untouched. Assert the takeover covers surface + every
+  // host text line and is scoped to the card containing our slot.
+  it('retargets the whole host card to theme aliases, scoped by :has', () => {
+    expect(HOVER_CSS).toMatch(/\[class\*=['"]card['"]\]:has\(\[data-status-slot\]\)/)
+    expect(HOVER_CSS).toMatch(/--dsw-hovercard-bg:\s*var\(--dsw-alias-bg-layer-2\)/)
+    for (const line of ['hoverTitle', 'hoverPath', 'hoverTime', 'hoverStatus']) {
+      expect(HOVER_CSS).toMatch(new RegExp(`\\[class\\*=['"]${line}['"]\\][^}]*color:\\s*var\\(--dsw-alias-label-`))
+    }
   })
 
-  it('gives every status a fixed light hover color for the dark card', () => {
+  it('paints our own panel with theme aliases, not fixed dark-surface tokens', () => {
+    expect(HOVER_CSS).toMatch(/--dsw-alias-label-primary/)
+    expect(HOVER_CSS).toMatch(/--dsw-alias-label-secondary/)
+    expect(HOVER_CSS).not.toMatch(/--dsw-static-neutral-00/)
+  })
+
+  it('gives every status a theme-aware hover color', () => {
     for (const status of STATUS_VALUES) {
-      expect(STATUS_META[status].hoverTone).toMatch(/^var\(--dsw-static-[a-z0-9-]+\)$/)
+      expect(STATUS_META[status].hoverTone).toMatch(/^var\(--dsw-alias-(state|label)-[a-z0-9-]+\)$/)
     }
   })
 
@@ -80,12 +89,11 @@ describe('stylesheet contract', () => {
     expect(OVERVIEW_CSS).toMatch(/\.row:hover\s*\{[^}]*background:\s*var\(--dsw-alias-interactive-bg-hover\)/)
   })
 
-  // The card surface is a fixed dark surface in both themes, so interactive
-  // feedback is translucent white derived from the fixed neutral token — it
-  // reads as a hover/active state on the dark card in both themes.
-  it('answers hover and active through translucent white on the dark card', () => {
-    expect(HOVER_CSS).toMatch(/\.cell:hover\s*\{[^}]*color-mix\(\s*in srgb,\s*var\(--dsw-static-neutral-00\)/)
-    expect(HOVER_CSS).toMatch(/\.cell\.active\s*\{[^}]*color-mix\(\s*in srgb,\s*var\(--dsw-static-neutral-00\)/)
+  // The card surface now follows the theme, so interaction feedback uses the
+  // same theme-aware tokens as the rest of the DSH surfaces.
+  it('answers hover and active through theme interactive tokens', () => {
+    expect(HOVER_CSS).toMatch(/\.cell:hover\s*\{[^}]*background:\s*var\(--dsw-alias-interactive-bg-hover\)/)
+    expect(HOVER_CSS).toMatch(/\.cell\.active\s*\{[^}]*background:\s*var\(--dsw-alias-interactive-bg-active\)/)
   })
 
   // The compact hover card spans the anchor gap with a 200 ms grace and no bridge
