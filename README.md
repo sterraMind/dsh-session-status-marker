@@ -7,8 +7,9 @@
 - **8 种状态**：`todo` / `done` / `stopped` / `blocked` / `review` / `pending-subagent` / `awaiting-answer` / `feedback`，每个可带备注。
 - **手动标记**：hover 卡一键 set / clear，或调用 `set_session_status` / `clear_session_status` 两个 model tool。
 - **AI 自主推断**：`inferStatus` 观察 `turn/end`、`tool/call`、`job/settled`、`goal/change`、`user/message` 等事件，按 7 类 `autoReason` 推断；手动标记永不覆盖。
+- **跨会话状态总览**：设置页 `会话状态` 按 8 状态分组、带计数、关联真实会话标题，页面内轮询自动更新（1.1.0）。
 - **跨重启保留**：`storageDomain` 的 `session_status_marker.marks` 表，key = `sessionId`，与第一方 Computer Use 同意状态同一机制。
-- **主题同步**：CSS Modules + `--dsw-*` tokens，跟随 light / dark / system；`done` 用官方 `--dsw-alias-state-done-primary`。
+- **主题同步**：CSS Modules + `--dsw-*` tokens，跟随 light / dark / system；徽标与悬停卡表面、文字、状态色都用随主题变化的别名（`--dsw-alias-bg-layer-2` / `--dsw-alias-label-primary` / `--dsw-alias-state-*-primary`）。
 - **零上下文污染**：状态是 host-side sidecar，不进 `deriveMessages()`、system prompt、tool schema 或 KV cache。
 
 ## 架构红线
@@ -20,7 +21,7 @@
 ```bash
 pnpm run typecheck     # EXIT=0
 pnpm run build         # lib/*.js + lib/client.js
-pnpm run test          # 37 项 node:test 断言
+pnpm run test          # 72 项 node:test 断言
 pnpm pack              # 产出 dsh-session-status-marker-*.tgz
 ```
 
@@ -31,7 +32,7 @@ dsh plugin --profile desktop add ./dsh-session-status-marker-*.tgz
 dsh --profile desktop --dump-config   # 核对 application: applied
 ```
 
-配置（`cordis.patch.yml` 的 `config`，三个字段都必填、无硬编码默认值）：
+配置（`cordis.patch.yml` 的 `config`；前三项必填，`refreshIntervalMs` 有默认值可省略）：
 
 ```yaml
 - id: session-status-marker
@@ -40,6 +41,7 @@ dsh --profile desktop --dump-config   # 核对 application: applied
     autoInfer: true
     maxNoteLength: 200
     autoExpireMs: 0
+    refreshIntervalMs: 2000   # 可选，≥250；浏览器侧列表读取间隔
 ```
 
 ## 目录
@@ -49,11 +51,11 @@ src/contracts.ts  共享契约（零依赖，Browser 不能带 zod）
 src/types.ts      zod 严格 schema + 编译期双向 extends 校验
 src/domain.ts     defineDomain / domainTable
 src/inference.ts  纯函数推断
-src/service.ts    SessionStatusService（init + 3 routes + 2 tools + 观察器）
-src/client/       Browser apply + Badge + HoverCard + locale + CSS Modules
+src/service.ts    SessionStatusService（init + 4 routes + 2 tools + 观察器 + overview 分组）
+src/client/       Browser apply + Badge + HoverCard + StatusOverview + locale + CSS Modules
 scripts/          build-client.mjs（TS compiler API，不 spawn）
-tests/            37 项 canonical 断言（.mjs）+ 薄壳 .ts
-docs/             architecture / research 01..07 / 规划与验收
+tests/            72 项 canonical 断言（.mjs）+ 薄壳 .ts
+docs/             architecture / research 01..09 / 规划与验收
 ```
 
 ## 文档
@@ -68,6 +70,8 @@ docs/             architecture / research 01..07 / 规划与验收
 | [Rust 预研](./docs/research/05-rust-feasibility.md) | 不引入 Rust 的依据 |
 | [竞品与市场](./docs/research/06-market-and-practices.md) | 同类产品特色 / 痛点 / 空缺 |
 | [官方状态面](./docs/research/07-dsh-state-surfaces.md) | DSH 现有状态机制清单 |
+| [悬停交互调研](./docs/research/08-hover-interaction.md) | 宿主 HoverCard 契约、WCAG/Floating UI/Radix 最佳实践、语言与主题根因 |
+| [状态总览设计](./docs/research/09-status-overview.md) | P0 跨会话状态总览：路由、settings.section、标题关联、测试计划 |
 | [可行性与风险](./docs/feasibility-and-risks.md) | 可行性结论、风险登记、优先级 |
 | [实现计划](./docs/implementation-plan.md) | 技术栈、执行顺序、中途纠正 |
 | [验收与回归](./docs/acceptance-and-regression.md) | 已通过证据、待执行 smoke、升级清单 |
@@ -75,19 +79,17 @@ docs/             architecture / research 01..07 / 规划与验收
 
 ## 当前状态与已知限制
 
-当前版本 **1.0.2**，66 项测试全绿。开发与验收过程：Phase 3 完成真实 GUI 前端验收；Phase 4（1.0.0）让标记写入后无需刷新页面即可在侧栏看到（全页共享的列表定时读取 + 本地写透）；1.0.1 修掉浅色主题下悬停浮层不可读的配色缺陷；1.0.2 修掉五项使用反馈里的问题。全部在 dev4090 的真实 DSH 进程与真实页面上验证过：tarball 装载、`--dump-config` 生效、三条 route、跨进程持久化、侧栏标记、hover card 选择状态、改写与清除、连续三次重启后标记仍在、模型通过 `set_session_status` 自主标记。截图与命令见 [验收与回归](./docs/acceptance-and-regression.md) §3。
+当前版本 **1.1.0**，72 项测试全绿。版本沿革：
 
-五项反馈对应的修复：
+- **Phase 3**：真实 GUI 前端验收通过（侧栏徽标、悬停卡选状态、改写与清除、模型经 `set_session_status` 自主标记、连续三次重启后标记仍在）。
+- **1.0.0（Phase 4）**：标记写入后无需刷新页面即可在侧栏看到（全页共享列表定时读取 + 本地写透，`refreshIntervalMs` 默认 2000ms）。
+- **1.0.1 / 1.0.2**：修悬停卡配色与使用反馈——复制误触、图标边距、跨间隙命中区、8 语言字典、交互面主题响应、8 格单行。
+- **1.0.3**：悬停卡表面、文字、状态色全部改为随 DSH 主题变化的 `--dsw-alias-*`（浅色卡面白、深色卡面深灰，均经真实主题管线验收）；语言与主题设置持久化问题定位为 `cordis.patch.yml` 的 UTF-8 BOM 导致 config-editor 写入被拒，移除 BOM 后跨重启保持。
+- **1.1.0**：竞品评估后落地 P0 跨会话状态总览——设置页新增 `会话状态` 分区，按 8 状态分组、带计数、关联真实会话标题、页面内轮询自动更新。
 
-| 反馈 | 修复 |
-|---|---|
-| 点悬停卡上的按钮却返回「已复制」 | 内容区根节点接管 `onClick` 与 `onKeyDown` 并 `stopPropagation()`，不再冒泡到官方 HoverCard 的复制处理器 |
-| 图标没有边距 | 格子 22px `border-box` + 2px 内边距 + 2px 间距 = 190px，稳定单行，16px SVG 四周有留白 |
-| 鼠标挪开就点不到 | 内容区根节点加 `::before` 透明命中区，覆盖锚点到浮层的 8px 间隙，指针经过即取消关闭宽限 |
-| 语言没有同步 | 字典补齐到 Shell 全部 8 种语言（此前只有 zh/en，其余按 `FALLBACK_LOCALE` 回退英文） |
-| 主题没有同步 | 格子与按钮的悬停/选中底色改用随主题变化的 `--dsw-alias-tooltip-key-bg`；文字与状态图标保持静态色板（官方悬停浮层两个主题都固定深色） |
+全部在 dev4090 的真实 DSH 进程与页面上验证过（tarball 装载、`--dump-config` 生效、route、跨进程持久化、前端交互、明暗主题、状态总览）。截图与命令见 [验收与回归](./docs/acceptance-and-regression.md) §3。
 
-已知限制：浏览器侧用轮询（`refreshIntervalMs`，默认 2000ms）接收外部变更，不是服务端推送；dev4090 的 Host 语言配置不落盘，因此真实页面只验证到切换瞬间生效、无法验持久化后的非中文界面（字典键集合由单测保证）；`cordis_inspect_query` 运行时自检属 Creator mode 能力，测试环境未执行；TUI 端没有 slot 体系，标记只能由 AI 工具写入并以文本呈现，UI 接入待做；桌面端与 Web 端共用同一套 slot UI。
+已知限制：浏览器侧用轮询接收外部变更，不是服务端推送；ja/es/fr/de/ru/pt 的字典键集合由单测保证，未在真实页面逐语言目检；`cordis_inspect_query` 运行时自检属 Creator mode 能力，测试环境未执行；TUI 端没有 slot 体系，标记只能由 AI 工具写入并以文本呈现，UI 接入待做；桌面端与 Web 端共用同一套 slot UI；侧栏按状态过滤（宿主无过滤 slot）与批量状态操作（P1）尚未做。
 
 ## 约束
 

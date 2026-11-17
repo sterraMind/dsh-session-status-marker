@@ -2,6 +2,23 @@
 
 本文件记录 `dsh-session-status-marker` 的对外可见变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.1.0] - 2026-11-18
+
+竞品差异化轮：三个同类插件（dream12347 / hkkz9522 / TOBYCAI，见 `docs/research/07-competitive-session-managers.md`）全部落在「生命周期 + 注意力 + 组织」赛道，没有人在「按工作状态分组查看全部会话」这个点上有产品。本版本落地该独占痛点。
+
+### 新增
+
+- **跨会话状态总览（设置页）**：在 DSH 设置面板新增 `会话状态` 一节（`settings.section`，order 60）。页面按 8 个状态分组列出全部已标记会话，每组带计数，组内按更新时间降序。数据来自新的 Host 路由 `GET /api/session-status-marker.overview`（返回 `{ groups, totalMarked, refreshIntervalMs }`），标题通过 `ctx.sessions.list()` + `ctx.sessionTitle.get(session)?.title` 关联，读不到的标题回退为「未命名会话」。客户端组件 `src/client/StatusOverview.tsx` 按 `refreshIntervalMs` 轮询，页面隐藏时暂停、恢复可见立即刷新（与 `marks.ts` 同模式）。
+- **Host overview 路由**：`src/service.ts` 新增 `#handleOverview()`，把 `storageDomain` 的标记表按状态分组、按 `STATUS_VALUES` 顺序输出、仅保留非空组。服务 `static inject` 增补 `sessions` / `sessionTitle`（connection 仍懒注入）。
+- **8 语言总览文案**：`src/client/locales.ts` 每个语言新增 6 键（`overview.nav/title/empty/count/updatedAt/noTitle`），`DICTIONARIES` 一次注册。
+
+### 变更
+
+- `src/contracts.ts` / `src/types.ts`：新增 `OverviewEntry`、`StatusGroup`、`OverviewResponse` 类型与 `MARKER_OVERVIEW_PATH` / `MARKER_OVERVIEW_ROUTE`。
+- `src/client/index.ts`：注册 `settings.section` 槽位占据者（inject face 提供 `t` 与 `fetchOverview`，`t` 经 `ctx.locale.bind(NS)` 绑定，语言切换时导航标签随之刷新）。
+- 测试 72 项（17 套件）全绿：`tests/overview.test.mjs` 5 例（分组排序 / 仅非空组 / 标题关联 / null 回退 / 空态）+ `tests/theme.test.mjs` 新增总览页主题断言 + `tests/expect.mjs` 补 `toHaveLength`。
+- `pnpm pack` → `dsh-session-status-marker-1.1.0.tgz`。
+
 ## [1.0.3] - 2026-11-12
 
 针对用户反馈「主题还是黑色没有同步 dsh 本身主题」的修复轮。
