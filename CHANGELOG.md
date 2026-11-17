@@ -2,6 +2,17 @@
 
 本文件记录 `dsh-session-status-marker` 的对外可见变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.1.1] - 2026-11-18
+
+修复浅色主题下悬停卡割裂：1.0.3 起给状态面板单独涂了随主题变化的背景（`--dsw-alias-bg-layer-2`，浅色主题下是白），但 DSH 会话行悬停卡本身在两个主题下都是固定深色、宿主标题/时间/状态行都是深底浅字，于是浅色主题出现「上黑 + 中白 + 下黑」的割裂。
+
+### 修复
+
+- 状态面板改回融入官方固定深色卡：背景透明、文字用固定白色 token（`--dsw-static-neutral-00`）、状态图标用 400 级静态色板（`--dsw-static-*-400`）、hover/active 与按钮用半透明白；侧栏徽标仍用主题别名 `tone`（徽标在随主题变化的侧栏表面上）。
+- `tests/theme.test.mjs` 的三条悬停卡断言改为验证「融入深色卡 + 静态浅色文字/图标」。
+- 真实页面复核：浅色（`bodyBg rgb(255,255,255)`）与深色（`rgb(21,21,23)`）两主题下，卡片均为 `rgb(44,44,46)`、面板背景透明、文字白色、8 格单行；截图 `.drafts/shots/v111-light-picker.png` / `v111-dark-picker.png`。
+- 72 项测试全绿；`pnpm pack` → `dsh-session-status-marker-1.1.1.tgz`。
+
 ## [1.1.0] - 2026-11-18
 
 竞品差异化轮：三个同类插件（dream12347 / hkkz9522 / TOBYCAI，见 `docs/research/07-competitive-session-managers.md`）全部落在「生命周期 + 注意力 + 组织」赛道，没有人在「按工作状态分组查看全部会话」这个点上有产品。本版本落地该独占痛点。

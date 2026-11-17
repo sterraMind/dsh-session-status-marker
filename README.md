@@ -9,7 +9,7 @@
 - **AI 自主推断**：`inferStatus` 观察 `turn/end`、`tool/call`、`job/settled`、`goal/change`、`user/message` 等事件，按 7 类 `autoReason` 推断；手动标记永不覆盖。
 - **跨会话状态总览**：设置页 `会话状态` 按 8 状态分组、带计数、关联真实会话标题，页面内轮询自动更新（1.1.0）。
 - **跨重启保留**：`storageDomain` 的 `session_status_marker.marks` 表，key = `sessionId`，与第一方 Computer Use 同意状态同一机制。
-- **主题同步**：CSS Modules + `--dsw-*` tokens，跟随 light / dark / system；徽标与悬停卡表面、文字、状态色都用随主题变化的别名（`--dsw-alias-bg-layer-2` / `--dsw-alias-label-primary` / `--dsw-alias-state-*-primary`）。
+- **主题同步**：CSS Modules + `--dsw-*` tokens；侧栏徽标与状态总览用随 light / dark / system 变化的主题别名（`--dsw-alias-state-*-primary` / `--dsw-alias-bg-layer-*`）；悬停卡内容融入官方固定深色浮层，用固定浅色文字与 400 级状态图标（该浮层两个主题都固定深色）。
 - **零上下文污染**：状态是 host-side sidecar，不进 `deriveMessages()`、system prompt、tool schema 或 KV cache。
 
 ## 架构红线
@@ -79,13 +79,14 @@ docs/             architecture / research 01..09 / 规划与验收
 
 ## 当前状态与已知限制
 
-当前版本 **1.1.0**，72 项测试全绿。版本沿革：
+当前版本 **1.1.1**，72 项测试全绿。版本沿革：
 
 - **Phase 3**：真实 GUI 前端验收通过（侧栏徽标、悬停卡选状态、改写与清除、模型经 `set_session_status` 自主标记、连续三次重启后标记仍在）。
 - **1.0.0（Phase 4）**：标记写入后无需刷新页面即可在侧栏看到（全页共享列表定时读取 + 本地写透，`refreshIntervalMs` 默认 2000ms）。
 - **1.0.1 / 1.0.2**：修悬停卡配色与使用反馈——复制误触、图标边距、跨间隙命中区、8 语言字典、交互面主题响应、8 格单行。
 - **1.0.3**：悬停卡表面、文字、状态色全部改为随 DSH 主题变化的 `--dsw-alias-*`（浅色卡面白、深色卡面深灰，均经真实主题管线验收）；语言与主题设置持久化问题定位为 `cordis.patch.yml` 的 UTF-8 BOM 导致 config-editor 写入被拒，移除 BOM 后跨重启保持。
 - **1.1.0**：竞品评估后落地 P0 跨会话状态总览——设置页新增 `会话状态` 分区，按 8 状态分组、带计数、关联真实会话标题、页面内轮询自动更新。
+- **1.1.1**：修复浅色主题下 light picker 的黑白割裂——官方悬停卡两主题都固定深色，1.0.3 起给状态面板自绘主题白底导致「上黑 + 中白 + 下黑」；改回融入深色卡（透明底 + 固定浅色文字/图标），徽标仍随主题。两主题真实页面已复核。
 
 全部在 dev4090 的真实 DSH 进程与页面上验证过（tarball 装载、`--dump-config` 生效、route、跨进程持久化、前端交互、明暗主题、状态总览）。截图与命令见 [验收与回归](./docs/acceptance-and-regression.md) §3。
 
