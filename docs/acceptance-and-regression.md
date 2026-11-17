@@ -1,6 +1,6 @@
 # Acceptance & Regression
 
-> **文档版本**：v1.1.1 · 2026-11-18（对应插件 1.1.1）
+> **文档版本**：v1.1.2 · 2026-11-18（对应插件 1.1.2）
 
 > 记录验收标准、已通过证据、待执行集成 smoke 与回归清单。
 > 对应实现进度见 `docs/implementation-plan.md` §2，风险优先级见 `docs/feasibility-and-risks.md`。
@@ -12,12 +12,12 @@
 | Host 类型安全 | `pnpm run typecheck` | exit 0，零输出 |
 | Host bundle | `pnpm run build:host`（→ `tsc -p tsconfig.json`） | `lib/*.js` / `lib/*.d.ts` 均生成 |
 | Client bundle | `node --check lib/client.js` | syntax OK；文件大小随版本变化（r8 为 24,150 B 量级，宿主实际提供的字节数含服务端附加内容） |
-| 纯推理测试 | `node --test --test-isolation=none tests/inference.test.mjs` | 16 项全绿 |
-| Schema 契约测试 | `tests/types.test.mjs` | 7 项全绿 |
+| 纯推理测试 | `node --test --test-isolation=none tests/inference.test.mjs` | 17 项全绿 |
+| Schema 契约测试 | `tests/types.test.mjs` | 9 项全绿 |
 | Service 集成测试 | `tests/service.test.mjs` | 14 项全绿 |
-| i18n / 图标 / 样式契约 | `tests/i18n.test.mjs`、`tests/theme.test.mjs` | 14 项全绿 |
-| `pnpm run test` | `tests 72 / suites 17 / pass 72 / fail 0` |
-| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.1.1.tgz`（56,116 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md` |
+| i18n / 图标 / 样式契约 | `tests/i18n.test.mjs`、`tests/theme.test.mjs` | i18n 11 项 + theme 11 项全绿 |
+| `pnpm run test` | `tests 73 / suites 17 / pass 73 / fail 0` |
+| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.1.2.tgz`（56,683 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md` |
 | 真实装载 | `dsh plugin --profile smoke add <tgz>`（dev4090） | profile 初始化成功并安装插件，详见 §3 |
 | **前端视觉与交互** | 真实 GUI 上操作（dev4090 + CDP） | sidebar 行尾标记、hover card、状态改写/清除、跨进程持久化全部实测通过，见 §3.4 与 §4 |
 
@@ -27,10 +27,15 @@
 
 | 文件 | 用例数 | 覆盖点 |
 |---|---|---|
-| `tests/inference.test.mjs` | 16 | `inferStatus` 全部规则分支 + `shouldApplyInference` 三态 + `isAutoMarkExpired` 三态 |
-| `tests/types.test.mjs` | 7 | `MarkRecordSchema.strict`、超长 note 拒绝、默认值填充、`STATUS_META` 全覆盖、route 派生一致性 |
-| `tests/service.test.mjs` | 15 | `getMark`/`clearMark`/`listAll`/`putMark`；state route 400 与命中；mutate set→clear 往返；unsupported-action；两个 tool 注册与 execute；note 超长抛错；`turn/end interrupted` auto inference + manual mark not overwritten |
+| `tests/inference.test.mjs` | 17 | `inferStatus` 全部规则分支 + `shouldApplyInference` 三态 + `isAutoMarkExpired` 三态 |
+| `tests/types.test.mjs` | 9 | `MarkRecordSchema.strict`、超长 note 拒绝、默认值填充、`STATUS_META` 全覆盖、route 派生一致性 |
+| `tests/service.test.mjs` | 14 | `getMark`/`clearMark`/`listAll`/`putMark`；state route 400 与命中；mutate set→clear 往返；unsupported-action；两个 tool 注册与 execute；note 超长抛错；`turn/end interrupted` auto inference + manual mark not overwritten |
+| `tests/smoke.test.mjs` | 1 | 端到端 inference round-trip + state route read-back + neutral-event no-op |
+| `tests/i18n.test.mjs` | 11 | `STATUS_META`/tone/schema 默认值一致性 + 图标盒尺寸 + Shell 8 语言字典键集合与占位符 |
+| `tests/theme.test.mjs` | 11 | 零字面颜色、inline glyph 盒、active 格不重设 color、badge 尺寸、`:has([data-status-slot])` 整卡覆盖宿主、面板与状态色用主题别名、hover/active 用 interactive 令牌、桥接命中区、8 格盒尺寸、总览页主题别名 |
+| `tests/marks.test.mjs` | 5 | 共享读取器：快照分发、本地写透、消失会话分发 `null`、采纳 Host 读取间隔、读取失败保留上次 |
 | `tests/overview.test.mjs` | 5 | overview route：分组排序、仅非空组、标题关联、`sessionTitle` 缺失/抛错回退 null、空态 |
+| **合计** | **73** | suites 17 / pass 73 / fail 0 |
 
 ## 3. 真实集成验证（dev4090，已执行）
 
@@ -207,6 +212,29 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 
 截图：`.drafts/shots/v111-light-picker.png`、`.drafts/shots/v111-dark-picker.png`（均 1576×861，已目检）。部署链路同 §3.10：base64 经 ssh stdin 上传 tgz → 停 3099 → `dsh plugin add`（1.1.1 需 `allow-version --accept-risk`）→ 常驻 ssh 起 web → CDP 复核；远程 `lib/client.js` 实测含 `--dsw-static-neutral-00`、不含悬停卡白底声明。
 
+> **1.1.1 已被 1.1.2 取代**：1.1.1 只改了自己面板（透明 + 固定浅色文字），整卡仍是宿主固定深色，浅色主题下整卡仍黑，未满足「跟随 DSH 主题」。见 §3.12。
+
+### 3.12 1.1.2 整卡主题接管（真实页面，2026-11-18）
+
+1.1.1 被用户否决（「light 这回也是黑色浮窗」）：验收口径应是**整张卡**跟随主题（读 `cardBg`，light≠dark 才算通过），只看「面板透明/文字白」是错误口径。根因：官方 `div.card`（`ui-primitives/src/HoverCard.module.css:9-19`）`--dsw-hovercard-bg` 写死 `#2C2C2E`，宿主标题/路径/时间/状态行也写死深底浅字（`ui-workspace/.../rows/Rows.tsx:473-495`、`Rows.module.css:417-444`），我们 slot 只是卡里的一段，只调自己面板无法让整卡跟随主题。
+
+1.1.2 从内容区用 `:has([data-status-slot])` 覆盖宿主整张卡（方案先经 `.drafts/probe-takeover.mjs` 在 1.1.1 页面注入验证成立）：
+
+- `src/client/hover.module.css` 新增 4 组全局规则（属性选择器不被 `build-client.mjs` 的 `.class` 哈希改写，`:has()` + `!important` 特异性高于官方样式，只命中含我们 slot 的那张卡）：`[class*='card']:has([data-status-slot]) { --dsw-hovercard-bg: var(--dsw-alias-bg-layer-2) !important }`；`[class*='hoverTitle'] → --dsw-alias-label-primary`、`[class*='hoverPath']/[class*='hoverTime']/[class*='hoverStatus'] → --dsw-alias-label-secondary`（均 `!important`）。我们面板 `.root` 透明、`--dsw-alias-label-primary`，hover/active 用 `--dsw-alias-interactive-bg-hover/active`，状态图标用主题别名。
+- `src/client/HoverCard.tsx`：`data-status-slot` 锚点 spread 到三个根 div；`guard`（`stopPropagation` 阻断官方整卡复制）保留。
+- `src/contracts.ts`：八项 `hoverTone` 改回主题别名（awaiting-answer 用 `--dsw-alias-label-secondary`）。
+- `tests/theme.test.mjs`：新增 `:has` 整卡覆盖、面板主题别名、主题感知 hover 色三条断言。
+
+`.drafts/verify-112.mjs` 两主题实测（驱动同 §3.10）：
+
+| 验收点 | 操作 | 实测证据 |
+|---|---|---|
+| 浅色主题整卡变浅 | `ui-theme preference: system` + `prefers-color-scheme: light`，悬停会话行 → 点「Change status」 | `bodyBg rgb(255,255,255)`、**`cardBg rgb(255,255,255)`**、`titleColor rgb(15,17,21)`、`metaColor rgb(97,102,107)`、`ourPanelColor rgb(15,17,21)`；8 格单行 `cellRows:[378]` |
+| 深色主题整卡变深 | 同上切 `prefers-color-scheme: dark` | `bodyBg rgb(21,21,23)`、**`cardBg rgb(44,44,46)`**、`titleColor rgb(249,250,251)`、`metaColor rgb(207,211,214)`、`ourPanelColor rgb(249,250,251)`；8 格单行 |
+| 整卡随主题（验收口径） | 对比两主题 `cardBg` | light `rgb(255,255,255)` ≠ dark `rgb(44,44,46)` → 通过 |
+
+截图：`.drafts/shots/v112-light-picker.png`（53,023 B，白卡深字彩色图标）、`.drafts/shots/v112-dark-picker.png`（51,214 B，深灰卡浅字），均 1576×861，已目检。部署：`.drafts/upload-112-chunked.ps1` 分块 base64 ssh 上传（REMOTE_BYTES=56683）→ `allow-version dsh-session-status-marker@1.1.2 --dsh-version 0.2.0-rc.2 --accept-risk` + `dsh plugin add`（INSTALLED_VERSION=1.1.2）。本地 73 项测试全绿、`pnpm pack` 56,683 B。
+
 ## 4. Phase 2 – Smoke & icon round-trip（已完成）
 
 ### 新增文件
@@ -222,10 +250,10 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 | `tests/service.test.mjs` | 14 | `getMark`/`clearMark`/`listAll`/`putMark`；state route 400 与命中；mutate set→clear 往返；unsupported-action；两个 tool 注册与 execute；note 超长抛错；`turn/end interrupted` auto inference + manual mark not overwritten |
 | `tests/smoke.test.mjs` | 1 | 完整 inference round-trip + GET state route read-back + neutral-event no-op |
 | `tests/i18n.test.mjs` | 11 | STATUS_META/tone/schema/defaults 跨模块一致性 + 图标尺寸契约 + Shell 8 语言字典键集合与占位符 |
-| `tests/theme.test.mjs` | 10 | 样式只用 `--dsw-*` token、图标盒尺寸、active 格不覆盖 color、badge 盒尺寸、悬停卡融入深色卡的固定浅色文字、每个状态的静态 `hoverTone`、格子底色半透明白、`.root::before` 桥接命中区、格子 22px border-box + 2px 内边距 + 2px 间距、总览页主题别名 |
+| `tests/theme.test.mjs` | 11 | 零字面颜色、图标盒尺寸、active 格不覆盖 color、badge 盒尺寸、`[class*='card']:has([data-status-slot])` 整卡覆盖宿主、面板用主题别名、状态 hover 色用主题别名、`.root::before` 桥接命中区、格子 22px border-box + 2px 内边距 + 2px 间距、总览页主题别名 |
 | `tests/marks.test.mjs` | 5 | 共享读取器：快照分发、本地写透、消失的会话分发 `null`、采纳 Host 下发的读取间隔、读取失败保留上一次结果 |
 | `tests/overview.test.mjs` | 5 | overview route：分组排序、仅非空组、标题关联、`sessionTitle` 缺失/抛错回退 null、空态 |
-| **合计** | **72** | suites 17 / pass 72 / fail 0 |
+| **合计** | **73** | suites 17 / pass 73 / fail 0 |
 
 ## 5. 升级回归清单
 

@@ -1,6 +1,6 @@
 # 项目记忆 · dsh-session-status-marker
 
-> **文档版本**：v1.1.1 · 2026-11-18（对应插件 1.1.1）
+> **文档版本**：v1.1.2 · 2026-11-18（对应插件 1.1.2）
 
 > 本文件是「项目记忆」的落盘载体，供后续会话 / Agent 续接时读取。记录决策沿革、硬约束、已验证事实与教训；不放临时日志。与 `AGENTS.md`（standing orders）、`docs/architecture.md`（当前架构）、`docs/implementation-plan.md`（执行顺序）、`docs/acceptance-and-regression.md`（验收证据）分工明确。
 
@@ -51,9 +51,9 @@
 
 - `pnpm run typecheck` → EXIT=0，无输出。
 - `pnpm run build` → EXIT=0，`[session-status-marker:client] built lib/client.js`；`node --check lib/client.js` EXIT=0。
-- `pnpm run test` → EXIT=0，`tests 72 / suites 17 / pass 72 / fail 0`。
-- 测试分布：inference 17 例（10 规则 + 3 优先序 + 3 过期 + 1）、types 9 例、service 14 例、smoke 1 例（`turn/end:interrupted` → `effectiveMark` 与 GET state route 同一行）、i18n 11 例（STATUS_META/tone/schema/defaults + 图标尺寸契约 + Shell 8 语言字典）、theme 10 例（样式只用 `--dsw-*` token、图标盒尺寸、active 格不覆盖 color、主题别名、`tooltip-key-bg`、`::before` 桥接命中区、格子 22px/2px、总览页主题别名）、marks 5 例、overview 5 例（分组排序/仅非空组/标题关联/null 回退/空态）。
-- `pnpm pack` → `dsh-session-status-marker-1.1.1.tgz`（56,116 B；1.1.0 为 56,007 B，1.0.3 为 47,725 B，1.0.2 为 47,148 B，1.0.1 为 39,838 B，1.0.0 为 39,387 B，0.1.0 为 32,600 B）。
+- `pnpm run test` → EXIT=0，`tests 73 / suites 17 / pass 73 / fail 0`。
+- 测试分布：inference 17 例（10 规则 + 3 优先序 + 3 过期 + 1）、types 9 例、service 14 例、smoke 1 例（`turn/end:interrupted` → `effectiveMark` 与 GET state route 同一行）、i18n 11 例（STATUS_META/tone/schema/defaults + 图标尺寸契约 + Shell 8 语言字典）、theme 11 例（零字面颜色、图标盒、active 格不覆盖 color、badge 盒、`:has([data-status-slot])` 整卡覆盖宿主、面板与状态色用主题别名、hover/active 用 interactive 令牌、`::before` 桥接命中区、格子 22px/2px、总览页主题别名）、marks 5 例、overview 5 例（分组排序/仅非空组/标题关联/null 回退/空态）。
+- `pnpm pack` → `dsh-session-status-marker-1.1.2.tgz`（56,683 B；1.1.1 为 56,116 B、1.1.0 为 56,007 B，1.0.3 为 47,725 B，1.0.2 为 47,148 B，1.0.1 为 39,838 B，1.0.0 为 39,387 B，0.1.0 为 32,600 B）。
 - dev4090 真实集成（2026-11-11）：`dsh plugin add` 装载成功、`--dump-config` 第 1244–1249 行显示行与 config、web 宿主起 3099、三条 route 的 401/400/200 与跨进程冷读、落盘 `storages/session_status_marker/marks/<sid>.json`、boot graph 含本插件 entry、`/plugins/??…&rev=…` 200。全部细节见 `docs/acceptance-and-regression.md` §3。
 - dev4090 前端视觉验收（2026-11-11，真实 GUI + CDP 驱动）：侧栏行尾标记渲染 16×16 SVG 且颜色取 `--dsw-alias-state-*-primary`；未标记会话经 hover card 的 8 格可手动标记；已标记会话可改写状态、可清除；**连续三次杀掉 3099 进程重启后标记仍在**；模型通过 `set_session_status` 工具自主标记（新增 `{status:"done",source:"manual",note:"ai-self-mark"}`）。截图见 `.drafts/shots/`。
 - fake Cordis ctx 必须有 `reflect: { provide: () => {} }`（`cordis/lib/index.js:1854` 的 `Service` 构造器会调它）与可调用的 `inject(deps, callback)`（路由注册改用 `ctx.inject(['connection'], …)` 之后）；`defineTool.execute` 会先校验参数，`subjectId: null` 被拒，测试须省略该字段。
@@ -97,7 +97,8 @@
 23. **本机 scp 对 dev4090 会以 SFTP `copy /Y` 失败**：Windows OpenSSH 的 scp 把目标当本地路径报「系统找不到指定的路径」。可靠替代：把小脚本或 tgz base64 后经 ssh stdin 写到远端——`[Convert]::ToBase64String(...)` → `ssh dev4090 "powershell -NoProfile -Command \"[IO.File]::WriteAllBytes('...',[Convert]::FromBase64String(([Console]::In.ReadToEnd() -replace '\s','')))\""`，再用 `powershell -File` 执行。所有远程探测脚本必须走「base64 写入 → File 执行」，不要 ssh 内联 `$` 变量（被本地 PowerShell 展开吞掉）。
 24. **远程 DSH 安装形态会变，shim 路径不能硬记**：dev4090 的 DSH 从 scoop 版（`scoop\apps\deepseek-harness-pre\current`）改成 `AppData\Local\Programs\DeepSeek Harness` 常规安装后，旧 `dsh-test.cmd` 全部失效；新 CLI shim 在 `resources\runtime\cli\bin\dsh.cmd`，exe/asar 在常规安装根下。版本也从 0.2.2-rc.1 变成 0.2.0-rc.2，装载插件需 `dsh plugin ... allow-version ... --accept-risk` 显式豁免 peerDependencies 版本不符。每次远程验收前先探测安装形态与版本，再重写 shim。
 25. **web 服务必须靠常驻 ssh 保活**：dev4090 上 `Start-Process cmd` 起的 web 服务会随发起的 ssh 会话退出被杀（`NO_LISTENER`）。可靠做法是用本地后台作业跑 `ssh dev4090 "cmd /c start-web2.cmd"`，ssh 保持连接则服务常驻；token 从该作业输出读取。
-26. **插件只是宿主浮层里的一段 slot，不能自绘与宿主冲突的表面**：DSH 会话行悬停卡两主题都固定深色，宿主的标题/时间/状态行深底浅字。给状态面板单独涂随主题的白底（`--dsw-alias-bg-layer-2`）在浅色主题下会出现「上黑 + 中白 + 下黑」割裂（1.0.3–1.1.0 的缺陷）。判断口径：卡片表面是否随主题由宿主决定，插件只融入——背景透明、固定浅色文字、400 级静态图标。徽标不同（在随主题的侧栏上，用主题别名）。用户反馈「light picker 明显有问题」时用计算样式 `panelBg`/`cardBg` 取证，不要只看 DOM。
+26. **插件只是宿主浮层里的一段 slot，不能自绘与宿主冲突的表面**：DSH 会话行悬停卡两主题都固定深色，宿主的标题/时间/状态行深底浅字。给状态面板单独涂随主题的白底（`--dsw-alias-bg-layer-2`）在浅色主题下会出现「上黑 + 中白 + 下黑」割裂（1.0.3–1.1.0 的缺陷）。徽标不同（在随主题的侧栏上，用主题别名）。用户反馈「light picker 明显有问题」时用计算样式 `panelBg`/`cardBg` 取证，不要只看 DOM。
+27. **要让整张宿主浮层跟随主题，唯一正解是用 `:has()` 从内容区反向覆盖整张卡，而不是自己再涂一层表面**：1.1.1 只改自己面板（透明 + 固定浅色字），整卡仍是宿主固定深色 → 被用户否决（「light 这回也是黑色浮窗」）。1.1.2 用 `[class*='card']:has([data-status-slot]) { --dsw-hovercard-bg: var(--dsw-alias-bg-layer-2) !important }` 把卡片底色变量指向主题别名，并把宿主 `hoverTitle/hoverPath/hoverTime/hoverStatus` 行指向 `--dsw-alias-label-primary/secondary`——属性选择器不被 CSS-module 构建器哈希，`:has()+!important` 特异性高于官方样式且只命中含我们 slot 的那张卡。**验收口径必须是「整卡」而非「面板」**：读 `cardBg`，light≠dark 才算通过（1.1.1 的口径「面板透明 + 文字白」是错的，会漏掉「整卡仍黑」）。方案先用 `.drafts/probe-takeover.mjs` 在旧版本页面注入规则验证 `:has` 覆盖生效，再落代码。
 
 ## 7. 仍开放的事项
 
@@ -108,7 +109,8 @@
 - 1.0.2 的真实页面限制：语言切换在 dev4090 上 `T+0` 生效、80ms 后被 Host 回写覆盖回 `zh-CN`，重载后仍是 `zh-CN`（`locale/src/client/index.ts:261` 的 `host?.set` 不落盘）。这是环境限制，非插件缺陷；ja/es/fr/de/ru/pt 的字典键集合由单测保证，未在真实页面逐语言目检。
 - 1.0.3（已完成，2026-11-17）：推翻 1.0.1「浮层文字用静态色板」的决策——悬停卡内容区改用主题别名（`--dsw-alias-bg-layer-2` 表面、`--dsw-alias-label-primary` 文字、`--dsw-alias-state-*-primary` 状态色），内容区负边距 `-12px -16px` 覆盖官方 `.card` 固定深色底。**真实主题管线验收**（`ui-theme preference: system` + `prefers-color-scheme`）：浅色主题下卡面 `rgb(255,255,255)` 白、文字 `rgb(15,17,21)` 近黑；深色主题下卡面 `rgb(44,44,46)` 深灰、文字 `rgb(249,250,251)` 近白。截图 `.drafts/shots/v103-system-light-picker.png` / `v103-system-dark-picker.png`。**语言持久化根因**：dev4090 的 `cordis.patch.yml` 含 UTF-8 BOM，移除后语言与主题均跨重启保持；属环境侧修复。
 - 1.1.0（已完成，2026-11-18）：竞品差异化——三个同类插件全在「生命周期+注意力+组织」赛道，无人做「按工作状态分组查看全部会话」。落地 P0 跨会话状态总览：新 Host 路由 `GET /api/session-status-marker.overview`（按 8 状态分组、组内按更新时间降序、`sessionTitle.get` 关联标题、读不到回退 null），设置页 `settings.section` 新组件 `StatusOverview.tsx`（mount+轮询+可见性感知，全 `--dsw-alias-*`），8 语言各补 6 键。`static inject` 增 `sessions`/`sessionTitle`（本地 `declare module` 声明 Context merge，未加依赖），client 侧本地声明 `settings.section` SlotMap entry（未装 `dsh-client-ui-settings`）。**真实页面验收**：dev4090 设置页出现 `Session status` 入口，按 TODO/Done/Review/Awaiting answer 分组、带计数、标题关联到真实会话「标记会话为完成」、mutate 后 3 秒内页面自动更新；明暗两主题面板与状态组色均随 DSH 主题变化。截图 `.drafts/shots/v110-overview-{light,dark,titled}.png`。72 项测试全绿，tgz 56,007 B。
-- 1.1.1（已完成，2026-11-18）：用户指出 light picker 黑白割裂。根因是官方悬停卡两主题都固定深色、宿主标题/时间/状态行深底浅字，而 1.0.3 起给状态面板自绘了随主题的白底。改回融入深色卡：`.root` 背景透明、文字固定白 `--dsw-static-neutral-00`、状态图标 400 级静态色、hover/active 半透明白；`STATUS_META.hoverTone` 从主题别名改回静态色板。徽标仍用主题别名。**真实页面两主题复核**：浅色/深色下卡片均 `rgb(44,44,46)`、面板透明、文字白色、8 格单行，截图 `.drafts/shots/v111-{light,dark}-picker.png`。72 项测试全绿，tgz 56,116 B。
+- 1.1.1（已完成但被 1.1.2 取代，2026-11-18）：用户指出 light picker 黑白割裂。1.1.1 只改自己面板（透明 + 固定浅色字），整卡仍宿主固定深色，浅色主题下整卡仍黑，未真正跟随主题。截图 `.drafts/shots/v111-{light,dark}-picker.png`。
+- 1.1.2（已完成，2026-11-18）：用户否决 1.1.1（「light 这回也是黑色浮窗」）后，改用 `[class*='card']:has([data-status-slot])` 从内容区反向覆盖宿主整张卡——`--dsw-hovercard-bg` → `--dsw-alias-bg-layer-2`、宿主标题/路径/时间/状态行 → `--dsw-alias-label-primary/secondary`，我们面板透明、状态图标与 hover/active 全用主题别名。属性选择器不被 CSS-module 构建器哈希，`:has()+!important` 只命中含我们 slot 的那张卡。**真实页面验收**：浅色整卡 `cardBg rgb(255,255,255)`、深色整卡 `rgb(44,44,46)`（以 `cardBg` light≠dark 为准），8 格单行，截图 `.drafts/shots/v112-{light,dark}-picker.png`。73 项测试全绿，tgz 56,683 B。部署用 `.drafts/upload-112-chunked.ps1` 分块 base64 ssh 上传 + `allow-version @1.1.2`。
 - 仍开放：fork 继承策略；`cordis_inspect_query` 运行时自检（Creator mode 能力）；TUI 端 UI 接入；GUI 回归 `test:gui` / `DSH_SNAPSHOT=replay test:web`；侧栏按状态过滤（宿主无过滤 hook slot，推迟）；批量状态操作（P1）。
 - Phase 4（已完成）：tarball 内容、profile 装载、`--dump-config`、跨进程持久化、client bundle 组合与投递、前端视觉与交互（含 AI 自主标记）都在 dev4090 验过。**仍未执行**：`cordis_inspect_query` 运行时自检——该工具属 Creator mode 能力，测试 home 里没有对应开关；替代证据是真实页面对三条 route 的直接调用（`docs/acceptance-and-regression.md` §3.4）。
 - 桌面端 / TUI 端 UI 接入：Host service 与 route 已通用（headless 与 web profile 都能装载），但 `sidebar.session.row.trailing` / `.hover` 是 Web client 的 slot，桌面端走同一套 Web UI（Electron 窗口内是同一个 web 面，可用）；**TUI 端没有 slot 体系，标记只能由 AI 工具写、按文本呈现**，需另做接入。

@@ -38,6 +38,7 @@
 - 语言：官方 Shell 提供 8 种语言 `en, ja, es, fr, de, ru, pt, zh`（`packages/client/locale/src/client/index.ts:23`；`ui-workspace/src/client/index.ts:136` 的 `locale.register(NS, { zh, en, ja, es, fr, de, ru, pt })` 是官方范式），回退语言 `FALLBACK_LOCALE = 'en'`（`locale/src/client/index.ts:110`）。插件此前只注册 `{ zh, en }`，切到其余 6 种时本命名空间缺字典，按回退链掉回英文，读起来就是「语言没切换」。**修法**：把 `src/client/locales.ts` 补齐 8 种并以 `DICTIONARIES` 一次注册（`src/client/index.ts`）。
 - 主题：悬停卡表面是**两主题都固定的深色**（`HoverCard.module.css:10` `--dsw-hovercard-bg: #2C2C2E`；`ui-workspace/src/client/rows/Rows.module.css:410-444` 注释「dark surface, fixed colors both themes」）。文字与状态色若改用主题别名，浅色主题下会解析成接近黑色，重演 1.0.0「文字看不见」的缺陷（见 `AGENTS.md` 悬停卡交互约束）。
   - 因此文字与八个状态图标保持静态色板；**主题响应**改由交互面承担：悬停/选中格底色与按钮悬停底色改用 `--dsw-alias-tooltip-key-bg`。该令牌由 `--dsw-alias-tooltip-bg` 派生（`packages/client/ui-theme/src/styles/design-platform.css:281` 浅色 = neutral-bluish-850、`:407` 深色 = neutral-bluish-750，两者不同），是**随主题变化的背景**，坐在静态色文字之下，不会重演不可读问题。
+- **1.1.2 之后的最终方案（取代上面的静态色板）**：用户反馈 light 主题下整卡仍是黑色浮窗（1.1.1 只改自己面板、整卡仍宿主固定深色），最终改为用 `[class*='card']:has([data-status-slot])` 从内容区反向覆盖宿主整张卡——`--dsw-hovercard-bg` 指向 `--dsw-alias-bg-layer-2`、宿主 `hoverTitle/hoverPath/hoverTime/hoverStatus` 指向 `--dsw-alias-label-primary/secondary`，面板与状态图标全用主题别名。属性选择器不被 CSS-module 构建器哈希，`:has()+!important` 特异性高于官方样式且只命中含我们 slot 的那张卡。验收口径是**整卡**（读 `cardBg`，light `rgb(255,255,255)` ≠ dark `rgb(44,44,46)`），不是面板透明。见 `docs/acceptance-and-regression.md` §3.12。
 
 ## 5. 图标内边距
 
