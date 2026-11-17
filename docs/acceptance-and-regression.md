@@ -1,6 +1,6 @@
 # Acceptance & Regression
 
-> **文档版本**：v1.1.0 · 2026-11-18（对应插件 1.1.0）
+> **文档版本**：v1.1.1 · 2026-11-18（对应插件 1.1.1）
 
 > 记录验收标准、已通过证据、待执行集成 smoke 与回归清单。
 > 对应实现进度见 `docs/implementation-plan.md` §2，风险优先级见 `docs/feasibility-and-risks.md`。
@@ -17,7 +17,7 @@
 | Service 集成测试 | `tests/service.test.mjs` | 14 项全绿 |
 | i18n / 图标 / 样式契约 | `tests/i18n.test.mjs`、`tests/theme.test.mjs` | 14 项全绿 |
 | `pnpm run test` | `tests 72 / suites 17 / pass 72 / fail 0` |
-| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.1.0.tgz`（56,007 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md` |
+| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.1.1.tgz`（56,116 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md` |
 | 真实装载 | `dsh plugin --profile smoke add <tgz>`（dev4090） | profile 初始化成功并安装插件，详见 §3 |
 | **前端视觉与交互** | 真实 GUI 上操作（dev4090 + CDP） | sidebar 行尾标记、hover card、状态改写/清除、跨进程持久化全部实测通过，见 §3.4 与 §4 |
 
@@ -195,6 +195,18 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 
 > 环境注记：dev4090 本机 DSH 由 scoop 版改为 `AppData\Local\Programs` 常规安装，版本从 0.2.2-rc.1 变为 0.2.0-rc.2；通过显式版本豁免完成装载。前端行为在 two themes 下均正常，未观察到与版本差异相关的运行错误。
 
+### 3.11 1.1.1 悬停卡浅色主题割裂修复（真实页面，2026-11-18）
+
+用户指出 1.0.3–1.1.0 的 light picker 存在黑白割裂：DSH 会话行悬停卡两主题都固定深色、宿主的标题/时间/状态行都是深底浅字，而 1.0.3 起给状态面板单独涂了随主题变化的白底（`--dsw-alias-bg-layer-2`），浅色主题下出现「上黑 + 中白 + 下黑」。1.1.1 改回融入官方深色卡。
+
+| 验收点 | 操作 | 实测证据 |
+|---|---|---|
+| 浅色主题无割裂 | `ui-theme preference: system` + `prefers-color-scheme: light`，悬停会话行、开状态面板 | `bodyBg rgb(255,255,255)`、`cardBg rgb(44,44,46)`、面板 `panelBg rgba(0,0,0,0)`（透明）、`panelColor rgb(255,255,255)`；8 格单行 `cellRows:[378]` |
+| 深色主题一致 | 同一页面切 `prefers-color-scheme: dark` | `bodyBg rgb(21,21,23)`、`cardBg rgb(44,44,46)`、面板透明、文字白色、8 格单行——与浅色主题同一套卡内配色 |
+| 状态图标可读 | 读 8 格 `color` | 400 级静态色：`todo rgb(122,170,255)`、`stopped rgb(242,90,90)` 等，在固定深色卡上两主题都稳定 |
+
+截图：`.drafts/shots/v111-light-picker.png`、`.drafts/shots/v111-dark-picker.png`（均 1576×861，已目检）。部署链路同 §3.10：base64 经 ssh stdin 上传 tgz → 停 3099 → `dsh plugin add`（1.1.1 需 `allow-version --accept-risk`）→ 常驻 ssh 起 web → CDP 复核；远程 `lib/client.js` 实测含 `--dsw-static-neutral-00`、不含悬停卡白底声明。
+
 ## 4. Phase 2 – Smoke & icon round-trip（已完成）
 
 ### 新增文件
@@ -210,7 +222,7 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 | `tests/service.test.mjs` | 14 | `getMark`/`clearMark`/`listAll`/`putMark`；state route 400 与命中；mutate set→clear 往返；unsupported-action；两个 tool 注册与 execute；note 超长抛错；`turn/end interrupted` auto inference + manual mark not overwritten |
 | `tests/smoke.test.mjs` | 1 | 完整 inference round-trip + GET state route read-back + neutral-event no-op |
 | `tests/i18n.test.mjs` | 11 | STATUS_META/tone/schema/defaults 跨模块一致性 + 图标尺寸契约 + Shell 8 语言字典键集合与占位符 |
-| `tests/theme.test.mjs` | 10 | 样式只用 `--dsw-*` token、图标盒尺寸、active 格不覆盖 color、badge 盒尺寸、悬停卡主题别名与静态色板、每个状态的 `hoverTone`、格子底色用 `--dsw-alias-tooltip-key-bg`、`.root::before` 桥接命中区、格子 22px border-box + 2px 内边距 + 2px 间距、总览页主题别名 |
+| `tests/theme.test.mjs` | 10 | 样式只用 `--dsw-*` token、图标盒尺寸、active 格不覆盖 color、badge 盒尺寸、悬停卡融入深色卡的固定浅色文字、每个状态的静态 `hoverTone`、格子底色半透明白、`.root::before` 桥接命中区、格子 22px border-box + 2px 内边距 + 2px 间距、总览页主题别名 |
 | `tests/marks.test.mjs` | 5 | 共享读取器：快照分发、本地写透、消失的会话分发 `null`、采纳 Host 下发的读取间隔、读取失败保留上一次结果 |
 | `tests/overview.test.mjs` | 5 | overview route：分组排序、仅非空组、标题关联、`sessionTitle` 缺失/抛错回退 null、空态 |
 | **合计** | **72** | suites 17 / pass 72 / fail 0 |
