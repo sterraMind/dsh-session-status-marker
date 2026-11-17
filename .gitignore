@@ -8,6 +8,9 @@ lib/
 # Local scratch space: one-off scripts, remote test helpers, screenshots
 .drafts/
 
+# Subagent scratch artifacts (probes, launch scripts, remote inspectors)
+.scratch/
+
 # Official DSH source mirror used as the fact source (re-download with the URL in AGENTS.md)
 .research/
 

@@ -37,7 +37,17 @@
 ### 测试
 
 - 新增 3 条语言字典断言（覆盖 Shell 全部 8 种语言、与 `zh` 键集合一致、占位符保留）与 3 条样式断言（悬停/选中格用 tooltip 背景令牌、跨间隙命中区存在、8 格在 212px 内单行）。测试合计 66 项。
-- 在 dev4090 真实页面复核五项修复：点「修改状态」不再触发复制（`copiedLabelShown: false`、`cardStillOpen: true`）；8 格 `distinctRows: 1` 全部 y=458、22×22px、`padding: 2px`；`.root::before` 命中区 `left: -24px` / `width: 24px`；`--dsw-alias-tooltip-key-bg` 在浅/深主题下解析为不同颜色；语言切换 `T+0` 生效（持久化受 dev4090 的 Host 配置写入限制，见 `docs/acceptance-and-regression.md` §3.8）。
+- 在 dev4090 真实页面复核五项修复：点「修改状态」不再触发复制（`copiedLabelShown: false`、`cardStillOpen: true`）；8 格 `distinctRows: 1` 全部 y=458、22×22px、`padding: 2px`；`.root::before` 命中区 `left: -8px` / `width: 8px`；`--dsw-alias-tooltip-key-bg` 在浅/深主题下解析为不同颜色；语言切换 `T+0` 生效。
+
+### 前端验收（2026-11-17）
+
+通过真实 DSH 主题（`ui-theme preference: system`，不依赖 CDP 媒体模拟）验证悬停卡主题同步：
+
+- **浅色主题**：`rootBg = rgb(255,255,255)`（白）、`rootColor = rgb(15,17,21)`（近黑）、`activeColor = rgb(65,118,230)`（浅色主题状态色）；截图 `.drafts/shots/v103-system-light-picker.png` 显示白色卡片表面 + 深色文字。
+- **深色主题**：`rootBg = rgb(44,44,46)`（深灰）、`rootColor = rgb(249,250,251)`（近白）、`activeColor = rgb(122,170,255)`（深色主题状态色）；截图 `.drafts/shots/v103-system-dark-picker.png` 显示深灰卡片表面 + 浅色文字。
+- 两个主题下 `cardBox` 尺寸一致（244×214px）、`.root::before` 命中区 `left: -8px / width: 8px`、8 格单行（`cellRows: [458]`、22px 宽、`padding: 2px`）。
+
+语言持久化根因（2026-11-17 补充）：`dsh-home/profiles/smoke/cordis.patch.yml` 头部含 UTF-8 BOM（3 字节），导致 config-editor 写入路径解析失败，设置（语言、主题）写入均被拒绝。移除 BOM 并在 `cordis.patch.yml` 里补上 `- id: locale` / `- id: ui-theme` 两段配置后，语言（`lang=en`）和主题（`data-ds-theme-source`）均跨重启保持。属环境侧修复，插件代码无需改动。
 
 ## [1.0.1] - 2026-11-11
 
