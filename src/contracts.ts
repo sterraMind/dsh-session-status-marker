@@ -84,6 +84,37 @@ export interface AllMarksResponse {
   readonly refreshIntervalMs: number
 }
 
+/** One session row inside a status group, enriched with its display title. */
+export interface OverviewEntry {
+  readonly sessionId: string
+  /** Session display title; `null` when the session has none. */
+  readonly title: string | null
+  readonly status: StatusEnum
+  readonly note: string | null
+  readonly source: MarkSource
+  readonly autoReason: AutoReasonCode | null
+  /** Last modification time of the mark, ms since epoch. */
+  readonly updatedAtMs: number
+}
+
+/** All marked sessions grouped by status; only non-empty groups are present. */
+export interface StatusGroup {
+  readonly status: StatusEnum
+  readonly count: number
+  /** Group members, `updatedAtMs` descending. */
+  readonly entries: readonly OverviewEntry[]
+}
+
+/** Response returned by `GET /api/session-status-marker.overview`. */
+export interface OverviewResponse {
+  /** Non-empty status groups in `STATUS_VALUES` order. */
+  readonly groups: readonly StatusGroup[]
+  /** Number of marked sessions across all groups. */
+  readonly totalMarked: number
+  /** How often the Browser should re-read this route, from the Host config. */
+  readonly refreshIntervalMs: number
+}
+
 /** Success response for mutation routes. */
 export interface MutationOk {
   readonly ok: true
@@ -154,8 +185,10 @@ export const STATUS_META: Readonly<Record<StatusEnum, StatusMeta>> = {
 export const MARKER_STATE_PATH = '/api/session-status-marker.state'
 export const MARKER_LIST_PATH = '/api/session-status-marker.list'
 export const MARKER_MUTATE_PATH = '/api/session-status-marker.mutate'
+export const MARKER_OVERVIEW_PATH = '/api/session-status-marker.overview'
 
 /** Exact-route document-relative paths (Browser `fetch`). */
 export const MARKER_STATE_ROUTE = MARKER_STATE_PATH.slice(1)
 export const MARKER_LIST_ROUTE = MARKER_LIST_PATH.slice(1)
 export const MARKER_MUTATE_ROUTE = MARKER_MUTATE_PATH.slice(1)
+export const MARKER_OVERVIEW_ROUTE = MARKER_OVERVIEW_PATH.slice(1)
