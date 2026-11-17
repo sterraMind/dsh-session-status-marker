@@ -1,6 +1,6 @@
 # Acceptance & Regression
 
-> **文档版本**：v1.0.3 · 2026-11-17（对应插件 1.0.3）
+> **文档版本**：v1.1.0 · 2026-11-18（对应插件 1.1.0）
 
 > 记录验收标准、已通过证据、待执行集成 smoke 与回归清单。
 > 对应实现进度见 `docs/implementation-plan.md` §2，风险优先级见 `docs/feasibility-and-risks.md`。
@@ -16,8 +16,8 @@
 | Schema 契约测试 | `tests/types.test.mjs` | 7 项全绿 |
 | Service 集成测试 | `tests/service.test.mjs` | 14 项全绿 |
 | i18n / 图标 / 样式契约 | `tests/i18n.test.mjs`、`tests/theme.test.mjs` | 14 项全绿 |
-| `pnpm run test` | `tests 66 / suites 16 / pass 66 / fail 0 / duration_ms ~383ms` |
-| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.0.3.tgz`（47,725 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md` |
+| `pnpm run test` | `tests 72 / suites 17 / pass 72 / fail 0` |
+| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.1.0.tgz`（56,007 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md` |
 | 真实装载 | `dsh plugin --profile smoke add <tgz>`（dev4090） | profile 初始化成功并安装插件，详见 §3 |
 | **前端视觉与交互** | 真实 GUI 上操作（dev4090 + CDP） | sidebar 行尾标记、hover card、状态改写/清除、跨进程持久化全部实测通过，见 §3.4 与 §4 |
 
@@ -30,6 +30,7 @@
 | `tests/inference.test.mjs` | 16 | `inferStatus` 全部规则分支 + `shouldApplyInference` 三态 + `isAutoMarkExpired` 三态 |
 | `tests/types.test.mjs` | 7 | `MarkRecordSchema.strict`、超长 note 拒绝、默认值填充、`STATUS_META` 全覆盖、route 派生一致性 |
 | `tests/service.test.mjs` | 15 | `getMark`/`clearMark`/`listAll`/`putMark`；state route 400 与命中；mutate set→clear 往返；unsupported-action；两个 tool 注册与 execute；note 超长抛错；`turn/end interrupted` auto inference + manual mark not overwritten |
+| `tests/overview.test.mjs` | 5 | overview route：分组排序、仅非空组、标题关联、`sessionTitle` 缺失/抛错回退 null、空态 |
 
 ## 3. 真实集成验证（dev4090，已执行）
 
@@ -177,6 +178,23 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 
 > **语言持久化根因（2026-11-17 补充，环境侧修复）**：§3.8 记录的「语言切换不持久」根因已定位——`dsh-home/profiles/smoke/cordis.patch.yml` 头部含 UTF-8 BOM（3 字节 `EF BB BF`），导致 config-editor 写入路径解析失败，所有设置（语言、主题）写入均被拒绝。移除 BOM 并在 `cordis.patch.yml` 里补上 `- id: locale`（`config: { preference: en }`）与 `- id: ui-theme`（`config: { preference: system }`）两段配置后，语言（`lang=en`）和主题均跨重启保持。**属环境侧修复，插件代码无需改动。**
 
+### 3.10 1.1.0 跨会话状态总览（真实页面，2026-11-18）
+
+1.1.0 新增设置页 `会话状态`（`settings.section`，order 60）与新 Host 路由 `GET /api/session-status-marker.overview`。dev4090 真实页面完成端到端验收：
+
+| 验收点 | 操作 | 实测证据 |
+|---|---|---|
+| 插件装载（新 DSH 安装） | dev4090 的 DSH 从 scoop 换成 `AppData\Local\Programs` 常规安装（0.2.0-rc.2），旧的 `dsh-test.cmd`  scoop 路径失效 → 用新版 exe/asar 路径重写 shim；插件 peerDependencies 声明 0.2.2-rc.1，被 0.2.0-rc.2 拒装 → `dsh plugin --profile smoke allow-version dsh-session-status-marker@1.1.0 --dsh-version 0.2.0-rc.2 --accept-risk` 显式豁免后 `dsh plugin add` 成功 | `INSTALLED_VERSION=1.1.0` |
+| overview 路由 | 浏览器内 `fetch('/api/session-status-marker.overview')` | HTTP 200，`{ groups, totalMarked, refreshIntervalMs }`；初始 `totalMarked=4`、3 个非空组 |
+| 设置页入口 | 点左下角 Settings → 侧栏出现 `Session status` 项 → 点入 | 页面标题 `Session status overview`；按 TODO / Done / Review / Awaiting answer 分组，组头带计数，组内按更新时间降序 |
+| 标题关联 | mutate 一条当前会话的标记后读 overview | 该条 `title` = `标记会话为完成`（真实会话标题），备注 `v110-frontend-verify`；孤儿标记（会话已不在列表）回退 `Untitled session` |
+| 轮询生效 | 页面不刷新，mutate 后等 3 秒 | 设置页自动新增 `Done 1` 分组并显示新标记，`totalMarked` 4 → 5 |
+| 主题同步 | `ui-theme preference: system` + `prefers-color-scheme` 分别 light/dark | 浅色 `bodyBg rgb(255,255,255)`、深色 `bodyBg rgb(21,21,23)`；状态组标题用 `--dsw-alias-state-*-primary` 随主题切换，面板底色随 DSH 主题变化 |
+
+截图：`.drafts/shots/v110-overview-light.png`（浅色，1576×861，59,217 B）、`.drafts/shots/v110-overview-dark.png`（深色，1576×861，61,936 B）、`.drafts/shots/v110-overview-titled.png`（含真实会话标题，63,498 B）。
+
+> 环境注记：dev4090 本机 DSH 由 scoop 版改为 `AppData\Local\Programs` 常规安装，版本从 0.2.2-rc.1 变为 0.2.0-rc.2；通过显式版本豁免完成装载。前端行为在 two themes 下均正常，未观察到与版本差异相关的运行错误。
+
 ## 4. Phase 2 – Smoke & icon round-trip（已完成）
 
 ### 新增文件
@@ -187,14 +205,15 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 ### 更新后的测试分布
 | 文件 | 用例数 | 覆盖点 |
 |---|---|---|
-| `tests/inference.test.mjs` | 16 | `inferStatus` 全部规则分支 + `shouldApplyInference` 三态 + `isAutoMarkExpired` 三态 |
-| `tests/types.test.mjs` | 7 | `MarkRecordSchema.strict`、超长 note 拒绝、默认值填充、`STATUS_META` 全覆盖、route 派生一致性 |
-| `tests/service.test.mjs` | 15 | `getMark`/`clearMark`/`listAll`/`putMark`；state route 400 与命中；mutate set→clear 往返；unsupported-action；两个 tool 注册与 execute；note 超长抛错；`turn/end interrupted` auto inference + manual mark not overwritten |
+| `tests/inference.test.mjs` | 17 | `inferStatus` 全部规则分支 + `shouldApplyInference` 三态 + `isAutoMarkExpired` 三态 |
+| `tests/types.test.mjs` | 9 | `MarkRecordSchema.strict`、超长 note 拒绝、默认值填充、`STATUS_META` 全覆盖、route 派生一致性 |
+| `tests/service.test.mjs` | 14 | `getMark`/`clearMark`/`listAll`/`putMark`；state route 400 与命中；mutate set→clear 往返；unsupported-action；两个 tool 注册与 execute；note 超长抛错；`turn/end interrupted` auto inference + manual mark not overwritten |
 | `tests/smoke.test.mjs` | 1 | 完整 inference round-trip + GET state route read-back + neutral-event no-op |
-| `tests/i18n.test.mjs` | 9 | STATUS_META/tone/schema/defaults 跨模块一致性 + 图标尺寸契约 + Shell 8 语言字典键集合与占位符 |
-| `tests/theme.test.mjs` | 9 | 样式只用 `--dsw-*` token、图标盒尺寸、active 格不覆盖 color、badge 盒尺寸、悬停卡不得用随主题变化的别名取色、每个状态的 `hoverTone` 必须是静态色板变量、格子底色用 `--dsw-alias-tooltip-key-bg`、`.root::before` 桥接命中区、格子 22px border-box + 2px 内边距 + 2px 间距 |
+| `tests/i18n.test.mjs` | 11 | STATUS_META/tone/schema/defaults 跨模块一致性 + 图标尺寸契约 + Shell 8 语言字典键集合与占位符 |
+| `tests/theme.test.mjs` | 10 | 样式只用 `--dsw-*` token、图标盒尺寸、active 格不覆盖 color、badge 盒尺寸、悬停卡主题别名与静态色板、每个状态的 `hoverTone`、格子底色用 `--dsw-alias-tooltip-key-bg`、`.root::before` 桥接命中区、格子 22px border-box + 2px 内边距 + 2px 间距、总览页主题别名 |
 | `tests/marks.test.mjs` | 5 | 共享读取器：快照分发、本地写透、消失的会话分发 `null`、采纳 Host 下发的读取间隔、读取失败保留上一次结果 |
-| **合计** | **66** | suites 16 / pass 66 / fail 0 / ~383 ms |
+| `tests/overview.test.mjs` | 5 | overview route：分组排序、仅非空组、标题关联、`sessionTitle` 缺失/抛错回退 null、空态 |
+| **合计** | **72** | suites 17 / pass 72 / fail 0 |
 
 ## 5. 升级回归清单
 
