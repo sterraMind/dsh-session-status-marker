@@ -2,7 +2,20 @@
 
 本文件记录 `dsh-session-status-marker` 的对外可见变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [1.1.1] - 2026-11-18
+## [1.1.2] - 2026-11-18
+
+彻底修复浅色主题悬停卡不跟随 DSH 主题：1.1.1 的「融入官方固定深色卡」方案被用户否决——它在两个主题下都显示深色浮窗，等于没有跟随主题。真正的根因是官方会话行 hover card 的表面与标题/时间/状态行颜色全部写死（深底浅字、两主题一致），插件只改自己的面板无论怎么调都无法让整张卡跟随主题。
+
+### 修复
+
+- 从我们的 slot 用 `:has([data-status-slot])` 覆盖**宿主整张卡**：卡片背景变量 `--dsw-hovercard-bg` 改指向 `--dsw-alias-bg-layer-2`，宿主的标题/路径/时间/状态行改指向 `--dsw-alias-label-primary/secondary`。属性选择器在 CSS-module 构建中不会被哈希，`:has()` + `!important` 保证特异性高于官方样式，且只命中包含我们 slot 的那张卡，不影响其它 HoverCard。
+- 我们自己的面板保持透明、文字与状态图标全部回到主题别名（`hoverTone` 与徽标 `tone` 同源），hover/active 用 `--dsw-alias-interactive-bg-hover/active`。
+- 真实页面复核：**light 整卡 `rgb(255,255,255)` 白底、标题 `rgb(15,17,21)` 近黑；dark 整卡 `rgb(44,44,46)` 深灰、标题 `rgb(249,250,251)` 近白**；8 格单行、状态图标两主题都可读。截图 `.drafts/shots/v112-light-picker.png` / `v112-dark-picker.png`（已目检）。
+- `tests/theme.test.mjs` 改为断言整卡主题接管（surface + 每个宿主文字行 + `:has` 作用域 + 主题别名 hoverTone）；73 项测试全绿；`pnpm pack` → `dsh-session-status-marker-1.1.2.tgz`（56,683 B）。
+
+## [1.1.1] - 2026-11-18（已被 1.1.2 取代）
+
+> 该版本的方案被用户否决：见下方记录与 1.1.2。它解决了「白块割裂」，但把整张卡留在深色，浅色主题下仍是黑色浮窗，没有满足「跟随 DSH 主题」的诉求。
 
 修复浅色主题下悬停卡割裂：1.0.3 起给状态面板单独涂了随主题变化的背景（`--dsw-alias-bg-layer-2`，浅色主题下是白），但 DSH 会话行悬停卡本身在两个主题下都是固定深色、宿主标题/时间/状态行都是深底浅字，于是浅色主题出现「上黑 + 中白 + 下黑」的割裂。
 
