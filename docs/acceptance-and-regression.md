@@ -1,6 +1,6 @@
 # Acceptance & Regression
 
-> **文档版本**：v1.0.2 · 2026-11-12（对应插件 1.0.2）
+> **文档版本**：v1.0.3 · 2026-11-17（对应插件 1.0.3）
 
 > 记录验收标准、已通过证据、待执行集成 smoke 与回归清单。
 > 对应实现进度见 `docs/implementation-plan.md` §2，风险优先级见 `docs/feasibility-and-risks.md`。
@@ -17,7 +17,7 @@
 | Service 集成测试 | `tests/service.test.mjs` | 14 项全绿 |
 | i18n / 图标 / 样式契约 | `tests/i18n.test.mjs`、`tests/theme.test.mjs` | 14 项全绿 |
 | `pnpm run test` | `tests 66 / suites 16 / pass 66 / fail 0 / duration_ms ~383ms` |
-| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.0.2.tgz`（47,148 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md` |
+| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.0.3.tgz`（47,725 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md` |
 | 真实装载 | `dsh plugin --profile smoke add <tgz>`（dev4090） | profile 初始化成功并安装插件，详见 §3 |
 | **前端视觉与交互** | 真实 GUI 上操作（dev4090 + CDP） | sidebar 行尾标记、hover card、状态改写/清除、跨进程持久化全部实测通过，见 §3.4 与 §4 |
 
@@ -153,6 +153,29 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 截图：`.drafts/shots/v102-light-picker.png`（浅色 8 格，1576×861）与 `.drafts/shots/v102-dark-picker.png`（深色 8 格，1576×861）；`.drafts/shots/v102-light-hover.png` 与 `.drafts/shots/v102-dark-hover.png` 为选择器打开前的悬停卡整页。
 
 > 未在真实页面验证的点：切换到 ja/es/fr/de/ru/pt 后的插件文案渲染（受上表最后一行的 Host 持久化限制，只能验证 `en` 的瞬时切换）；英文以外的字典键集合由 `tests/i18n.test.mjs` 的断言保证。
+
+### 3.9 1.0.3 悬停卡主题同步（真实 DSH 主题，2026-11-17）
+
+1.0.3（提交 `e5cb7cf`）把悬停卡表面与文字从静态色板改为主题别名（`--dsw-alias-bg-layer-2` / `--dsw-alias-label-primary`），内容区用负边距 `-12px -16px` 覆盖整张卡片，官方 `.card` 固定深色底色被遮住。此前（§3.8）受「`ui-theme preference` 固定为 dark、CDP `prefers-color-scheme` 媒体模拟不影响 DSH 主题解析」限制，只能验证深色一端；本轮通过把远程 `ui-theme preference` 改回 `system`，用真实 DSH 主题管线驱动 `prefers-color-scheme` 完成两端验收。
+
+驱动脚本 `.drafts/theme-verify-103b.mjs`（一次性诊断脚本，留在工作区 `.drafts/`）。
+
+| 验收点 | 操作 | 实测证据 |
+|---|---|---|
+| 浅色主题表面 | `ui-theme preference: system` + `prefers-color-scheme: light` → 悬停会话行 → 点「Change status」 | `dsThemeSource: system`、`darkAttr: false`、`bodyBg: rgb(255,255,255)`、`rootBg: rgb(255,255,255)`（白）、`rootColor: rgb(15,17,21)`（近黑）、`activeColor: rgb(65,118,230)`（浅色主题状态色） |
+| 深色主题表面 | 同上，`prefers-color-scheme: dark` | `dsThemeSource: system`、`darkAttr: true`、`bodyBg: rgb(21,21,23)`、`rootBg: rgb(44,44,46)`（深灰）、`rootColor: rgb(249,250,251)`（近白）、`activeColor: rgb(122,170,255)`（深色主题状态色） |
+| 桥接命中区 | 读插件内容根节点的 `::before` | 两主题一致：`left: -8px`、`width: 8px`（仅覆盖锚点间隙） |
+| 八格单行 | 读 `button[aria-pressed]` 的 `getBoundingClientRect()` | 两主题一致：`cellCount: 8`、`cellRows: [458]`、`cellW: 22` |
+
+截图：`.drafts/shots/v103-system-light-picker.png`（浅色 8 格，1600×900）与 `.drafts/shots/v103-system-dark-picker.png`（深色 8 格，1600×900）。
+
+| 维度 | 浅色主题 | 深色主题 |
+|---|---|---|
+| 悬停卡表面 | `rgb(255,255,255)` 白 | `rgb(44,44,46)` 深灰 |
+| 主文字 | `rgb(15,17,21)` 近黑 | `rgb(249,250,251)` 近白 |
+| active 格「TODO」 | `rgb(65,118,230)` | `rgb(122,170,255)` |
+
+> **语言持久化根因（2026-11-17 补充，环境侧修复）**：§3.8 记录的「语言切换不持久」根因已定位——`dsh-home/profiles/smoke/cordis.patch.yml` 头部含 UTF-8 BOM（3 字节 `EF BB BF`），导致 config-editor 写入路径解析失败，所有设置（语言、主题）写入均被拒绝。移除 BOM 并在 `cordis.patch.yml` 里补上 `- id: locale`（`config: { preference: en }`）与 `- id: ui-theme`（`config: { preference: system }`）两段配置后，语言（`lang=en`）和主题均跨重启保持。**属环境侧修复，插件代码无需改动。**
 
 ## 4. Phase 2 – Smoke & icon round-trip（已完成）
 
