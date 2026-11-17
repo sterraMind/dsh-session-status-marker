@@ -156,10 +156,11 @@ export interface StatusMeta {
   /**
    * Color token for the hover card status icon.
    *
-   * The hover card surface is theme-aware (`--dsw-alias-bg-layer-2`), so status
-   * colors use the same theme-aware tokens as the badge (`tone`). These resolve
-   * to 500/600-level colors in the light theme and 400-level in the dark theme,
-   * ensuring visibility on both light and dark surfaces.
+   * The hover card surface is a fixed dark surface in both themes (DSH's own
+   * card background and its title/time/status line never follow the DSH theme),
+   * so the icon uses 400-level static colors that stay legible on that dark
+   * card in both themes. The badge, by contrast, sits on the theme-aware sidebar
+   * and keeps the theme-alias `tone`.
    */
   readonly hoverTone: string
   /** Localization key for the status label (see `./client/locales.ts`). */
@@ -171,14 +172,14 @@ export type StatusLabelKey = `status.${StatusEnum}`
 
 /** Per-status presentation metadata, shared by the Browser UI. */
 export const STATUS_META: Readonly<Record<StatusEnum, StatusMeta>> = {
-  todo: { icon: 'checklist-outline', tone: 'var(--dsw-alias-state-business-primary)', hoverTone: 'var(--dsw-alias-state-business-primary)', labelKey: 'status.todo' },
-  done: { icon: 'check-circle-fill', tone: 'var(--dsw-alias-state-done-primary)', hoverTone: 'var(--dsw-alias-state-done-primary)', labelKey: 'status.done' },
-  stopped: { icon: 'stop-fill', tone: 'var(--dsw-alias-state-error-primary)', hoverTone: 'var(--dsw-alias-state-error-primary)', labelKey: 'status.stopped' },
-  blocked: { icon: 'warning-triangle-outline', tone: 'var(--dsw-alias-state-warn-primary)', hoverTone: 'var(--dsw-alias-state-warn-primary)', labelKey: 'status.blocked' },
-  review: { icon: 'browse-outline', tone: 'var(--dsw-alias-state-business-primary)', hoverTone: 'var(--dsw-alias-state-business-primary)', labelKey: 'status.review' },
-  'pending-subagent': { icon: 'agent-preset-outline', tone: 'var(--dsw-alias-state-success-primary)', hoverTone: 'var(--dsw-alias-state-success-primary)', labelKey: 'status.pending-subagent' },
-  'awaiting-answer': { icon: 'pause-outline', tone: 'var(--dsw-alias-state-idle-primary)', hoverTone: 'var(--dsw-alias-label-secondary)', labelKey: 'status.awaiting-answer' },
-  feedback: { icon: 'like-outline', tone: 'var(--dsw-alias-state-success-primary)', hoverTone: 'var(--dsw-alias-state-success-primary)', labelKey: 'status.feedback' },
+  todo: { icon: 'checklist-outline', tone: 'var(--dsw-alias-state-business-primary)', hoverTone: 'var(--dsw-static-deepseek-400)', labelKey: 'status.todo' },
+  done: { icon: 'check-circle-fill', tone: 'var(--dsw-alias-state-done-primary)', hoverTone: 'var(--dsw-static-violet-400)', labelKey: 'status.done' },
+  stopped: { icon: 'stop-fill', tone: 'var(--dsw-alias-state-error-primary)', hoverTone: 'var(--dsw-static-red-400)', labelKey: 'status.stopped' },
+  blocked: { icon: 'warning-triangle-outline', tone: 'var(--dsw-alias-state-warn-primary)', hoverTone: 'var(--dsw-static-amber-400)', labelKey: 'status.blocked' },
+  review: { icon: 'browse-outline', tone: 'var(--dsw-alias-state-business-primary)', hoverTone: 'var(--dsw-static-deepseek-400)', labelKey: 'status.review' },
+  'pending-subagent': { icon: 'agent-preset-outline', tone: 'var(--dsw-alias-state-success-primary)', hoverTone: 'var(--dsw-static-green-400)', labelKey: 'status.pending-subagent' },
+  'awaiting-answer': { icon: 'pause-outline', tone: 'var(--dsw-alias-state-idle-primary)', hoverTone: 'var(--dsw-static-neutral-bluish-300)', labelKey: 'status.awaiting-answer' },
+  feedback: { icon: 'like-outline', tone: 'var(--dsw-alias-state-success-primary)', hoverTone: 'var(--dsw-static-green-400)', labelKey: 'status.feedback' },
 }
 
 /** Exact-route absolute paths (Host registration). */
