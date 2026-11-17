@@ -12,6 +12,7 @@ import { STATUS_META, STATUS_VALUES } from '../lib/contracts.js'
 
 const BADGE_CSS = readFileSync(new URL('../src/client/badge.module.css', import.meta.url), 'utf8')
 const HOVER_CSS = readFileSync(new URL('../src/client/hover.module.css', import.meta.url), 'utf8')
+const OVERVIEW_CSS = readFileSync(new URL('../src/client/overview.module.css', import.meta.url), 'utf8')
 
 /** Returns the declaration block of `selector`, or null when absent. */
 function block(css, selector) {
@@ -21,7 +22,7 @@ function block(css, selector) {
 
 describe('stylesheet contract', () => {
   it('uses only --dsw-* tokens for colors', () => {
-    for (const css of [BADGE_CSS, HOVER_CSS]) {
+    for (const css of [BADGE_CSS, HOVER_CSS, OVERVIEW_CSS]) {
       const literals = css.match(/#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/g) ?? []
       expect(literals).toEqual([])
     }
@@ -67,6 +68,15 @@ describe('stylesheet contract', () => {
     for (const status of STATUS_VALUES) {
       expect(STATUS_META[status].hoverTone).toMatch(/^var\(--dsw-alias-(state|label)-[a-z0-9-]+\)$/)
     }
+  })
+
+  // The status-overview page is a settings panel on a host surface that already
+  // follows the theme, so it uses theme aliases: page surface `--dsw-alias-bg-layer-2`,
+  // primary text `--dsw-alias-label-primary`, hover `--dsw-alias-interactive-bg-hover`.
+  it('draws the status-overview page with theme aliases', () => {
+    expect(OVERVIEW_CSS).toMatch(/--dsw-alias-bg-layer-2/)
+    expect(OVERVIEW_CSS).toMatch(/--dsw-alias-label-primary/)
+    expect(OVERVIEW_CSS).toMatch(/\.row:hover\s*\{[^}]*background:\s*var\(--dsw-alias-interactive-bg-hover\)/)
   })
 
   // The card surface is now theme-aware (--dsw-alias-bg-layer-2), so interactive

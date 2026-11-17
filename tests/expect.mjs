@@ -25,6 +25,11 @@ export function expect(actual) {
     toMatchObject(expected) { isSubset(actual, expected); return api },
     toBeNull() { assert.strictEqual(actual, null); return api },
     toBeDefined() { assert.notStrictEqual(actual, undefined); return api },
+    toHaveLength(length) {
+      assert.ok(Array.isArray(actual) || typeof actual === 'string', 'expected array or string')
+      assert.strictEqual(actual.length, length, `expected length ${length}, got ${actual.length}`)
+      return api
+    },
     toContain(expected) {
       assert.ok(Array.isArray(actual) || typeof actual === 'string', 'expected array or string')
       assert.ok(actual.includes(expected), `expected to contain ${JSON.stringify(expected)}`)
