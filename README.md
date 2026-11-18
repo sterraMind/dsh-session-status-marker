@@ -37,10 +37,10 @@
 dsh plugin --profile desktop add dsh-session-status-marker
 ```
 
-**从 GitHub Release 安装**：到 <https://github.com/sterraMind/dsh-session-status-marker/releases> 下载 `dsh-session-status-marker-1.1.5.tgz`，然后：
+**从 GitHub Release 安装**：到 <https://github.com/sterraMind/dsh-session-status-marker/releases> 下载 `dsh-session-status-marker-1.1.6.tgz`，然后：
 
 ```bash
-dsh plugin --profile desktop add ./dsh-session-status-marker-1.1.5.tgz
+dsh plugin --profile desktop add ./dsh-session-status-marker-1.1.6.tgz
 ```
 
 装完核对一下是否生效：

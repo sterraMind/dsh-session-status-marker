@@ -2,6 +2,17 @@
 
 本文件记录 `dsh-session-status-marker` 的对外可见变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.1.6] - 2026-11-19
+
+按官方发布包的依赖声明规范重写 `package.json` 的依赖字段：运行时与宿主共享的依赖放 `peerDependencies`，第三方运行时依赖放 `dependencies`，开发期只保留类型检查与构建实际需要的包。
+
+### 变更
+
+- **`peerDependencies` 用区间而非精确版本**：此前写死 `0.2.2-rc.1`，DSH 更新到 rc.2 或 rc.3 就会被版本检查拒装。现在每个宿主共享的包（`@deepseek-ai/cordis`、`dsh-client-connection`、`dsh-client-locale`、`dsh-client-ui-renderer`、`dsh-client-ui-slots`、`dsh-client-ui-workspace`、`dsh-session`、`dsh-storage-domain`、`dsh-tools`）用 `>=0.2.2-rc.1 <0.3.0`，与 `engines.dsh` 范围一致；`@deepseek-ai/schemastery` 保持 `^3.19.0`。
+- **新增 `dependencies`**：`zod 4.4.3` 与 `@deepseek-ai/schemastery ~3.19.0` 是插件自身运行时必须拿到的独立包，按官方范式（`docs/user/develop/basic/publish.md:105`）从 `devDependencies` 移到 `dependencies`，不再依赖宿主提供。
+- **`devDependencies` 只留开发实际需要**：删除 `cosmokit`、`dsh-agent`、`dsh-brand`、`dsh-client-ui-primitives`、`dsh-llm`、`dsh-scope`、`dsh-system-prompt`、`dsh-user-approval`、`dsh-util-values`、`esbuild`、`@esbuild/win32-x64`、`react-dom`、`@types/react-dom`、`vitest` 共 14 个源码里没有引用的包（测试实际走 `node --test`，构建走 TypeScript compiler API）。保留类型检查与构建所需的镜像依赖。
+- 行为与产物不变，73 项测试全部通过。
+
 ## [1.1.5] - 2026-11-18
 
 修两个问题：README 的预览图没展示核心功能，以及 1.1.2 把 DSH 版本下限放宽到了核心功能不可用的版本。

@@ -1,6 +1,6 @@
 # Acceptance & Regression
 
-> **文档版本**：v1.1.4 · 2026-11-18（对应插件 1.1.4）
+> **文档版本**：v1.1.6 · 2026-11-19（对应插件 1.1.6）
 
 > 记录验收标准、已通过证据、待执行集成 smoke 与回归清单。
 > 对应实现进度见 `docs/implementation-plan.md` §2，风险优先级见 `docs/feasibility-and-risks.md`。
@@ -17,7 +17,7 @@
 | Service 集成测试 | `tests/service.test.mjs` | 14 项全绿 |
 | i18n / 图标 / 样式契约 | `tests/i18n.test.mjs`、`tests/theme.test.mjs` | i18n 11 项 + theme 11 项全绿 |
 | `pnpm run test` | `tests 73 / suites 17 / pass 73 / fail 0` |
-| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.1.4.tgz`（55,335 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md`；`docs/` 与截图不入包 |
+| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.1.6.tgz`（55,310 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md`；`docs/` 与截图不入包 |
 | 真实装载 | `dsh plugin --profile smoke add <tgz>`（dev4090） | profile 初始化成功并安装插件，详见 §3 |
 | **前端视觉与交互** | 真实 GUI 上操作（dev4090 + CDP） | sidebar 行尾标记、hover card、状态改写/清除、跨进程持久化全部实测通过，见 §3.4 与 §4 |
 
@@ -298,3 +298,15 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 | 前后对比报告 | `.drafts/去AI味报告.md`（改前 919 字 / 改后 927 字） |
 | 构建与测试 | `pnpm run typecheck` EXIT=0、`pnpm run build` EXIT=0、73 tests / 17 suites / pass 73 / fail 0 |
 | 发布 | tag `v1.1.4`，Release 附 `dsh-session-status-marker-1.1.4.tgz`（55,335 B）；npm `latest` 17:43:27 变 `1.1.4`，tarball 200；registry 顶层 `readme` 3,002 字符已确认含新措辞、旧措辞消失 |
+
+### 3.16 1.1.5 与 1.1.6 依赖与版本声明（2026-11-18 ~ 11-19）
+
+1.1.5 与 1.1.6 均为发布声明修正，无运行时行为改动，客户端 bundle 与 1.1.4 字节一致。
+
+| 项 | 1.1.5 | 1.1.6 |
+|---|---|---|
+| 变更 | 恢复 `engines.dsh` 下限到 `>=0.2.2-rc.1`（1.1.2 曾放宽到 `>=0.2.0-rc.2`，但侧栏行尾徽标依赖 0.2.2-rc.1 才引入的 `sidebar.session.row.trailing` 槽位，0.2.0-rc.2 无此槽位导致徽标不显示）；README 补侧栏图标预览图 `docs/images/sidebar-badge.png` | 依赖声明归位：`peerDependencies` 从写死 `0.2.2-rc.1` 改为 `>=0.2.2-rc.1 <0.3.0` 区间；`zod`、`@deepseek-ai/schemastery` 按官方 publish 范式从 `devDependencies` 移入 `dependencies`（zod 4.4.3 固定、schemastery ~3.19.0）；`devDependencies` 从 30 项瘦身到 14 项（删 14 个未用包） |
+| typecheck / build | EXIT=0 / EXIT=0 | EXIT=0 / EXIT=0 |
+| 测试 | 73 tests / 17 suites / pass 73 / fail 0 | 73 tests / 17 suites / pass 73 / fail 0 |
+| tgz | 55,313 B | 55,310 B |
+| 发布 | tag `v1.1.5`、GitHub Release、npm `latest` 1.1.5 | tag `v1.1.6`、GitHub Release、npm `latest` 1.1.6 |
