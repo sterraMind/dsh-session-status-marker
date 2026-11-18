@@ -2,6 +2,20 @@
 
 本文件记录 `dsh-session-status-marker` 的对外可见变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.1.5] - 2026-11-18
+
+修两个问题：README 的预览图没展示核心功能，以及 1.1.2 把 DSH 版本下限放宽到了核心功能不可用的版本。
+
+### 修复
+
+- **恢复 DSH 版本下限为 `>=0.2.2-rc.1`**：1.1.2 曾把下限放宽到 `>=0.2.0-rc.2`，理由是 dev4090 上的验收通过。但侧栏标题旁的状态图标挂在 `sidebar.session.row.trailing` 槽位上，而这个槽位是 `@deepseek-ai/dsh-client-ui-workspace` 0.2.2-rc.1 才加入的：逐个下载 npm 上的 tarball 检查，`0.2.0-rc.2`、`0.2.1-rc.1`、`0.2.1-rc.2`、`0.2.1-rc.3` 都没有这个槽位名，`0.2.2-rc.1` 起才有。也就是说在 0.2.0-rc.2 上插件只能显示悬停卡里的状态格子，侧栏图标不会渲染。当时的「验收通过」只覆盖了悬停卡，没有覆盖侧栏图标，结论下早了。
+- **README 增加侧栏图标的预览图**：新增 `docs/images/sidebar-badge.png`，展示侧栏会话标题后面的状态图标（完成是紫色对勾、待办是蓝色清单）。原来的两张图都是悬停卡展开状态，看不到核心功能。开头改成「侧栏每个会话标题后面显示一个状态图标」，先给图标图，再给悬停卡图。
+- README 的版本要求改成「`0.2.2-rc.1` 到 `0.3.0`」，并注明低于 `0.2.2-rc.1` 的版本没有侧栏标题旁的插槽，状态图标不会显示。
+
+### 关于悬停卡贴顶
+
+有反馈说悬停卡看起来贴在页面顶部。查过官方源码与真实页面几何后确认这不是本插件的布局问题：官方 `HoverCard` 用 `position: fixed`，`top` 直接取锚点行的 `getBoundingClientRect().top`（`.research/dsh-repo/packages/client/ui-primitives/src/HoverCard.tsx:223-224`），卡片高度超出视口底部时才整体上推。实测悬停第二行会话（`anchorTop=242`）时卡片 `cardTop=276`、`deltaTopFromAnchor=34`、`position=fixed`、`hostTag=BODY.`，卡片顶端始终跟着锚点行走。看起来贴顶是因为被悬停的是侧栏最上面那一行。
+
 ## [1.1.4] - 2026-11-18
 
 按用户反馈修 README 的两处问题：预览图构图不合适，正文有机器味。
