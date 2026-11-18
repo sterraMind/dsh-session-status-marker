@@ -38,7 +38,7 @@ dsh plugin --profile desktop add ./dsh-session-status-marker-*.tgz
 dsh --profile desktop --dump-config   # 核对 application: applied
 ```
 
-npm 包：`dsh-session-status-marker`。**当前 1.1.2 尚未从 npm 公开**——发布请求已被 registry 接受，但账号使用 npm 正在限制的「绕过 2FA 的 granular token 直发」，registry 只公开了占位版本 `0.0.0-stage`。owner 在 npmjs.com 的 Staged Packages 页签用 2FA 批准后，`1.1.2` 才会出现在 npm；在那之前请用上面的 GitHub Release 安装。原因与步骤见 [CHANGELOG](./CHANGELOG.md) 1.1.2「发布」与 [项目记忆](./docs/project-memory.md) §6 教训 28。
+npm 包已发布：`dsh-session-status-marker@1.1.2`，<https://www.npmjs.com/package/dsh-session-status-marker>。也可直接 `dsh plugin --profile desktop add dsh-session-status-marker`（若 DSH 的 plugin 源支持 npm 名）。发布走 staged publishing，registry 先显示占位版本 `0.0.0-stage`、约 11 分钟后 `1.1.2` 才上线；判据见 [CHANGELOG](./CHANGELOG.md) 1.1.2「发布」与 [项目记忆](./docs/project-memory.md) §6 教训 28。
 
 配置（`cordis.patch.yml` 的 `config`；前三项必填，`refreshIntervalMs` 有默认值可省略）：
 
