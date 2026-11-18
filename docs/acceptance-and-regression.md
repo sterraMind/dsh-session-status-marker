@@ -1,6 +1,6 @@
 # Acceptance & Regression
 
-> **文档版本**：v1.1.3 · 2026-11-18（对应插件 1.1.3）
+> **文档版本**：v1.1.4 · 2026-11-18（对应插件 1.1.4）
 
 > 记录验收标准、已通过证据、待执行集成 smoke 与回归清单。
 > 对应实现进度见 `docs/implementation-plan.md` §2，风险优先级见 `docs/feasibility-and-risks.md`。
@@ -17,7 +17,7 @@
 | Service 集成测试 | `tests/service.test.mjs` | 14 项全绿 |
 | i18n / 图标 / 样式契约 | `tests/i18n.test.mjs`、`tests/theme.test.mjs` | i18n 11 项 + theme 11 项全绿 |
 | `pnpm run test` | `tests 73 / suites 17 / pass 73 / fail 0` |
-| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.1.3.tgz`（55,284 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md`；`docs/` 与截图不入包 |
+| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.1.4.tgz`（55,335 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md`；`docs/` 与截图不入包 |
 | 真实装载 | `dsh plugin --profile smoke add <tgz>`（dev4090） | profile 初始化成功并安装插件，详见 §3 |
 | **前端视觉与交互** | 真实 GUI 上操作（dev4090 + CDP） | sidebar 行尾标记、hover card、状态改写/清除、跨进程持久化全部实测通过，见 §3.4 与 §4 |
 
@@ -284,3 +284,17 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 - 新字段加进 `MarkRecordSchema` 时需同时加进 `contracts.ts` 与 `src/client/*` 消费面
 - 路由 path 一旦对外发布就冻结；如需改动须在 `_ROUTE` 常量里同步更新，并保留 `/api/session-status-marker.*` 作为 legacy fallback
 - `STATUS_VALUES` / `AUTO_REASON_VALUES` 追加新值时必须同时更新 `STATUS_META.icon/tone/labelKey`、locale 字典、hover card 的状态网格渲染
+### 3.15 1.1.4 预览图裁切与正文润色（2026-11-18）
+
+用户反馈：「为啥图片里的对话框被顶到最上面了 这能当预览图吗。另外你的README要用说人话skill润色一下」。
+
+| 验收点 | 证据 |
+|---|---|
+| 预览图构图 | 原图为 1576×861 整窗截图，悬停卡只占左上角。改用 Pillow 从 `.drafts/shots/v112-{light,dark}-picker.png` 裁 `box=(0,205,600,470)`（侧栏三行会话 + 整张悬停卡），LANCZOS 放大两倍 → 1200×530，覆盖 `docs/images/hover-{light,dark}.png`（139,256 B / 153,016 B）；`raw.githubusercontent.com` HEAD 返回 200 |
+| 顿号并列密度 | 按 `lieflat-less-ai-tone` 的 `detect.py`：改前 7.617 处/千字（7 处），改后 2.157 处/千字（2 处），人类参考约 1.78 |
+| 具体改写 | 开头「待办、已完成、被中断，还是卡住了」→「待办、已完成，还是被中断或者卡住了」；「任务被中断、子代理还没跑完、需要你回答时」→「任务被中断、子代理还没跑完，或者需要你回答的时候」；「侧栏徽标、状态总览、悬停卡片都使用同一套主题颜色」→「侧栏徽标、状态总览和悬停卡片用的是同一套主题颜色」；语言清单拆成两段短句；限制条目「日文、西班牙文、法文、德文、俄文和葡萄牙文」→「除简体中文和英文之外的六种语言」；「DSH 宿主侧的数据文件」→「DeepSeek Harness 自己的数据目录」 |
+| 未改项（按规则保留） | X 级「空转句引列表」5 处（`README.md:30` `:36` `:42` `:52` `:92`）实测不是 AI 特征；F 级破折号/分号/引号均 0，不因指纹增删；C 级小标题密度 9.709/千字偏高属 README 导航结构所需，不改结构 |
+| 语义层判读 | 20 条候选（rename 7 / cohesion 7 / colon 6 / iso3 0）按 `references/semantic-criteria.md` 封闭判据逐条标注，结果存 `.drafts/readme-candidates-labeled.json`：rename 0组 6 / 1组 1，cohesion 明确承接 5 / 主题跳转 2（最长连环 3），colon 定义或解释 5 / 版式用途 1，均未达改写门槛 |
+| 前后对比报告 | `.drafts/去AI味报告.md`（改前 919 字 / 改后 927 字） |
+| 构建与测试 | `pnpm run typecheck` EXIT=0、`pnpm run build` EXIT=0、73 tests / 17 suites / pass 73 / fail 0 |
+| 发布 | tag `v1.1.4`，Release 附 `dsh-session-status-marker-1.1.4.tgz`（55,335 B）；npm `latest` 17:43:27 变 `1.1.4`，tarball 200；registry 顶层 `readme` 3,002 字符已确认含新措辞、旧措辞消失 |
