@@ -13,6 +13,12 @@
 - 真实页面复核：**light 整卡 `rgb(255,255,255)` 白底、标题 `rgb(15,17,21)` 近黑；dark 整卡 `rgb(44,44,46)` 深灰、标题 `rgb(249,250,251)` 近白**；8 格单行、状态图标两主题都可读。截图 `.drafts/shots/v112-light-picker.png` / `v112-dark-picker.png`（已目检）。
 - `tests/theme.test.mjs` 改为断言整卡主题接管（surface + 每个宿主文字行 + `:has` 作用域 + 主题别名 hoverTone）；73 项测试全绿；`pnpm pack` → `dsh-session-status-marker-1.1.2.tgz`（56,683 B）。
 
+### 发布
+
+- `engines.dsh` 下限从 `>=0.2.2-rc.1` 放宽到 `>=0.2.0-rc.2`（dev4090 真实验收环境是常规安装的 0.2.0-rc.2）。tarball 重打包为 **56,921 B**（shasum `a6cb9c1848edeb3c8a96d2df72214b10212fc574`）。
+- **GitHub 已发布**：`sterraMind/dsh-session-status-marker`（public），tag `v1.1.2` 与 Release 已推送，Release 附 `dsh-session-status-marker-1.1.2.tgz`（sha256 `f5d0edec8fe24a75633d2bd65d70226bed08a0938c308d308ffe02a29313778a`）。地址：<https://github.com/sterraMind/dsh-session-status-marker/releases/tag/v1.1.2>。
+- **npm 待账号 owner 2FA 批准**：发布请求已被 registry 接受，但账号使用的是 npm 正在限制的「绕过 2FA 的 granular token 直发」，registry 只公开了占位版本 `0.0.0-stage`，真实 `1.1.2` 尚未公开（`npm view @1.1.2` 返回 E404）。这是 npm 的 [staged publishing](https://docs.npmjs.com/staged-publishing/) 机制，放行必须由 owner 在 npmjs.com 的 Staged Packages 页签用 2FA 批准，或取得 stage-id 后执行 `npm stage approve <stage-id> --otp <code>`。详见 [项目记忆](./docs/project-memory.md) §6 教训 28。
+
 ## [1.1.1] - 2026-11-18（已被 1.1.2 取代）
 
 > 该版本的方案被用户否决：见下方记录与 1.1.2。它解决了「白块割裂」，但把整张卡留在深色，浅色主题下仍是黑色浮窗，没有满足「跟随 DSH 主题」的诉求。
