@@ -1,6 +1,6 @@
 # Acceptance & Regression
 
-> **文档版本**：v1.1.2 · 2026-11-18（对应插件 1.1.2）
+> **文档版本**：v1.1.3 · 2026-11-18（对应插件 1.1.3）
 
 > 记录验收标准、已通过证据、待执行集成 smoke 与回归清单。
 > 对应实现进度见 `docs/implementation-plan.md` §2，风险优先级见 `docs/feasibility-and-risks.md`。
@@ -17,7 +17,7 @@
 | Service 集成测试 | `tests/service.test.mjs` | 14 项全绿 |
 | i18n / 图标 / 样式契约 | `tests/i18n.test.mjs`、`tests/theme.test.mjs` | i18n 11 项 + theme 11 项全绿 |
 | `pnpm run test` | `tests 73 / suites 17 / pass 73 / fail 0` |
-| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.1.2.tgz`（56,921 B，放宽 engines 下限后重打包；发布前 56,683 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md` |
+| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.1.3.tgz`（55,284 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md`；`docs/` 与截图不入包 |
 | 真实装载 | `dsh plugin --profile smoke add <tgz>`（dev4090） | profile 初始化成功并安装插件，详见 §3 |
 | **前端视觉与交互** | 真实 GUI 上操作（dev4090 + CDP） | sidebar 行尾标记、hover card、状态改写/清除、跨进程持久化全部实测通过，见 §3.4 与 §4 |
 
@@ -244,6 +244,19 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 | npm 发布 | 完成 | `npm publish` 输出 `+ dsh-session-status-marker@1.1.2`、EXIT=0、publish 日志 `PUT 202`（非 201）。走 staged publishing：发布后约 1 分钟 `npm view version` 仍是 `0.0.0-stage`、`@1.1.2` tarball HEAD 404、`/-/stage` 为空；第 11 分钟重读时 `versions` 含 `1.1.2`、`latest` 变 `1.1.2`、tarball HEAD 200、`dist.integrity` `sha512-3ws7itHa9zP5M...`（与 dry-run shasum `a6cb9c1848edeb3c8a96d2df72214b10212fc574` 一致）。上线：<https://www.npmjs.com/package/dsh-session-status-marker/v/1.1.2>。详见 `docs/project-memory.md` §6 教训 28 |
 
 > 发布是否上线不能只看 `npm publish` 的输出：它只代表请求被接受。判据是三个独立视图重读——两个 packument 视图（`/dsh-session-status-marker` 与 `/-/package/.../dist-tags`）、版本端点、tarball HEAD；registry 读副本约 4.5 分钟、staged→publish 约 14 分钟延迟（借鉴 dsh-triage `docs/HANDOFF.md`）。
+
+### 3.14 1.1.3 README 重写与 npm 包边界（2026-11-18）
+
+用户反馈：「为什么项目介绍里面放什么架构红线什么看不懂的内容，还有什么完整证据与取舍，明禁是啥意思？缩写？docs 可以不用放到 npm 仓库里面」。
+
+| 验收点 | 证据 |
+|---|---|
+| README 面向使用者 | 新结构：一句话说明 → 两张界面截图 → 怎么用（手动标记 / 跨会话总览 / AI 自动标记）→ 八种状态表（状态 / 图标 / 用在哪）→ 安装 → 配置 → 主题与语言 → 已知限制 → 开发 → 许可 |
+| 内部术语已移除 | `README.md` 全文检索 `红线|明禁|out-of-tree|sidecar|slot|route|bundle|契约|schema|token|tarball|Phase|证据与取舍|零上下文` 仅命中「打包成 .tgz 压缩包」一行（改写后无残留） |
+| 文档链接可点 | README 中 6 个链接全部为 `https://github.com/sterraMind/...` 或 `https://raw.githubusercontent.com/...` 绝对地址，相对链接数 0（npm 页面不会指向不存在的 `npmjs.com/package/.../docs/...`） |
+| 截图入仓库、不入包 | 新增 `docs/images/hover-light.png`（53,023 B）、`docs/images/hover-dark.png`（51,214 B）；`package.json` 的 `files` 仍为 `lib/`、`locale/`、`cordis.patch.yml`、`icon.svg`，打包后 `tar -tzf` 中无 `docs/` |
+| 构建与测试 | `pnpm run typecheck` EXIT=0、`pnpm run build` EXIT=0、`node --test --test-isolation=none tests/*.test.mjs` → 73 tests / 17 suites / pass 73 / fail 0 |
+| 包内容 | `dsh-session-status-marker-1.1.3.tgz` 55,284 B；包内 `README.md` 为 101 行新版（含「怎么用 / 八种状态 / 已知限制」标题），无 `docs/` |
 
 ## 4. Phase 2 – Smoke & icon round-trip（已完成）
 

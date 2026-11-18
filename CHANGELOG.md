@@ -2,6 +2,17 @@
 
 本文件记录 `dsh-session-status-marker` 的对外可见变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.1.3] - 2026-11-18
+
+重写 README，让第一次接触这个插件的人能读懂。此前的 README 把内部实现术语写在项目介绍里（「架构红线」「完整证据与取舍」「明禁」等），普通读者看不懂。
+
+### 变更
+
+- README 改用面向用户的语言：先说明插件做什么、怎么用、八种状态各自用在哪，再给安装与配置。内部实现细节移到仓库文档，README 只保留一句必要说明（独立安装包、数据不进会话日志）。
+- README 里的文档链接全部改成 GitHub 绝对地址。此前用的是 `./docs/...` 相对路径，在 npm 页面会指向 `npmjs.com/package/.../docs/...` 这个不存在的路径。
+- README 增加两张真实界面截图（`docs/images/hover-light.png`、`docs/images/hover-dark.png`），用 `raw.githubusercontent.com` 绝对地址引用。
+- npm 包内容不变：`package.json` 的 `files` 只包含 `lib/`、`locale/`、`cordis.patch.yml`、`icon.svg`，`docs/` 与截图不进包，安装体积不受影响。
+
 ## [1.1.2] - 2026-11-18
 
 彻底修复浅色主题悬停卡不跟随 DSH 主题：1.1.1 的「融入官方固定深色卡」方案被用户否决——它在两个主题下都显示深色浮窗，等于没有跟随主题。真正的根因是官方会话行 hover card 的表面与标题/时间/状态行颜色全部写死（深底浅字、两主题一致），插件只改自己的面板无论怎么调都无法让整张卡跟随主题。
