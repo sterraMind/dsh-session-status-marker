@@ -1,8 +1,12 @@
 # dsh-session-status-marker
 
-给 DeepSeek Harness 的会话打状态标记。侧栏每个会话行后面显示一个小图标，一眼就能看出这个会话是待办、已完成，还是被中断或者卡住了。状态可以你自己点选，也可以让 AI 在任务结束时自动标。
+给 DeepSeek Harness 的会话打状态标记。侧栏每个会话标题后面显示一个状态图标，一眼就能看出这个会话是待办、已完成，还是被中断或者卡住了。状态可以你自己点选，也可以让 AI 在任务结束时自动标。
 
-![浅色主题下的状态选择卡片](https://raw.githubusercontent.com/sterraMind/dsh-session-status-marker/main/docs/images/hover-light.png)
+![侧栏会话标题后面的状态图标](https://raw.githubusercontent.com/sterraMind/dsh-session-status-marker/main/docs/images/sidebar-badge.png)
+
+鼠标移到会话行上会展开状态卡片，里面是八个状态格子：
+
+![悬停展开的状态选择卡片](https://raw.githubusercontent.com/sterraMind/dsh-session-status-marker/main/docs/images/hover-light.png)
 
 ## 怎么用
 
@@ -27,16 +31,16 @@
 
 ## 安装
 
-**从 npm 安装**（当前版本 1.1.4）：
+**从 npm 安装**（当前版本 1.1.5）：
 
 ```bash
 dsh plugin --profile desktop add dsh-session-status-marker
 ```
 
-**从 GitHub Release 安装**：到 <https://github.com/sterraMind/dsh-session-status-marker/releases> 下载 `dsh-session-status-marker-1.1.4.tgz`，然后：
+**从 GitHub Release 安装**：到 <https://github.com/sterraMind/dsh-session-status-marker/releases> 下载 `dsh-session-status-marker-1.1.5.tgz`，然后：
 
 ```bash
-dsh plugin --profile desktop add ./dsh-session-status-marker-1.1.4.tgz
+dsh plugin --profile desktop add ./dsh-session-status-marker-1.1.5.tgz
 ```
 
 装完核对一下是否生效：
@@ -45,7 +49,7 @@ dsh plugin --profile desktop add ./dsh-session-status-marker-1.1.4.tgz
 dsh --profile desktop --dump-config   # 输出里应出现 session-status-marker
 ```
 
-要求 DeepSeek Harness 版本在 `0.2.0-rc.2` 到 `0.3.0` 之间，Node 版本 24.9.0 或更高。
+要求 DeepSeek Harness 版本在 `0.2.2-rc.1` 到 `0.3.0` 之间，Node 版本 24.9.0 或更高。低于 0.2.2-rc.1 的版本没有侧栏标题旁的插槽，状态图标不会显示。
 
 ## 配置
 
