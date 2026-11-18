@@ -17,7 +17,7 @@
 
 - `engines.dsh` 下限从 `>=0.2.2-rc.1` 放宽到 `>=0.2.0-rc.2`（dev4090 真实验收环境是常规安装的 0.2.0-rc.2）。tarball 重打包为 **56,921 B**（shasum `a6cb9c1848edeb3c8a96d2df72214b10212fc574`）。
 - **GitHub 已发布**：`sterraMind/dsh-session-status-marker`（public），tag `v1.1.2` 与 Release 已推送，Release 附 `dsh-session-status-marker-1.1.2.tgz`（sha256 `f5d0edec8fe24a75633d2bd65d70226bed08a0938c308d308ffe02a29313778a`）。地址：<https://github.com/sterraMind/dsh-session-status-marker/releases/tag/v1.1.2>。
-- **npm 待账号 owner 2FA 批准**：发布请求已被 registry 接受，但账号使用的是 npm 正在限制的「绕过 2FA 的 granular token 直发」，registry 只公开了占位版本 `0.0.0-stage`，真实 `1.1.2` 尚未公开（`npm view @1.1.2` 返回 E404）。这是 npm 的 [staged publishing](https://docs.npmjs.com/staged-publishing/) 机制，放行必须由 owner 在 npmjs.com 的 Staged Packages 页签用 2FA 批准，或取得 stage-id 后执行 `npm stage approve <stage-id> --otp <code>`。详见 [项目记忆](./docs/project-memory.md) §6 教训 28。
+- **npm 已发布**：<https://www.npmjs.com/package/dsh-session-status-marker/v/1.1.2>。发布走的是 staged publishing 路径——`npm publish` 输出 `+ dsh-session-status-marker@1.1.2`、publish 日志 `PUT 202`（非 201），registry 先公开占位版本 `0.0.0-stage`，约 11 分钟后 staged→publish 完成，`latest` 变为 `1.1.2`、tarball HEAD 200（integrity `sha512-3ws7itHa9zP5M...`，与 dry-run 的 shasum `a6cb9c1848edeb3c8a96d2df72214b10212fc574` 一致）。判据与延迟窗口见 [项目记忆](./docs/project-memory.md) §6 教训 28 与 [验收与回归](./docs/acceptance-and-regression.md) §3.13。
 
 ## [1.1.1] - 2026-11-18（已被 1.1.2 取代）
 
