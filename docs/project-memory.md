@@ -1,6 +1,6 @@
 # 项目记忆 · dsh-session-status-marker
 
-> **文档版本**：v1.1.3 · 2026-11-18（对应插件 1.1.3）
+> **文档版本**：v1.1.4 · 2026-11-18（对应插件 1.1.4）
 
 > 本文件是「项目记忆」的落盘载体，供后续会话 / Agent 续接时读取。记录决策沿革、硬约束、已验证事实与教训；不放临时日志。与 `AGENTS.md`（standing orders）、`docs/architecture.md`（当前架构）、`docs/implementation-plan.md`（执行顺序）、`docs/acceptance-and-regression.md`（验收证据）分工明确。
 
@@ -53,7 +53,7 @@
 - `pnpm run build` → EXIT=0，`[session-status-marker:client] built lib/client.js`；`node --check lib/client.js` EXIT=0。
 - `pnpm run test` → EXIT=0，`tests 73 / suites 17 / pass 73 / fail 0`。
 - 测试分布：inference 17 例（10 规则 + 3 优先序 + 3 过期 + 1）、types 9 例、service 14 例、smoke 1 例（`turn/end:interrupted` → `effectiveMark` 与 GET state route 同一行）、i18n 11 例（STATUS_META/tone/schema/defaults + 图标尺寸契约 + Shell 8 语言字典）、theme 11 例（零字面颜色、图标盒、active 格不覆盖 color、badge 盒、`:has([data-status-slot])` 整卡覆盖宿主、面板与状态色用主题别名、hover/active 用 interactive 令牌、`::before` 桥接命中区、格子 22px/2px、总览页主题别名）、marks 5 例、overview 5 例（分组排序/仅非空组/标题关联/null 回退/空态）。
-- `pnpm pack` → `dsh-session-status-marker-1.1.3.tgz`（55,284 B；1.1.2 为 56,921 B，放宽 engines 下限后重打包；发布前为 56,683 B；1.1.1 为 56,116 B、1.1.0 为 56,007 B，1.0.3 为 47,725 B，1.0.2 为 47,148 B，1.0.1 为 39,838 B，1.0.0 为 39,387 B，0.1.0 为 32,600 B）。
+- `pnpm pack` → `dsh-session-status-marker-1.1.4.tgz`（55,335 B；1.1.3 为 55,284 B；1.1.2 为 56,921 B，放宽 engines 下限后重打包；发布前为 56,683 B；1.1.1 为 56,116 B、1.1.0 为 56,007 B，1.0.3 为 47,725 B，1.0.2 为 47,148 B，1.0.1 为 39,838 B，1.0.0 为 39,387 B，0.1.0 为 32,600 B）。
 - dev4090 真实集成（2026-11-11）：`dsh plugin add` 装载成功、`--dump-config` 第 1244–1249 行显示行与 config、web 宿主起 3099、三条 route 的 401/400/200 与跨进程冷读、落盘 `storages/session_status_marker/marks/<sid>.json`、boot graph 含本插件 entry、`/plugins/??…&rev=…` 200。全部细节见 `docs/acceptance-and-regression.md` §3。
 - dev4090 前端视觉验收（2026-11-11，真实 GUI + CDP 驱动）：侧栏行尾标记渲染 16×16 SVG 且颜色取 `--dsw-alias-state-*-primary`；未标记会话经 hover card 的 8 格可手动标记；已标记会话可改写状态、可清除；**连续三次杀掉 3099 进程重启后标记仍在**；模型通过 `set_session_status` 工具自主标记（新增 `{status:"done",source:"manual",note:"ai-self-mark"}`）。截图见 `.drafts/shots/`。
 - fake Cordis ctx 必须有 `reflect: { provide: () => {} }`（`cordis/lib/index.js:1854` 的 `Service` 构造器会调它）与可调用的 `inject(deps, callback)`（路由注册改用 `ctx.inject(['connection'], …)` 之后）；`defineTool.execute` 会先校验参数，`subjectId: null` 被拒，测试须省略该字段。
@@ -115,7 +115,7 @@
 - 1.1.2（已完成，2026-11-18）：用户否决 1.1.1（「light 这回也是黑色浮窗」）后，改用 `[class*='card']:has([data-status-slot])` 从内容区反向覆盖宿主整张卡——`--dsw-hovercard-bg` → `--dsw-alias-bg-layer-2`、宿主标题/路径/时间/状态行 → `--dsw-alias-label-primary/secondary`，我们面板透明、状态图标与 hover/active 全用主题别名。属性选择器不被 CSS-module 构建器哈希，`:has()+!important` 只命中含我们 slot 的那张卡。**真实页面验收**：浅色整卡 `cardBg rgb(255,255,255)`、深色整卡 `rgb(44,44,46)`（以 `cardBg` light≠dark 为准），8 格单行，截图 `.drafts/shots/v112-{light,dark}-picker.png`。73 项测试全绿，tgz 56,683 B。部署用 `.drafts/upload-112-chunked.ps1` 分块 base64 ssh 上传 + `allow-version @1.1.2`。
 - 发布（2026-11-18）：`engines.dsh` 下限放宽到 `>=0.2.0-rc.2`，tgz 重打包 56,921 B。**GitHub 已发布**：`sterraMind/dsh-session-status-marker`，tag `v1.1.2` 与 Release（附 tgz，sha256 `f5d0edec8fe24a75633d2bd65d70226bed08a0938c308d308ffe02a29313778a`）。**npm 已发布**：`dsh-session-status-marker@1.1.2`（<https://www.npmjs.com/package/dsh-session-status-marker/v/1.1.2>），走 staged publishing，发布后约 11 分钟 `latest` 变 `1.1.2`、tarball 200（见教训 28）。
 - 1.1.3（已完成，2026-11-18）：用户反馈 README 里的「架构红线」「完整证据与取舍」「明禁」看不懂，且 docs 不必进 npm 包。README 重写为面向使用者的说明（做什么 / 怎么用 / 八种状态表 / 安装 / 配置 / 主题语言 / 限制 / 开发），内部术语全部移出；所有链接改 GitHub 绝对地址，并新增 `docs/images/hover-{light,dark}.png` 两张截图用 `raw.githubusercontent.com` 引用。npm 包内容不变（`files` 只有 `lib/`、`locale/`、`cordis.patch.yml`、`icon.svg`），tgz 55,284 B。见教训 29。
-- 仍开放：fork 继承策略；`cordis_inspect_query` 运行时自检（Creator mode 能力）；TUI 端 UI 接入；GUI 回归 `test:gui` / `DSH_SNAPSHOT=replay test:web`；侧栏按状态过滤（宿主无过滤 hook slot，推迟）；批量状态操作（P1）。
+- 1.1.4（已完成，2026-11-18）：用户反馈预览图构图不合适、README 需要润色。预览图从整窗截图改为局部裁切（`box=(0,205,600,470)` 放大两倍 → 1200×530，浅色与深色各一张，`docs/images/hover-{light,dark}.png`）；README 按 `lieflat-less-ai-tone` 流程润色，顿号并列 7.617 → 2.157 处/千字，语言清单拆句，「DSH 宿主侧的数据文件」改「DeepSeek Harness 自己的数据目录」，X 级特征按规则保留。73 项测试全绿，tgz 55,335 B，已发 GitHub Release 与 npm。- 仍开放：fork 继承策略；`cordis_inspect_query` 运行时自检（Creator mode 能力）；TUI 端 UI 接入；GUI 回归 `test:gui` / `DSH_SNAPSHOT=replay test:web`；侧栏按状态过滤（宿主无过滤 hook slot，推迟）；批量状态操作（P1）。
 - Phase 4（已完成）：tarball 内容、profile 装载、`--dump-config`、跨进程持久化、client bundle 组合与投递、前端视觉与交互（含 AI 自主标记）都在 dev4090 验过。**仍未执行**：`cordis_inspect_query` 运行时自检——该工具属 Creator mode 能力，测试 home 里没有对应开关；替代证据是真实页面对三条 route 的直接调用（`docs/acceptance-and-regression.md` §3.4）。
 - 桌面端 / TUI 端 UI 接入：Host service 与 route 已通用（headless 与 web profile 都能装载），但 `sidebar.session.row.trailing` / `.hover` 是 Web client 的 slot，桌面端走同一套 Web UI（Electron 窗口内是同一个 web 面，可用）；**TUI 端没有 slot 体系，标记只能由 AI 工具写、按文本呈现**，需另做接入。
 
@@ -124,3 +124,5 @@
 - 需求与流程：m00002、m00139、m00167（「继续」）。
 - 关键决策证据链落在 `docs/architecture.md` §3、`docs/implementation-plan.md` §3、`docs/research/01-host-api.md` 顶部 V2 修订说明。
 - 官方镜像路径与行号全部以 `.research/dsh-repo/` 为准。
+30. **README 的预览图要用局部裁切，整窗截图当预览图看不清内容**：整窗截图里悬停卡只占左上角一小块，右侧和下方大片空白，读者看不出插件做了什么。正确做法是从截图裁出「侧栏会话行 + 整张悬停卡」的范围（本次 `box=(0,205,600,470)`），再放大两倍输出 1200×530，浅色与深色各一张。裁切用 bundled python 的 Pillow（`...\dsh-runtimes\dsh-primary-runtime\dependencies\python\python.exe`），`Image.LANCZOS` 重采样。图片放 `docs/images/`，`files` 字段不含 `docs/`，不会增加 npm 安装体积。
+31. **润色 README 要用 `lieflat-less-ai-tone` skill 的完整流程，不要凭感觉改**：流程是 `detect.py <file> --json` 存档 → `--candidates --out` 抽语义候选 → 按 `references/semantic-criteria.md` 的封闭判据逐条标注 `label`/`confidence`/`reason` 写回 → 改写 → `detect.py` 复测 + `report.py` 出前后对比。本次 README 的顿号并列从 7.617 处/千字降到 2.157（人类参考约 1.78）。**X 级特征不要改**：空转句引列表（「然后：」「装完核对一下是否生效：」）实测人类用得比 AI 多一个量级；C 级小标题密度偏高是 README 导航结构所需，不为指标动结构。
