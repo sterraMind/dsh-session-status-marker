@@ -25,6 +25,10 @@ let intervalMs = DEFAULT_REFRESH_INTERVAL_MS
 let timer: ReturnType<typeof setTimeout> | null = null
 let started = false
 let inFlight = false
+/** Revision of the last complete snapshot; sent as `?since=` on later reads. */
+let lastRevision: string | null = null
+/** A forced read requested while another read is in flight; honoured on the next tick. */
+let pendingForce = false
 
 /** Narrow view of the browser document; the Host build has no DOM lib. */
 interface VisibilityDocument {
@@ -51,17 +55,37 @@ function publish(sessionId: string, mark: MarkRecord | null): void {
  * A session that is subscribed but absent from the response publishes `null`,
  * so a cleared or expired mark disappears from the badge without a reload.
  * Failures keep the previous snapshot and leave the next tick to retry.
+ *
+ * When the browser already knows a snapshot revision, the read is conditional:
+ * the server answers `unchanged:true` with no rows, and no listener is called,
+ * so React components are not repainted for data that did not change. The
+ * timed tick still fires; only the publish step is skipped. `force` omits the
+ * `since` parameter and is used when a hidden tab becomes visible again.
  */
-export async function refreshMarksOnce(): Promise<void> {
-  if (inFlight) return
+export async function refreshMarksOnce(force = false): Promise<void> {
+  if (inFlight) {
+    // A forced read that lands while a conditional read is running must not be
+    // dropped: a newly subscribed session would otherwise wait for a change
+    // that may never come and stay in the loading state.
+    if (force) pendingForce = true
+    return
+  }
   inFlight = true
+  const full = force || pendingForce
+  pendingForce = false
   try {
-    const resp = await fetch(MARKER_LIST_ROUTE)
+    const url = !full && lastRevision !== null
+      ? `${MARKER_LIST_ROUTE}?since=${encodeURIComponent(lastRevision)}`
+      : MARKER_LIST_ROUTE
+    const resp = await fetch(url)
     if (!resp.ok) return
     const data = (await resp.json()) as AllMarksResponse
     if (typeof data.refreshIntervalMs === 'number' && data.refreshIntervalMs >= 250) {
       intervalMs = data.refreshIntervalMs
     }
+    if (typeof data.revision === 'string') lastRevision = data.revision
+    // Unchanged snapshot: do not touch the cache or notify any subscriber.
+    if (data.unchanged === true) return
     const seen = new Set<string>()
     for (const row of data.marks) {
       seen.add(row.sessionId)
@@ -90,7 +114,7 @@ function tick(): void {
 /** Refresh as soon as a hidden tab becomes visible again. */
 function onVisibilityChange(): void {
   const doc = currentDocument()
-  if (doc !== undefined && !doc.hidden) void refreshMarksOnce()
+  if (doc !== undefined && !doc.hidden) void refreshMarksOnce(true)
 }
 
 /**
@@ -113,7 +137,12 @@ export function subscribeMarks(sessionId: string, listener: MarkListener): () =>
     timer = setTimeout(tick, intervalMs)
     const doc = currentDocument()
     if (doc !== undefined) doc.addEventListener('visibilitychange', onVisibilityChange)
-  } else if (cache.has(sessionId)) {
+  } else if (!cache.has(sessionId)) {
+    // A session first subscribed after the shared loop started has no cached
+    // answer. A conditional read would be answered "unchanged" and never give
+    // it a value, so request one full read to seed this subscription.
+    void refreshMarksOnce(true)
+  } else {
     listener(cache.get(sessionId) ?? null)
   }
 
@@ -161,4 +190,6 @@ export function resetMarksForTest(): void {
   }
   started = false
   inFlight = false
+  lastRevision = null
+  pendingForce = false
 }

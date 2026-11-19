@@ -44,7 +44,6 @@ async function postMutate(body: unknown): Promise<unknown> {
 export function SessionStatusHover({ sessionId, t }: HoverProps) {
   const { mark, loading } = useMark(sessionId)
   const [error, setError] = useState<string | null>(null)
-  const [picking, setPicking] = useState(false)
 
   async function handleSet(status: StatusEnum, note: string | null = null) {
     try {
@@ -78,9 +77,10 @@ export function SessionStatusHover({ sessionId, t }: HoverProps) {
   if (error) return <div className={css.root} data-mark="error" {...slotAnchor} {...guard}>{error}</div>
 
   const meta = mark ? STATUS_META[mark.status] : null
-  // A session without a mark gets the picker straight away: hiding it behind the
-  // change button left brand-new sessions with no way to be marked manually.
-  const showGrid = picking || mark === null
+  // The eight cells stay visible for marked and unmarked sessions alike. Making
+  // the user open a picker first added a step to every change; showing the cells
+  // directly lets one click switch status, and the active cell marks the current
+  // one. The heading below doubles as the label the change button used to carry.
   return (
     <div className={css.root} data-mark={mark ? 'present' : 'absent'} {...slotAnchor} {...guard}>
       <div className={css.label}>
@@ -91,31 +91,26 @@ export function SessionStatusHover({ sessionId, t }: HoverProps) {
             : t('hover.manual', { status: t(meta!.labelKey) })}
       </div>
       {mark?.note && <div className={css.note}>{t('hover.note', { note: mark.note.slice(0, 64) })}</div>}
-      <div className={css.actions}>
-        <button className={css.btn} aria-expanded={showGrid} onClick={() => setPicking((v) => !v)}>{t('hover.setBtn')}</button>
-        {mark && <button className={css.clearBtn} onClick={() => void handleClear()}>{t('hover.clearBtn')}</button>}
+      <div className={css.grid}>
+        {STATUS_VALUES.map((s) => {
+          const m = STATUS_META[s]
+          const active = s === mark?.status
+          return (
+            <button
+              key={s}
+              className={[css.cell, active && css.active].filter(Boolean).join(' ')}
+              title={t(m.labelKey)}
+              aria-label={t(m.labelKey)}
+              aria-pressed={active}
+              style={{ color: m.hoverTone }}
+              onClick={() => { void handleSet(s, null) }}
+            >
+              <span className={css.iconCell} dangerouslySetInnerHTML={{ __html: ICONS[m.icon] ?? '' }} />
+            </button>
+          )
+        })}
       </div>
-      {showGrid && (
-        <div className={css.grid}>
-          {STATUS_VALUES.map((s) => {
-            const m = STATUS_META[s]
-            const active = s === mark?.status
-            return (
-              <button
-                key={s}
-                className={[css.cell, active && css.active].filter(Boolean).join(' ')}
-                title={t(m.labelKey)}
-                aria-label={t(m.labelKey)}
-                aria-pressed={active}
-                style={{ color: m.hoverTone }}
-                onClick={() => { setPicking(false); void handleSet(s, null) }}
-              >
-                <span className={css.iconCell} dangerouslySetInnerHTML={{ __html: ICONS[m.icon] ?? '' }} />
-              </button>
-            )
-          })}
-        </div>
-      )}
+      {mark && <div className={css.actions}><button className={css.clearBtn} onClick={() => void handleClear()}>{t('hover.clearBtn')}</button></div>}
     </div>
   )
 }

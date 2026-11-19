@@ -13,6 +13,10 @@ import {
   AUTO_REASON_VALUES,
   DEFAULT_MAX_NOTE_LENGTH,
   DEFAULT_REFRESH_INTERVAL_MS,
+  DEFAULT_ROW_ACTION_ORDER,
+  DEFAULT_MENU_ITEM_ORDER,
+  CLIENT_CONFIG_GLOBAL,
+  marksRevision,
   type MarkRecord,
   type SetMarkBody,
   type ClearMarkBody,
@@ -48,6 +52,10 @@ export {
   type MarkSource,
   DEFAULT_MAX_NOTE_LENGTH,
   DEFAULT_REFRESH_INTERVAL_MS,
+  DEFAULT_ROW_ACTION_ORDER,
+  DEFAULT_MENU_ITEM_ORDER,
+  CLIENT_CONFIG_GLOBAL,
+  marksRevision,
   type MarkRecord,
   type SetMarkBody,
   type ClearMarkBody,
@@ -89,6 +97,21 @@ type _MarkRecordMatches = z.output<typeof MarkRecordSchema> extends MarkRecord
   : never
 const _markRecordCheck: _MarkRecordMatches = true
 void _markRecordCheck
+
+/** Zod schema for the list response, including the conditional-read fields. */
+export const AllMarksResponseSchema = z.object({
+  marks: z.array(MarkRecordSchema).readonly(),
+  refreshIntervalMs: z.number().int().min(250),
+  revision: z.string(),
+  unchanged: z.boolean(),
+}).strict()
+
+/** Compile-time check that the list response schema matches the shared contract both ways. */
+type _AllMarksResponseMatches = z.output<typeof AllMarksResponseSchema> extends AllMarksResponse
+  ? AllMarksResponse extends z.output<typeof AllMarksResponseSchema> ? true : never
+  : never
+const _allMarksResponseCheck: _AllMarksResponseMatches = true
+void _allMarksResponseCheck
 
 /** Body accepted by the set action of the POST exact route and the `set_session_status` tool. */
 export const SetMarkBodySchema = z.object({

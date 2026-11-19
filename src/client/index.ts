@@ -1,8 +1,10 @@
 /** @module Client entry for dsh-session-status-marker.
  *
- * Registers the locale namespace and two slot occupants:
+ * Registers the locale namespace and four slot occupants:
  *  - `sidebar.session.row.trailing` → SessionStatusBadge
  *  - `sidebar.session.row.hover`   → SessionStatusHover
+ *  - `sidebar.workspaces.session.row.action` → SessionStatusRowAction (order 300)
+ *  - `sidebar.workspaces.session.menu.item`  → MenuStatusItem (touch/keyboard fallback)
  *
  * Follows `.research/dsh-repo/packages/client/ui-deliverables/src/client/index.ts:38-64`.
  */
@@ -13,12 +15,15 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { SessionStatusBadge } from './Badge.js'
 import { SessionStatusHover } from './HoverCard.js'
+import { SessionStatusRowAction } from './RowAction.js'
+import { MenuStatusItem } from './MenuStatusItem.js'
 import { StatusOverview } from './StatusOverview.js'
 import type { StatusOverviewInjected } from './StatusOverview.js'
 import { NS, DICTIONARIES } from './locales.js'
 import type { MarkerKey } from './locales.js'
-import { MARKER_OVERVIEW_ROUTE } from '../contracts.js'
+import { MARKER_OVERVIEW_ROUTE, CLIENT_CONFIG_GLOBAL } from '../contracts.js'
 import type { OverviewResponse } from '../contracts.js'
+import { DEFAULT_ROW_ACTION_ORDER, DEFAULT_MENU_ITEM_ORDER } from '../contracts.js'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -27,11 +32,23 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** Required services for the dictionaries and the two slot registrations. */
+/** Slot orders injected by the Host through `webserver/index-inject`. */
+interface BrowserConfig {
+  rowActionOrder?: number
+  menuItemOrder?: number
+}
+
+/** Required services for the dictionaries and the four slot registrations. */
 export const inject = ['slots', 'locale']
 
-/** Client plugin body: register dictionaries and the two slot occupants. */
+/** Client plugin body: register dictionaries and the four slot occupants. */
 export function apply(ctx: ClientContext): void {
+  // The dynamic client row carries no config, so read the orders the Host
+  // injected as a page global (official `webserver/index-inject` pattern).
+  // Missing or malformed values fall back to the documented defaults.
+  const browserConfig = (globalThis as { [CLIENT_CONFIG_GLOBAL]?: BrowserConfig })[CLIENT_CONFIG_GLOBAL] ?? {}
+  const rowActionOrder = typeof browserConfig.rowActionOrder === 'number' ? browserConfig.rowActionOrder : DEFAULT_ROW_ACTION_ORDER
+  const menuItemOrder = typeof browserConfig.menuItemOrder === 'number' ? browserConfig.menuItemOrder : DEFAULT_MENU_ITEM_ORDER
   // Ship every language the shell offers (`locale/src/client/index.ts:23` lists
   // en, ja, es, fr, de, ru, pt, zh). Registering only zh/en made the six others
   // fall back to English, which read as "the language never switches".
@@ -58,6 +75,34 @@ export function apply(ctx: ClientContext): void {
         locale: NS,
       },
       SessionStatusHover,
+    ),
+  )
+
+  // Non-hover entry points. ui-workspace registers archive (100) and pin (200)
+  // in row.action; 300 places this status button after both. The same picker is
+  // contributed to the row menu because the host hides row.action under
+  // `@media (hover: none)`, which is the touch device case.
+  ctx.slots.inject('sidebar.workspaces.session.row.action', () =>
+    ctx.slots.register(
+      {
+        name: 'sidebar.workspaces.session.row.action',
+        id: 'session-status-row-action',
+        order: rowActionOrder,
+        locale: NS,
+      },
+      SessionStatusRowAction,
+    ),
+  )
+
+  ctx.slots.inject('sidebar.workspaces.session.menu.item', () =>
+    ctx.slots.register(
+      {
+        name: 'sidebar.workspaces.session.menu.item',
+        id: 'session-status-menu-item',
+        order: menuItemOrder,
+        locale: NS,
+      },
+      MenuStatusItem,
     ),
   )
 

@@ -42,6 +42,57 @@ export const DEFAULT_MAX_NOTE_LENGTH = 200
 /** Browser re-read cadence used until the Host reports its configured value. */
 export const DEFAULT_REFRESH_INTERVAL_MS = 2000
 
+/**
+ * Default order of the row-action status button, after the host's archive (100)
+ * and pin (200). Configurable so other plugins can be placed around it.
+ */
+export const DEFAULT_ROW_ACTION_ORDER = 300
+
+/** Default order of the row-menu status item, matching the row-action button. */
+export const DEFAULT_MENU_ITEM_ORDER = 300
+
+/**
+ * Global injected into the browser by the Host so the Client can read the
+ * configured slot orders. `window.__ModuleLoader__` rows carry no config, so
+ * this follows the official `webserver/index-inject` pattern.
+ */
+export const CLIENT_CONFIG_GLOBAL = '__DSH_SESSION_MARKER_CONFIG__'
+
+/**
+ * Derive a stable revision from one durable row.
+ *
+ * The Host sorts every mark by session id and serializes this tuple, so the same
+ * stored data yields the same revision after a Host restart. A module-level
+ * counter would reset on restart and leave browsers permanently stuck on 304.
+ * Every mutable field participates, so a note or source change cannot be
+ * mistaken for an unchanged snapshot.
+ */
+export function markRevisionPart(row: MarkRecord): string {
+  return JSON.stringify([
+    row.sessionId,
+    row.status,
+    row.insertedAtMs,
+    row.seq,
+    row.source,
+    row.subjectId,
+    row.autoReason,
+    row.note,
+  ])
+}
+
+/**
+ * Derive the revision of a complete snapshot of marks.
+ *
+ * Rows are sorted by session id so the result does not depend on storage
+ * iteration order. An empty snapshot has the fixed revision `""`.
+ */
+export function marksRevision(marks: readonly MarkRecord[]): string {
+  return [...marks]
+    .sort((a, b) => a.sessionId.localeCompare(b.sessionId))
+    .map(markRevisionPart)
+    .join('\n')
+}
+
 /** One durable row. Mirrored by `MarkRecordSchema` in `./types.ts`. */
 export interface MarkRecord {
   readonly version: typeof MARK_VERSION
@@ -82,6 +133,10 @@ export interface AllMarksResponse {
   readonly marks: readonly MarkRecord[]
   /** How often the Browser should re-read this route, from the Host config. */
   readonly refreshIntervalMs: number
+  /** Stable fingerprint of the full mark snapshot, derived only from its rows. */
+  readonly revision: string
+  /** True when `revision` equals the client's last read, so `marks` is empty and subscribers must not repaint. */
+  readonly unchanged: boolean
 }
 
 /** One session row inside a status group, enriched with its display title. */
@@ -179,7 +234,7 @@ export const STATUS_META: Readonly<Record<StatusEnum, StatusMeta>> = {
   blocked: { icon: 'warning-triangle-outline', tone: 'var(--dsw-alias-state-warn-primary)', hoverTone: 'var(--dsw-alias-state-warn-primary)', labelKey: 'status.blocked' },
   review: { icon: 'browse-outline', tone: 'var(--dsw-alias-state-business-primary)', hoverTone: 'var(--dsw-alias-state-business-primary)', labelKey: 'status.review' },
   'pending-subagent': { icon: 'agent-preset-outline', tone: 'var(--dsw-alias-state-success-primary)', hoverTone: 'var(--dsw-alias-state-success-primary)', labelKey: 'status.pending-subagent' },
-  'awaiting-answer': { icon: 'pause-outline', tone: 'var(--dsw-alias-state-idle-primary)', hoverTone: 'var(--dsw-alias-label-secondary)', labelKey: 'status.awaiting-answer' },
+  'awaiting-answer': { icon: 'pause-outline', tone: 'var(--dsw-alias-label-secondary)', hoverTone: 'var(--dsw-alias-label-secondary)', labelKey: 'status.awaiting-answer' },
   feedback: { icon: 'like-outline', tone: 'var(--dsw-alias-state-success-primary)', hoverTone: 'var(--dsw-alias-state-success-primary)', labelKey: 'status.feedback' },
 }
 

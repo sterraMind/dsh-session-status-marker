@@ -33,9 +33,13 @@ const MODULES = {
   'client/useMark.ts': join(SRC, 'client', 'useMark.ts'),
   'client/badge.module.css': join(SRC, 'client', 'badge.module.css'),
   'client/hover.module.css': join(SRC, 'client', 'hover.module.css'),
+  'client/action.module.css': join(SRC, 'client', 'action.module.css'),
   'client/overview.module.css': join(SRC, 'client', 'overview.module.css'),
   'client/Badge.tsx': join(SRC, 'client', 'Badge.tsx'),
   'client/HoverCard.tsx': join(SRC, 'client', 'HoverCard.tsx'),
+  'client/StatusPicker.tsx': join(SRC, 'client', 'StatusPicker.tsx'),
+  'client/RowAction.tsx': join(SRC, 'client', 'RowAction.tsx'),
+  'client/MenuStatusItem.tsx': join(SRC, 'client', 'MenuStatusItem.tsx'),
   'client/StatusOverview.tsx': join(SRC, 'client', 'StatusOverview.tsx'),
   'client/index.ts': join(SRC, 'client', 'index.ts'),
 }

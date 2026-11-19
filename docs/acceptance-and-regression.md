@@ -1,6 +1,6 @@
 # Acceptance & Regression
 
-> **文档版本**：v1.1.6 · 2026-11-19（对应插件 1.1.6）
+> **文档版本**：v1.2.0 · 2026-11-19（对应插件 1.2.0）
 
 > 记录验收标准、已通过证据、待执行集成 smoke 与回归清单。
 > 对应实现进度见 `docs/implementation-plan.md` §2，风险优先级见 `docs/feasibility-and-risks.md`。
@@ -14,10 +14,11 @@
 | Client bundle | `node --check lib/client.js` | syntax OK；文件大小随版本变化（r8 为 24,150 B 量级，宿主实际提供的字节数含服务端附加内容） |
 | 纯推理测试 | `node --test --test-isolation=none tests/inference.test.mjs` | 17 项全绿 |
 | Schema 契约测试 | `tests/types.test.mjs` | 9 项全绿 |
-| Service 集成测试 | `tests/service.test.mjs` | 14 项全绿 |
+| Service 集成测试 | `tests/service.test.mjs` | 20 项全绿 |
+| 行操作 / 菜单入口 / 共享状态选择器 | `tests/action.test.mjs` | 12 项全绿 |
 | i18n / 图标 / 样式契约 | `tests/i18n.test.mjs`、`tests/theme.test.mjs` | i18n 11 项 + theme 11 项全绿 |
-| `pnpm run test` | `tests 73 / suites 17 / pass 73 / fail 0` |
-| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.1.6.tgz`（55,310 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md`；`docs/` 与截图不入包 |
+| `pnpm run test` | `tests 95 / suites 23 / pass 95 / fail 0`（目录形式 `node --test tests/` 在 Node 26 下另计入 4 个 `.test.ts` 薄壳，报告 99/23，同一批断言） |
+| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.2.0.tgz`（70,350 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md`；`docs/` 与截图不入包 |
 | 真实装载 | `dsh plugin --profile smoke add <tgz>`（dev4090） | profile 初始化成功并安装插件，详见 §3 |
 | **前端视觉与交互** | 真实 GUI 上操作（dev4090 + CDP） | sidebar 行尾标记、hover card、状态改写/清除、跨进程持久化全部实测通过，见 §3.4 与 §4 |
 
@@ -29,13 +30,14 @@
 |---|---|---|
 | `tests/inference.test.mjs` | 17 | `inferStatus` 全部规则分支 + `shouldApplyInference` 三态 + `isAutoMarkExpired` 三态 |
 | `tests/types.test.mjs` | 9 | `MarkRecordSchema.strict`、超长 note 拒绝、默认值填充、`STATUS_META` 全覆盖、route 派生一致性 |
-| `tests/service.test.mjs` | 14 | `getMark`/`clearMark`/`listAll`/`putMark`；state route 400 与命中；mutate set→clear 往返；unsupported-action；两个 tool 注册与 execute；note 超长抛错；`turn/end interrupted` auto inference + manual mark not overwritten |
+| `tests/service.test.mjs` | 20 | `getMark`/`clearMark`/`listAll`/`putMark`；state route 400 与命中；mutate set→clear 往返；unsupported-action；两个 tool 注册与 execute（含覆盖规则描述）；note 超长抛错；`turn/end interrupted` auto inference + manual mark not overwritten；`?since=<revision>` 条件刷新（revision 命中跳过行、跨实例稳定）；`rowActionOrder`/`menuItemOrder` 页面全局注入与默认回退 |
 | `tests/smoke.test.mjs` | 1 | 端到端 inference round-trip + state route read-back + neutral-event no-op |
 | `tests/i18n.test.mjs` | 11 | `STATUS_META`/tone/schema 默认值一致性 + 图标盒尺寸 + Shell 8 语言字典键集合与占位符 |
-| `tests/theme.test.mjs` | 11 | 零字面颜色、inline glyph 盒、active 格不重设 color、badge 尺寸、`:has([data-status-slot])` 整卡覆盖宿主、面板与状态色用主题别名、hover/active 用 interactive 令牌、桥接命中区、8 格盒尺寸、总览页主题别名 |
-| `tests/marks.test.mjs` | 5 | 共享读取器：快照分发、本地写透、消失会话分发 `null`、采纳 Host 读取间隔、读取失败保留上次 |
+| `tests/theme.test.mjs` | 11 | 零字面颜色、inline glyph 盒、active 格不重设 color、badge 尺寸、`:has([data-status-slot])` 整卡覆盖宿主（同时覆盖 `--dsw-alias-hovercard-bg` 与 `--dsw-hovercard-bg`）、面板与状态色用主题别名、hover/active 用 interactive 令牌、桥接命中区、8 格盒尺寸、总览页主题别名 |
+| `tests/marks.test.mjs` | 9 | 共享读取器：快照分发、本地写透、消失会话分发 `null`、采纳 Host 读取间隔、读取失败保留上次、`?since` + host 判 unchanged 时跳过 publish、读取失败保留 revision、晚加入会话全量读取、可见性恢复强制全量读取 |
 | `tests/overview.test.mjs` | 5 | overview route：分组排序、仅非空组、标题关联、`sessionTitle` 缺失/抛错回退 null、空态 |
-| **合计** | **73** | suites 17 / pass 73 / fail 0 |
+| `tests/action.test.mjs` | 12 | 行操作/菜单项 slot 注册（id、order 300、排在官方 archive/pin 之后）、行按钮接共享选择器并 stopPropagation、菜单项用 owner menu hook + `role=menuitem`、共享选择器契约（8×22px 单行、主题令牌、POST 既有 route）、bundle 表与 8 语言字典键、默认 order + 页面全局读取回退、profile 配置暴露 |
+| **合计** | **95** | suites 23 / pass 95 / fail 0 |
 
 ## 3. 真实集成验证（dev4090，已执行）
 
@@ -270,13 +272,14 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 |---|---|---|
 | `tests/inference.test.mjs` | 17 | `inferStatus` 全部规则分支 + `shouldApplyInference` 三态 + `isAutoMarkExpired` 三态 |
 | `tests/types.test.mjs` | 9 | `MarkRecordSchema.strict`、超长 note 拒绝、默认值填充、`STATUS_META` 全覆盖、route 派生一致性 |
-| `tests/service.test.mjs` | 14 | `getMark`/`clearMark`/`listAll`/`putMark`；state route 400 与命中；mutate set→clear 往返；unsupported-action；两个 tool 注册与 execute；note 超长抛错；`turn/end interrupted` auto inference + manual mark not overwritten |
+| `tests/service.test.mjs` | 20 | `getMark`/`clearMark`/`listAll`/`putMark`；state route 400 与命中；mutate set→clear 往返；unsupported-action；两个 tool 注册与 execute；note 超长抛错；`turn/end interrupted` auto inference + manual mark not overwritten；`?since` 条件刷新 + revision 稳定；`rowActionOrder`/`menuItemOrder` 页面全局注入 |
 | `tests/smoke.test.mjs` | 1 | 完整 inference round-trip + GET state route read-back + neutral-event no-op |
 | `tests/i18n.test.mjs` | 11 | STATUS_META/tone/schema/defaults 跨模块一致性 + 图标尺寸契约 + Shell 8 语言字典键集合与占位符 |
-| `tests/theme.test.mjs` | 11 | 零字面颜色、图标盒尺寸、active 格不覆盖 color、badge 盒尺寸、`[class*='card']:has([data-status-slot])` 整卡覆盖宿主、面板用主题别名、状态 hover 色用主题别名、`.root::before` 桥接命中区、格子 22px border-box + 2px 内边距 + 2px 间距、总览页主题别名 |
-| `tests/marks.test.mjs` | 5 | 共享读取器：快照分发、本地写透、消失的会话分发 `null`、采纳 Host 下发的读取间隔、读取失败保留上一次结果 |
+| `tests/theme.test.mjs` | 11 | 零字面颜色、图标盒尺寸、active 格不覆盖 color、badge 盒尺寸、`[class*='card']:has([data-status-slot])` 整卡覆盖宿主（含 `--dsw-alias-hovercard-bg` 双变量）、状态 hover 色用主题别名、`.root::before` 桥接命中区、格子 22px border-box + 2px 内边距 + 2px 间距、总览页主题别名 |
+| `tests/marks.test.mjs` | 9 | 共享读取器：快照分发、本地写透、消失的会话分发 `null`、采纳 Host 下发的读取间隔、读取失败保留上一次结果、`?since` + unchanged 跳过 publish、晚加入会话全量读取、可见性恢复强制全量读取 |
 | `tests/overview.test.mjs` | 5 | overview route：分组排序、仅非空组、标题关联、`sessionTitle` 缺失/抛错回退 null、空态 |
-| **合计** | **73** | suites 17 / pass 73 / fail 0 |
+| `tests/action.test.mjs` | 12 | 行操作/菜单项 slot 注册（order 300、官方 archive/pin 之后）、行按钮接共享选择器、菜单项 `role=menuitem`、共享选择器 8×22px 单行 + 主题令牌、bundle 表 + 8 语言字典键、order 默认值与页面全局回退、profile 配置暴露 |
+| **合计** | **95** | suites 23 / pass 95 / fail 0 |
 
 ## 5. 升级回归清单
 
@@ -310,3 +313,23 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 | 测试 | 73 tests / 17 suites / pass 73 / fail 0 | 73 tests / 17 suites / pass 73 / fail 0 |
 | tgz | 55,313 B | 55,310 B |
 | 发布 | tag `v1.1.5`、GitHub Release、npm `latest` 1.1.5 | tag `v1.1.6`、GitHub Release、npm `latest` 1.1.6 |
+
+### 3.17 1.2.0 快捷操作、悬停卡 8 格直出与条件刷新（2026-11-19）
+
+1.2.0 为功能版本：代码与单元测试已全部完成，dev4090 真实 GUI 复核待执行（要求 DSH >= 0.2.2）。
+
+| 验收点 | 状态 |
+|---|---|
+| 已标记会话的悬停卡直接展示 8 格状态格（无需先点「修改状态」），当前状态高亮，清除按钮保留 | 代码 + 测试完成；待 dev4090 真实页面复核（8 格单行、点选不复制误触） |
+| 未标记会话同样直接展示 8 格 | 代码 + 测试完成；待真实页面复核 |
+| 新增 `sidebar.workspaces.session.row.action` 行操作（id `session-status-row-action`，默认 order 300），行内按钮打开共享状态选择器 | 代码 + 测试完成（注册位置在官方 archive/pin 之后、`role=menuitem`、stopPropagation、8×22px 单行契约）；待真实页面复核 |
+| 新增 `sidebar.workspaces.session.menu.item` 菜单入口（id `session-status-menu-item`，order 300），打开状态子菜单、选中后关闭菜单 | 代码 + 测试完成；待真实页面复核（子菜单展开/选中/关闭） |
+| `rowActionOrder` / `menuItemOrder` 配置（默认 300）：Host 经 `webserver/index-inject` 注入页面全局 `__DSH_SESSION_MARKER_CONFIG__`，Client 读取失败回退默认值 | 代码 + 测试完成（默认值、注入回退、profile 暴露）；待真实页面复核 |
+| `GET /api/session-status-marker.list?since=<revision>` 条件刷新：revision 命中返回 `unchanged:true` + 空 marks，Client 跳过重绘；可见性恢复与首次订阅无缓存时强制全量读取 | 代码 + 测试完成（revision 跨实例稳定、失败保留上次 revision）；待真实页面复核（轮询无闪烁） |
+| `awaiting-answer` 状态色改用 `--dsw-alias-label-secondary`（明暗主题对比度） | 代码 + 测试完成；待真实页面明/暗视觉确认 |
+| `set_session_status` 工具描述重写（WHEN TO USE / WHEN NOT TO USE / DO NOT USE FOR / USAGE / EXAMPLES，明确手动标记不被推断覆盖） | 代码完成，工具契约测试全绿 |
+| 整卡主题接管同时覆盖 `--dsw-alias-hovercard-bg` 与 `--dsw-hovercard-bg`（兼容较新 DSH 构建的卡底变量） | 代码 + 测试完成；待真实页面 cardBg 明/暗值复核 |
+| `engines.dsh` 收紧为 `>=0.2.2 <0.3.0`（行尾徽标依赖 0.2.2-rc.1 引入的 `sidebar.session.row.trailing` 槽位；行操作/菜单入口槽位更早可用） | 声明完成；待 dev4090（0.2.2-rc.1）安装验证 |
+| 测试 | 95 tests / 23 suites / pass 95 / fail 0（脚本形式 `pnpm run test`）；目录形式 `node --test tests/` 报告 99/23（4 个 `.test.ts` 薄壳各计 1 条，同一批断言） |
+| 打包 | `pnpm pack` → `dsh-session-status-marker-1.2.0.tgz`（70,350 B）；`lib/client.js` 72,264 B |
+| 发布 | 待 tag `v1.2.0`、GitHub Release、npm 发布 |

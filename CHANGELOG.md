@@ -2,6 +2,31 @@
 
 本文件记录 `dsh-session-status-marker` 的对外可见变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.2.0] - 2026-11-19
+
+新增不依赖悬停的状态入口、行操作顺序可配置，悬停卡默认直接展示八格状态选择，条件刷新减少无变化的重绘，并修复若干对比度与主题跟随问题。
+
+### 新增
+
+- **会话行行内状态按钮（触屏/键盘入口）**：新 slot `sidebar.workspaces.session.row.action`（id `session-status-row-action`），悬停行时显示行内状态选择按钮；同一状态选择器同时以 `sidebar.workspaces.session.menu.item`（id `session-status-menu-item`）贡献到行菜单，覆盖触屏与键盘场景（官方 `row.action` 在 `hover: none` 下隐藏）。两个入口此前在 1.1.x 列为「不依赖悬停的入口」未完成项。
+- **行操作顺序可配置**：Host 配置新增 `rowActionOrder` 与 `menuItemOrder`（`z.natural()`，默认 300，排在官方 archive=100 / pin=200 之后），`cordis.patch.yml` 同步写入。Host 通过 `webserver/index-inject` 以全局 `__DSH_SESSION_MARKER_CONFIG__` 下发（动态加载的 client row 没有逐条配置通道，这是官方 index-inject 模式），client 在 `apply` 时读取，缺失或非法值回退默认 300。
+- **条件列表刷新**：`GET /api/session-status-marker.list` 支持 `?since=<revision>`。服务端按行内容计算 revision，无变化时返回 `{marks: [], revision, unchanged: true}`，浏览器跳过重绘；变化或首次读取返回全量并带 `unchanged: false`。客户端保留 2 秒轮询兜底，仅在无变化时跳过分发；标签页重新可见、以及首次订阅且本地无缓存时会强制一次全量读取。减少无变化时的组件重绘与网络负载。
+- **悬停卡默认展示八格**：已标记会话的悬停卡默认直接展示八个状态图标（此前需要先点「修改状态」展开），当前状态高亮，已标记时保留「清除」按钮；未标记会话行为不变（八格始终可见）。
+
+### 变更
+
+- **`awaiting-answer` 对比度**：状态色从 `--dsw-alias-state-idle-primary` 改为 `--dsw-alias-label-secondary`。实测旧值仅 1.48:1（浅色）/ 1.87:1（深色），均低于 WCAG 图形对象 3:1 门槛；新值 5.80:1（浅色）/ 9.25:1（深色），两主题均达标。
+- **`set_session_status` 工具描述重写**：按 WHEN TO USE / WHEN NOT TO USE / DO NOT USE FOR / USAGE / EXAMPLES 重写，明确「模型正常结束会话不应自动标记为 done」「已有手动标记时不覆盖」，减少模型误调用与漏调用。
+- **`engines.dsh` 提升为 `>=0.2.2 <0.3.0`**：`row.action` / `menu.item` 槽位与侧栏行尾徽标（`sidebar.session.row.trailing`）均要求 0.2.2-rc.1 起引入的槽位体系，下限从 `0.2.2-rc.1` 提到稳定版 `0.2.2`。
+
+### 修复
+
+- **悬停卡整卡主题接管加固**：新版 DSH 构建的悬停卡底色改用 `--dsw-alias-hovercard-bg`（固定深底别名）绘制，旧版用 `--dsw-hovercard-bg`。1.1.2 起只覆盖了后者，在较新构建上整卡主题接管失效。现在 `[class*='card']:has([data-status-slot])` 同时覆盖两个变量指向 `--dsw-alias-bg-layer-2`，两个构建都跟随主题。
+
+### 发布
+
+- 95 项测试 / 23 套件全绿（目录形式另计入 4 个 `.test.ts` 薄壳，报告 99/23）；`pnpm pack` → `dsh-session-status-marker-1.2.0.tgz`（70,350 B）。
+
 ## [1.1.6] - 2026-11-19
 
 按官方发布包的依赖声明规范重写 `package.json` 的依赖字段：运行时与宿主共享的依赖放 `peerDependencies`，第三方运行时依赖放 `dependencies`，开发期只保留类型检查与构建实际需要的包。

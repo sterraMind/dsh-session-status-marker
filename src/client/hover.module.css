@@ -26,8 +26,12 @@
  * `onPointerEnter` and cancel the pending close.
  */
 
-/* Retarget the host card that contains our slot, not any other HoverCard. */
+/* Retarget the host card that contains our slot, not any other HoverCard.
+ * Newer DSH builds paint the card with `background: var(--dsw-alias-hovercard-bg)`
+ * (a fixed-dark alias), older ones with `--dsw-hovercard-bg`; we override both so
+ * the surface follows the DSH theme regardless of which alias the build reads. */
 [class*='card']:has([data-status-slot]) {
+  --dsw-alias-hovercard-bg: var(--dsw-alias-bg-layer-2) !important;
   --dsw-hovercard-bg: var(--dsw-alias-bg-layer-2) !important;
 }
 
