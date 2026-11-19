@@ -63,6 +63,9 @@ describe('stylesheet contract', () => {
   it('retargets the whole host card to theme aliases, scoped by :has', () => {
     expect(HOVER_CSS).toMatch(/\[class\*=['"]card['"]\]:has\(\[data-status-slot\]\)/)
     expect(HOVER_CSS).toMatch(/--dsw-hovercard-bg:\s*var\(--dsw-alias-bg-layer-2\)/)
+    // Newer DSH builds paint the card with `var(--dsw-alias-hovercard-bg)`;
+    // override that alias too so the surface follows the theme in both builds.
+    expect(HOVER_CSS).toMatch(/--dsw-alias-hovercard-bg:\s*var\(--dsw-alias-bg-layer-2\)/)
     for (const line of ['hoverTitle', 'hoverPath', 'hoverTime', 'hoverStatus']) {
       expect(HOVER_CSS).toMatch(new RegExp(`\\[class\\*=['"]${line}['"]\\][^}]*color:\\s*var\\(--dsw-alias-label-`))
     }

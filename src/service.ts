@@ -23,10 +23,14 @@ import {
   STATUS_VALUES,
   MARK_VERSION,
   DEFAULT_REFRESH_INTERVAL_MS,
+  DEFAULT_ROW_ACTION_ORDER,
+  DEFAULT_MENU_ITEM_ORDER,
+  CLIENT_CONFIG_GLOBAL,
   MARKER_STATE_PATH,
   MARKER_LIST_PATH,
   MARKER_MUTATE_PATH,
   MARKER_OVERVIEW_PATH,
+  marksRevision,
   SetMarkBodySchema,
   ClearMarkBodySchema,
   type MarkRecord,
@@ -46,6 +50,10 @@ export interface Config {
   autoExpireMs: number
   /** Browser re-read cadence for the mark list, in ms; defaults to 2000. */
   refreshIntervalMs: number
+  /** Order of the row-action status button; raise or lower to coexist with other plugins. */
+  rowActionOrder: number
+  /** Order of the row-menu status item; raise or lower to coexist with other plugins. */
+  menuItemOrder: number
 }
 
 /** Schemastery schema, consumed by Cordis when this row loads. */
@@ -54,7 +62,20 @@ export const Config = z.object({
   maxNoteLength: z.natural().min(1).required(),
   autoExpireMs: z.natural().required(),
   refreshIntervalMs: z.natural().min(250).default(DEFAULT_REFRESH_INTERVAL_MS),
+  rowActionOrder: z.natural().default(DEFAULT_ROW_ACTION_ORDER),
+  menuItemOrder: z.natural().default(DEFAULT_MENU_ITEM_ORDER),
 })
+
+/**
+ * Minimal shape of a `webserver/index-inject` global row. The authoritative
+ * `IndexInjection` union lives in `@deepseek-ai/dsh-host-webserver`, which this
+ * out-of-tree bundle does not depend on; only the `global` row is used here.
+ */
+interface IndexGlobalInjection {
+  kind: 'global'
+  name: string
+  value: unknown
+}
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -65,6 +86,10 @@ declare module '@deepseek-ai/cordis' {
      * live session, or `undefined` before eligible input.
      */
     sessionTitle: { get(session: Session): { readonly title: string } | undefined }
+  }
+  interface Events {
+    /** Collect structured index-injection rows for the rendered Web GUI page. */
+    'webserver/index-inject'(table: IndexGlobalInjection[], peer: unknown): void
   }
 }
 
@@ -115,7 +140,7 @@ export class SessionStatusService extends Service {
       path: MARKER_LIST_PATH,
       methods: ['GET'] as const,
       requestBody: 'buffered' as const,
-      fetch: () => this.#handleList(),
+      fetch: (request: Request) => this.#handleList(request),
     }
     const mutateRoute = {
       path: MARKER_MUTATE_PATH,
@@ -144,6 +169,23 @@ export class SessionStatusService extends Service {
         return () => { void disposeState(); void disposeList(); void disposeMutate(); void disposeOverview() }
       }, 'sessionStatus.fetchRoutes')
     })
+
+    // Expose the configured slot orders to the browser. The dynamic client
+    // row carries no config (`BootPluginRow` has only id/inject/immediately),
+    // so `apply(ctx, config)` on the client cannot see cordis.patch.yml. The
+    // official `webserver/index-inject` global is the supported channel.
+    this.ctx.effect(() => {
+      return this.ctx.on('webserver/index-inject', (table) => {
+        table.push({
+          kind: 'global',
+          name: CLIENT_CONFIG_GLOBAL,
+          value: {
+            rowActionOrder: this.config.rowActionOrder ?? DEFAULT_ROW_ACTION_ORDER,
+            menuItemOrder: this.config.menuItemOrder ?? DEFAULT_MENU_ITEM_ORDER,
+          },
+        })
+      })
+    }, 'sessionStatus.clientConfig')
 
     if (this.config.autoInfer) {
       this.ctx.on('session/event', (session: Session, event: SessionEvent) => {
@@ -245,10 +287,25 @@ export class SessionStatusService extends Service {
     return Response.json({ sessionId, mark: await this.effectiveMark(sessionId) })
   }
 
-  async #handleList(): Promise<Response> {
+  /**
+   * Full mark list, with a conditional-read shortcut: when the client sends the
+   * revision it last saw and that still equals the current snapshot's revision,
+   * return no rows and `unchanged:true` so the browser can skip repainting.
+   *
+   * The revision is derived only from sorted rows, never from a module counter:
+   * a Host restart must produce the same revision for the same data, otherwise
+   * browsers that cached a revision would never refresh again.
+   */
+  async #handleList(request: Request): Promise<Response> {
     const marks: MarkRecord[] = []
     for (const [, row] of this.listAll()) marks.push(row)
-    return Response.json({ marks, refreshIntervalMs: this.config.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS })
+    const revision = marksRevision(marks)
+    const since = new URL(request.url).searchParams.get('since')
+    const refreshIntervalMs = this.config.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS
+    if (since !== null && since === revision) {
+      return Response.json({ marks: [], refreshIntervalMs, revision, unchanged: true })
+    }
+    return Response.json({ marks, refreshIntervalMs, revision, unchanged: false })
   }
 
   /**
@@ -336,7 +393,14 @@ export class SessionStatusService extends Service {
     const service = this
     return defineTool({
       name: 'set_session_status',
-      description: 'Mark the current session with an explicit status label (TODO / DONE / STOP / BLOCKED / REVIEW / ...). Call this when the conversation state changes in a way that should be visible in the session list.',
+      description: [
+        'Set an explicit status label on the current session so the session list shows where it stands.',
+        'WHEN TO USE: the conversation reaches a state another person needs to see in the session list, such as waiting on the user, a subagent still running, work blocked, or a task genuinely finished.',
+        'WHEN NOT TO USE: Do not mark a normally finished session done automatically. A turn ending only means this reply finished; it does not mean the user goal is complete. Leave done to a deliberate user request or your own confirmed judgement.',
+        'DO NOT USE FOR: do not use this tool to record intermediate tool progress or an inference you are guessing at. Automatic inference never overwrites a manual mark or a mark made with this tool, and a later call to this tool replaces an earlier mark of either kind.',
+        'USAGE: pass one status from todo, done, stopped, blocked, review, pending-subagent, awaiting-answer, feedback. Statuses written by you through this tool are manual. Add a short note when the reason is not obvious, and a subjectId when the mark refers to a specific turn, goal, job, or subagent.',
+        'EXAMPLES: user asks you to pause and wait for their answer, call with status awaiting-answer and a note naming what you need. A subagent is launched and still running, call with status pending-subagent and its id as subjectId. Work is genuinely complete and confirmed, call with status done. To remove an incorrect mark, use clear_session_status instead of this tool.',
+      ].join(' '),
       parameters: {
         status: { type: 'string', required: true, enum: STATUS_VALUES, description: 'Status label to record for the current session.' },
         note: { type: 'string', description: 'Optional short human-readable reason for the mark.' },

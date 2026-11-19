@@ -38,6 +38,12 @@ export const zh = {
   'hover.loading': '加载中...',
   'hover.error': '加载失败，请重试',
 
+  // Non-hover row action and row menu entry
+  'action.aria': '设置会话状态',
+  'action.trigger': '状态',
+  'action.error': '设置失败，请重试',
+  'menu.setStatus': '设置状态',
+
   // General
   'badge.aria': '会话状态标记',
 
@@ -70,6 +76,11 @@ export const en: MarkerDict = {
   'hover.loading': 'Loading...',
   'hover.error': 'Load failed, try again',
 
+  'action.aria': 'Set session status',
+  'action.trigger': 'Status',
+  'action.error': 'Failed to set status, try again',
+  'menu.setStatus': 'Set status',
+
   'badge.aria': 'Session status marker',
 
   'overview.nav': 'Session status',
@@ -99,6 +110,11 @@ export const ja: MarkerDict = {
   'hover.clearBtn': 'クリア',
   'hover.loading': '読み込み中...',
   'hover.error': '読み込みに失敗しました。再試行してください',
+
+  'action.aria': 'セッションの状態を設定',
+  'action.trigger': '状態',
+  'action.error': '状態を設定できませんでした。再試行してください',
+  'menu.setStatus': '状態を設定',
 
   'badge.aria': 'セッション状態マーカー',
 
@@ -130,6 +146,11 @@ export const es: MarkerDict = {
   'hover.loading': 'Cargando...',
   'hover.error': 'Error al cargar, inténtelo de nuevo',
 
+  'action.aria': 'Establecer estado de la sesión',
+  'action.trigger': 'Estado',
+  'action.error': 'No se pudo establecer el estado, inténtelo de nuevo',
+  'menu.setStatus': 'Establecer estado',
+
   'badge.aria': 'Marcador de estado de sesión',
 
   'overview.nav': 'Estado de sesión',
@@ -159,6 +180,11 @@ export const fr: MarkerDict = {
   'hover.clearBtn': 'Effacer',
   'hover.loading': 'Chargement...',
   'hover.error': 'Échec du chargement, réessayez',
+
+  'action.aria': 'Définir l’état de la session',
+  'action.trigger': 'État',
+  'action.error': 'Échec de la définition de l’état, réessayez',
+  'menu.setStatus': 'Définir l’état',
 
   'badge.aria': 'Marqueur d’état de session',
 
@@ -190,6 +216,11 @@ export const de: MarkerDict = {
   'hover.loading': 'Wird geladen...',
   'hover.error': 'Laden fehlgeschlagen, erneut versuchen',
 
+  'action.aria': 'Sitzungsstatus festlegen',
+  'action.trigger': 'Status',
+  'action.error': 'Status konnte nicht festgelegt werden, erneut versuchen',
+  'menu.setStatus': 'Status festlegen',
+
   'badge.aria': 'Sitzungsstatus-Markierung',
 
   'overview.nav': 'Sitzungsstatus',
@@ -220,6 +251,11 @@ export const ru: MarkerDict = {
   'hover.loading': 'Загрузка...',
   'hover.error': 'Не удалось загрузить, попробуйте ещё раз',
 
+  'action.aria': 'Установить статус сессии',
+  'action.trigger': 'Статус',
+  'action.error': 'Не удалось установить статус, попробуйте ещё раз',
+  'menu.setStatus': 'Установить статус',
+
   'badge.aria': 'Маркер статуса сессии',
 
   'overview.nav': 'Статус сессий',
@@ -249,6 +285,11 @@ export const pt: MarkerDict = {
   'hover.clearBtn': 'Limpar',
   'hover.loading': 'Carregando...',
   'hover.error': 'Falha ao carregar, tente novamente',
+
+  'action.aria': 'Definir status da sessão',
+  'action.trigger': 'Status',
+  'action.error': 'Falha ao definir o status, tente novamente',
+  'menu.setStatus': 'Definir status',
 
   'badge.aria': 'Marcador de status da sessão',
 

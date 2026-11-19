@@ -23,10 +23,11 @@ describe('i18n consistency', () => {
     }
   })
 
-  it('all tone values reference --dsw-alias-state-* tokens (theme-aware)', () => {
+  it('all tone values reference theme-alias tokens (state or label)', () => {
     for (const s of STATUS_VALUES) {
       const tone = STATUS_META[s].tone
-      expect(tone.startsWith('var(--dsw-alias-state-')).toBe(true)
+      const isThemeAlias = tone.startsWith('var(--dsw-alias-state-') || tone.startsWith('var(--dsw-alias-label-')
+      expect(isThemeAlias).toBe(true)
     }
   })
 

@@ -10,7 +10,7 @@
 
 ## 怎么用
 
-**手动标记**：鼠标移到侧栏的会话行上，卡片里会出现八个状态格子。点一下就设好，也可以写一句备注。
+**手动标记**：把鼠标移到侧栏的会话行上，状态卡片会展开。卡片里有八个状态格子，点其中一个就能给这个会话设置状态。需要的话，还可以在备注框里写一句话说明。
 
 **跨会话总览**：打开设置面板，左侧出现「会话状态」一节。它按状态分组列出所有打过标记的会话，每组带数量，组内按更新时间排序，页面里自动刷新。
 
@@ -31,16 +31,16 @@
 
 ## 安装
 
-**从 npm 安装**（当前版本 1.1.5）：
+**从 npm 安装**（当前版本 1.2.0）：
 
 ```bash
 dsh plugin --profile desktop add dsh-session-status-marker
 ```
 
-**从 GitHub Release 安装**：到 <https://github.com/sterraMind/dsh-session-status-marker/releases> 下载 `dsh-session-status-marker-1.1.6.tgz`，然后：
+**从 GitHub Release 安装**：到 <https://github.com/sterraMind/dsh-session-status-marker/releases> 下载 `dsh-session-status-marker-1.2.0.tgz`，然后：
 
 ```bash
-dsh plugin --profile desktop add ./dsh-session-status-marker-1.1.6.tgz
+dsh plugin --profile desktop add ./dsh-session-status-marker-1.2.0.tgz
 ```
 
 装完核对一下是否生效：
@@ -53,7 +53,7 @@ dsh --profile desktop --dump-config   # 输出里应出现 session-status-marker
 
 ## 配置
 
-在 profile 的 `cordis.patch.yml` 里写配置。前三项必填，`refreshIntervalMs` 有默认值可以省略：
+在 profile 的 `cordis.patch.yml` 里写配置。前三项必填，其余有默认值可以省略：
 
 ```yaml
 - id: session-status-marker
@@ -63,7 +63,11 @@ dsh --profile desktop --dump-config   # 输出里应出现 session-status-marker
     maxNoteLength: 200         # 备注最长字符数
     autoExpireMs: 0            # 自动标记多久后过期，0 表示不过期
     refreshIntervalMs: 2000    # 浏览器多久读一次状态，最小 250
+    rowActionOrder: 300        # 会话行状态按钮的顺序，别的插件占用 300 时改大
+    menuItemOrder: 300         # 右键菜单里状态条目的顺序
 ```
+
+悬停卡片里八个状态一直显示，点图标就能设置，已标记的会话会高亮当前状态。会话行末尾和右键菜单里也各有一个入口，不用打开悬停卡片也能改。行末尾入口排在官方的归档、置顶按钮之后；如果别的插件也用了这个顺序，改上面两个配置项错开即可。
 
 ## 主题与语言
 
@@ -75,10 +79,15 @@ dsh --profile desktop --dump-config   # 输出里应出现 session-status-marker
 
 ## 已知限制
 
-- 浏览器端靠定时读取来发现其它窗口或 AI 写入的状态，不是服务端实时推送，因此最多有一个轮询周期的延迟（默认 2 秒）。
+- 浏览器端靠定时读取来发现其它窗口或 AI 写入的状态，不是服务端实时推送。读取时带一个版本号，状态没变就只用极小响应、不重绘界面，所以延迟最多是一个轮询周期（默认 2 秒）。
 - 除简体中文和英文之外的六种语言，界面文字只经过字典完整性测试，没有在真实页面里逐种语言看过。
-- 终端界面（TUI）没有状态徽标的显示位置，标记只能由 AI 写入并以文字形式呈现，界面接入还没做。
-- 侧栏按状态筛选、批量修改多个会话的状态，这两项还没做。
+
+## 路线图
+
+下面几项还没做，计划后续版本实现。
+
+- 终端界面接入：终端界面目前没有显示状态徽标的位置，标记只能由 AI 写入并以文字形式呈现。后续要做的话，需要另外设计终端侧的展示方式。
+- 侧栏按状态筛选、批量修改多个会话状态：目前侧栏没有状态筛选入口，也没有批量修改的操作入口。这两项计划在后续版本实现。
 
 ## 开发
 

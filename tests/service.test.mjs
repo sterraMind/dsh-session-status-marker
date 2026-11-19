@@ -28,6 +28,7 @@ function makeCtx(withConnection = true) {
   const tools = []
   const routes = []
   const listeners = []
+  const injections = []
   const table = makeTable()
   const connection = withConnection
     ? { fetch: { register: (r) => { routes.push(r); return () => {} } } }
@@ -57,19 +58,25 @@ function makeCtx(withConnection = true) {
     tools: { register: (t) => { tools.push(t); return () => {} } },
     connection,
     effect: (fn) => fn(),
-    on: (_name, listener) => { listeners.push(listener) },
+    // Only session/event listeners go to `listeners`; the webserver injection
+    // listener is captured separately so it cannot shift inference test indices.
+    on: (name, listener) => {
+      if (name === 'session/event') listeners.push(listener)
+      else if (name === 'webserver/index-inject') injections.push(listener)
+      return () => {}
+    },
     logger: { warn: () => {} },
   }
-  return { ctx, tools, routes, table, listeners }
+  return { ctx, tools, routes, table, listeners, injections }
 }
 
 const CONFIG = { autoInfer: false, maxNoteLength: 20, autoExpireMs: 0, refreshIntervalMs: 2000 }
 
 async function bootService(autoInfer = false, withConnection = true) {
-  const { ctx, tools, routes, table, listeners } = makeCtx(withConnection)
+  const { ctx, tools, routes, table, listeners, injections } = makeCtx(withConnection)
   const svc = new SessionStatusService(ctx, { ...CONFIG, autoInfer })
   await svc[Service.init]()
-  return { svc, tools, routes, table, listeners }
+  return { svc, tools, routes, table, listeners, injections }
 }
 
 describe('SessionStatusService storage', () => {
@@ -121,7 +128,39 @@ describe('SessionStatusService exact routes', () => {
     await svc.putMark(svc.explicitRow('s1', 'todo', null, null))
     const route = routes.find((r) => r.path.endsWith('.list'))
     const res = await route.fetch(new Request('http://x/api/session-status-marker.list'))
-    expect(await res.json()).toMatchObject({ refreshIntervalMs: 2000, marks: [{ sessionId: 's1', status: 'todo' }] })
+    expect(await res.json()).toMatchObject({ refreshIntervalMs: 2000, marks: [{ sessionId: 's1', status: 'todo' }], unchanged: false })
+  })
+
+  it('list route returns a stable derived revision and skips rows when since matches', async () => {
+    const { svc, routes } = await bootService()
+    await svc.putMark(svc.explicitRow('s1', 'todo', null, null))
+    const route = routes.find((r) => r.path.endsWith('.list'))
+    const first = await (await route.fetch(new Request('http://x/api/session-status-marker.list'))).json()
+    expect(typeof first.revision).toBe('string')
+    expect(first.revision.length > 0).toBe(true)
+    expect(first.unchanged).toBe(false)
+
+    const second = await (await route.fetch(new Request(`http://x/api/session-status-marker.list?since=${encodeURIComponent(first.revision)}`))).json()
+    expect(second).toMatchObject({ marks: [], revision: first.revision, unchanged: true, refreshIntervalMs: 2000 })
+  })
+
+  it('derives the same revision from the same rows after a fresh service instance', async () => {
+    const row = (sessionId, status) => ({
+      version: 1, insertedAtMs: 100, seq: 0, sessionId, status,
+      source: 'manual', subjectId: null, autoReason: null, note: null,
+    })
+    const first = await bootService()
+    await first.svc.putMark(row('s1', 'todo'))
+    await first.svc.putMark(row('s2', 'done'))
+    const firstRoute = first.routes.find((r) => r.path.endsWith('.list'))
+    const firstBody = await (await firstRoute.fetch(new Request('http://x/api/session-status-marker.list'))).json()
+
+    const second = await bootService()
+    await second.svc.putMark(row('s1', 'todo'))
+    await second.svc.putMark(row('s2', 'done'))
+    const secondRoute = second.routes.find((r) => r.path.endsWith('.list'))
+    const secondBody = await (await secondRoute.fetch(new Request('http://x/api/session-status-marker.list'))).json()
+    expect(secondBody.revision).toBe(firstBody.revision)
   })
 
   it('mutate set then clear round-trips', async () => {
@@ -173,6 +212,16 @@ describe('SessionStatusService tools', () => {
     expect(svc.getMark('session-7')?.source).toBe('manual')
   })
 
+  it('set_session_status lists all eight statuses and the override rules', async () => {
+    const { tools } = await bootService()
+    const description = tools.find((t) => t.name === 'set_session_status').description
+    for (const status of ['todo', 'done', 'stopped', 'blocked', 'review', 'pending-subagent', 'awaiting-answer', 'feedback']) {
+      expect(description).toContain(status)
+    }
+    expect(description).toContain('inference never overwrites a manual mark')
+    expect(description).toContain('Do not mark a normally finished session done automatically')
+  })
+
   it('rejects a note longer than maxNoteLength', async () => {
     const { tools } = await bootService()
     const tool = tools.find((t) => t.name === 'set_session_status')
@@ -196,5 +245,32 @@ describe('SessionStatusService auto inference', () => {
     await listeners[0]({ id: 's9' }, { type: 'turn/end', seq: 4, time: 123, data: { reason: { kind: 'interrupted' } } })
     await new Promise((r) => setTimeout(r, 0))
     expect(svc.getMark('s9')?.status).toBe('done')
+  })
+})
+
+describe('SessionStatusService client config injection', () => {
+  it('injects configured slot orders as a page global', async () => {
+    const { ctx, injections } = makeCtx()
+    const svc = new SessionStatusService(ctx, { ...CONFIG, rowActionOrder: 410, menuItemOrder: 420 })
+    await svc[Service.init]()
+    expect(injections.length).toBe(1)
+    const table = []
+    injections[0](table, {})
+    expect(table).toEqual([{ kind: 'global', name: '__DSH_SESSION_MARKER_CONFIG__', value: { rowActionOrder: 410, menuItemOrder: 420 } }])
+  })
+
+  it('falls back to default orders when config omits them', async () => {
+    const { ctx, injections } = makeCtx()
+    const svc = new SessionStatusService(ctx, { ...CONFIG })
+    await svc[Service.init]()
+    const table = []
+    injections[0](table, {})
+    expect(table[0].value).toEqual({ rowActionOrder: 300, menuItemOrder: 300 })
+  })
+
+  it('keeps session/event listeners separate from the injection listener', async () => {
+    const { listeners, injections } = await bootService(true)
+    expect(listeners.length).toBe(1)
+    expect(injections.length).toBe(1)
   })
 })
