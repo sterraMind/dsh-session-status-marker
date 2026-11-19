@@ -1,6 +1,6 @@
 # Acceptance & Regression
 
-> **文档版本**：v1.2.0 · 2026-11-19（对应插件 1.2.0）
+> **文档版本**：v1.2.1 · 2026-11-19（对应插件 1.2.1）
 
 > 记录验收标准、已通过证据、待执行集成 smoke 与回归清单。
 > 对应实现进度见 `docs/implementation-plan.md` §2，风险优先级见 `docs/feasibility-and-risks.md`。
@@ -334,3 +334,16 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 | 打包 | `pnpm pack` → `dsh-session-status-marker-1.2.0.tgz`（70,350 B）；`lib/client.js` 72,264 B |
 | 发布 | 已完成（2026-11-19）：提交 `27e06d1` + `24e70be`、标签 `v1.2.0`（24e70be）已推送；GitHub Release v1.2.0 附 tgz（70,350 B，直连下载 200）；npm publish shasum `b7fb2b8bc331f3d79cf0d466d70e6a9550096f3a`，`dist-tags.latest=1.2.0` 生效（tarball 端点复制稍滞后） |
 | 发布状态文档 | 提交 `a455915`（docs: 记录 1.2.0 发布状态）已推送 |
+
+### 3.18 1.2.1 rc.3 桌面端故障调查与复现（2026-11-19）
+
+用户在 DSH 0.2.2-rc.3 桌面版报告 1.2.1「图标全无、点击出现已复制」。调查结论：**插件代码无缺陷，根因在用户桌面的安装状态（孤儿安装）**。两路独立取证互相印证：
+
+| 取证路径 | 结果 |
+|---|---|
+| 主会话 dev4090 复现（DSH 0.2.2-rc.3，CLI 安装 1.2.1） | **全部通过**：boot entry 正常（`plugins/??dsh-session-status-marker/client.js&rev=276d8c7c85f5`，71,225 B）；侧栏徽标 `done`+`awaiting-answer` 各 1 个 16×16 SVG 可见；悬停卡 8 格单行 22×22（x=296..464 y=443）、cardBg `rgb(255,255,255)`（浅色白卡，1.1.2 主题接管生效）；点面板文本区 `copiedShown:false`（复制误触未回归）；点第 7 格状态写入成功、徽标轮询更新；route state 200。截图 `.drafts/shots/rc3-hover.png`、`rc3-after-click.png` 已目检 |
+| rc3-repro 子代理独立复现 + 静态分析 | **同一结论**：`webserver/index-inject` 在 rc.3 存在且正常（`dsh-host-webserver/lib/index.js:646-650` collectIndexInjections emit table+peer；`__DSH_SESSION_MARKER_CONFIG__` 成功注入）；运行时四条 route 全 200、行操作按钮 4 个、hover 卡 8 格浅色白卡、console 0 报错；1.2.0 在 rc.3 fresh-home 安装被拒（原文「installation rejected: … requirements {"engines.dsh":">=0.2.2 <0.3.0"}」），1.2.1 通过无需豁免 |
+| 用户桌面取证（desktop profile + operations.jsonl） | bundles（17 项）与 dependencies（13 项）均无插件、cordis.patch.yml 0 命中、node_modules 物理残留 1.2.1（孤儿）；`operations.jsonl` 时间线：1.2.0 两次 `failed incompatible-version`（engines 拒装）→ 1.2.1 `enable applied` 但激活层未落盘 → 用户 10:22:39 remove applied → 10:22:54 install cancelled，最终状态未安装 |
+| rc.3 CLI 坑（主会话实测） | `dsh plugin add` 在「Already up to date」分支（依赖已存在）**不写 bundles**——add 后 bundles 只剩官方两件套、`__DSH_BOOT__` 75 个 entry 无插件、client.js fetch 404；`plugin remove` 后重新 add（全新安装分支）bundles 恢复三件套。1.1.6 全新安装同样写 bundles → 坑与插件版本无关 |
+| 处置 | npm `unpublish` E403（granular token 不可撤版）→ `npm deprecate` 1.2.0/1.2.1（文案说明根因与恢复路径）；`npm dist-tag add dsh-session-status-marker@1.1.6 latest` 回指；GitHub Release v1.2.0/v1.2.1 PATCH 补故障说明 + prerelease=true |
+| 给用户的恢复路径 | 桌面端插件管理先卸载残留再重装，安装确认弹窗点「立即启用」（rc.3 市场装完默认 `enabled:false`）；或 CLI `dsh plugin remove` 后 `plugin add` 全新安装。重装后标记数据仍在（`$DSH_HOME/storages/session_status_marker/marks/` 不随卸载删除） |
