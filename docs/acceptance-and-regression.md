@@ -332,4 +332,4 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 | `engines.dsh` 收紧为 `>=0.2.2 <0.3.0`（行尾徽标依赖 0.2.2-rc.1 引入的 `sidebar.session.row.trailing` 槽位；行操作/菜单入口槽位更早可用） | 声明完成；待 dev4090（0.2.2-rc.1）安装验证 |
 | 测试 | 95 tests / 23 suites / pass 95 / fail 0（脚本形式 `pnpm run test`）；目录形式 `node --test tests/` 报告 99/23（4 个 `.test.ts` 薄壳各计 1 条，同一批断言） |
 | 打包 | `pnpm pack` → `dsh-session-status-marker-1.2.0.tgz`（70,350 B）；`lib/client.js` 72,264 B |
-| 发布 | 待 tag `v1.2.0`、GitHub Release、npm 发布 |
+| 发布 | 已完成（2026-11-19）：提交 `27e06d1` + `24e70be`、标签 `v1.2.0`（24e70be）已推送；GitHub Release v1.2.0 附 tgz（70,350 B，直连下载 200）；npm publish shasum `b7fb2b8bc331f3d79cf0d466d70e6a9550096f3a`，`dist-tags.latest=1.2.0` 生效（tarball 端点复制稍滞后） |
