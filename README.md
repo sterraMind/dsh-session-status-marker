@@ -31,16 +31,16 @@
 
 ## 安装
 
-**从 npm 安装**（当前版本 1.2.0）：
+**从 npm 安装**（当前版本 1.2.1）：
 
 ```bash
 dsh plugin --profile desktop add dsh-session-status-marker
 ```
 
-**从 GitHub Release 安装**：到 <https://github.com/sterraMind/dsh-session-status-marker/releases> 下载 `dsh-session-status-marker-1.2.0.tgz`，然后：
+**从 GitHub Release 安装**：到 <https://github.com/sterraMind/dsh-session-status-marker/releases> 下载 `dsh-session-status-marker-1.2.1.tgz`，然后：
 
 ```bash
-dsh plugin --profile desktop add ./dsh-session-status-marker-1.2.0.tgz
+dsh plugin --profile desktop add ./dsh-session-status-marker-1.2.1.tgz
 ```
 
 装完核对一下是否生效：
