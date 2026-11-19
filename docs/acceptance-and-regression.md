@@ -316,20 +316,21 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 
 ### 3.17 1.2.0 快捷操作、悬停卡 8 格直出与条件刷新（2026-11-19）
 
-1.2.0 为功能版本：代码与单元测试已全部完成，dev4090 真实 GUI 复核待执行（要求 DSH >= 0.2.2）。
+1.2.0 为功能版本：代码与单元测试已全部完成，dev4090 真实 GUI 复核已完成（2026-11-19，DSH 0.2.2-rc.5，npm 源安装，全部 PASS）。
 
 | 验收点 | 状态 |
 |---|---|
-| 已标记会话的悬停卡直接展示 8 格状态格（无需先点「修改状态」），当前状态高亮，清除按钮保留 | 代码 + 测试完成；待 dev4090 真实页面复核（8 格单行、点选不复制误触） |
-| 未标记会话同样直接展示 8 格 | 代码 + 测试完成；待真实页面复核 |
-| 新增 `sidebar.workspaces.session.row.action` 行操作（id `session-status-row-action`，默认 order 300），行内按钮打开共享状态选择器 | 代码 + 测试完成（注册位置在官方 archive/pin 之后、`role=menuitem`、stopPropagation、8×22px 单行契约）；待真实页面复核 |
-| 新增 `sidebar.workspaces.session.menu.item` 菜单入口（id `session-status-menu-item`，order 300），打开状态子菜单、选中后关闭菜单 | 代码 + 测试完成；待真实页面复核（子菜单展开/选中/关闭） |
-| `rowActionOrder` / `menuItemOrder` 配置（默认 300）：Host 经 `webserver/index-inject` 注入页面全局 `__DSH_SESSION_MARKER_CONFIG__`，Client 读取失败回退默认值 | 代码 + 测试完成（默认值、注入回退、profile 暴露）；待真实页面复核 |
-| `GET /api/session-status-marker.list?since=<revision>` 条件刷新：revision 命中返回 `unchanged:true` + 空 marks，Client 跳过重绘；可见性恢复与首次订阅无缓存时强制全量读取 | 代码 + 测试完成（revision 跨实例稳定、失败保留上次 revision）；待真实页面复核（轮询无闪烁） |
-| `awaiting-answer` 状态色改用 `--dsw-alias-label-secondary`（明暗主题对比度） | 代码 + 测试完成；待真实页面明/暗视觉确认 |
-| `set_session_status` 工具描述重写（WHEN TO USE / WHEN NOT TO USE / DO NOT USE FOR / USAGE / EXAMPLES，明确手动标记不被推断覆盖） | 代码完成，工具契约测试全绿 |
-| 整卡主题接管同时覆盖 `--dsw-alias-hovercard-bg` 与 `--dsw-hovercard-bg`（兼容较新 DSH 构建的卡底变量） | 代码 + 测试完成；待真实页面 cardBg 明/暗值复核 |
-| `engines.dsh` 收紧为 `>=0.2.2 <0.3.0`（行尾徽标依赖 0.2.2-rc.1 引入的 `sidebar.session.row.trailing` 槽位；行操作/菜单入口槽位更早可用） | 声明完成；待 dev4090（0.2.2-rc.1）安装验证 |
+| 已标记会话的悬停卡直接展示 8 格状态格（无需先点「修改状态」），当前状态高亮，清除按钮保留 | **PASS**：cellCount=8、cellRows=[443] 单行、cellWidths 22px、active 格 aria-pressed=true；点非 active 格写入成功且 copiedLabelShown=false、titleStillThere=true；点 active 格状态保持 |
+| 未标记会话同样直接展示 8 格 | **PASS**：未标记行 hover 卡 cellCount=8 单行 |
+| 新增 `sidebar.workspaces.session.row.action` 行操作（id `session-status-row-action`，默认 order 300），行内按钮打开共享状态选择器 | **PASS**：按钮 x 顺序 Session actions(131)→Archive(160)→Pin(189)→Set session status(222)，order=300 生效；点击展开 8 格（labels=TODO/Done/Stopped/Blocked/Review/Subagent running/Awaiting answer/Feedback），选 TODO 后行徽标变 todo、选择器关闭 |
+| 新增 `sidebar.workspaces.session.menu.item` 菜单入口（id `session-status-menu-item`，order 300），打开状态子菜单、选中后关闭菜单 | **PASS**：菜单含 Set status（data-slot=menu.item、role=menuitem）；展开 8 格（菜单项 14=官方 6+插件 8）；选 Done 后菜单全部关闭、revision 更新 |
+| `rowActionOrder` / `menuItemOrder` 配置（默认 300）：Host 经 `webserver/index-inject` 注入页面全局 `__DSH_SESSION_MARKER_CONFIG__`，Client 读取失败回退默认值 | **PASS**：`globalThis.__DSH_SESSION_MARKER_CONFIG__` = `{"rowActionOrder":300,"menuItemOrder":300}`（键名逐字核对）；远程 cordis.patch.yml 无 BOM（首三字节 45,32,105） |
+| `GET /api/session-status-marker.list?since=<revision>` 条件刷新：revision 命中返回 `unchanged:true` + 空 marks，Client 跳过重绘；可见性恢复与首次订阅无缓存时强制全量读取 | **PASS**：`?since=<revision>` 多轮返回 unchanged:true；mutate 后 revision 变化、全量 5 条；页面另一会话被 mutate 后徽标 323ms 更新、canary 12345 不变（无整页重载）。注：无头 Edge 新开标签页抢占前台时原页面按可见性感知暂停轮询，关闭新标签页并 bringToFront 后立即恢复，属设计行为 |
+| `awaiting-answer` 状态色改用 `--dsw-alias-label-secondary`（明暗主题对比度） | **PASS**：light rgb(97,102,107) == 卡片次要文字色；dark rgb(207,211,214) == 次要文字色；不再使用 idle 蓝（对照 todo active rgb(65,118,230)） |
+| `set_session_status` 工具描述重写（WHEN TO USE / WHEN NOT TO USE / DO NOT USE FOR / USAGE / EXAMPLES，明确手动标记不被推断覆盖） | 代码完成，工具契约测试全绿（描述内容经系统提示词下发，无法在页面直接断言） |
+| 整卡主题接管同时覆盖 `--dsw-alias-hovercard-bg` 与 `--dsw-hovercard-bg`（兼容较新 DSH 构建的卡底变量） | **PASS**：light cardBg=rgb(255,255,255)/标题 rgb(15,17,21)；dark cardBg=rgb(44,44,46)/标题 rgb(249,250,251)；截图 `.drafts/shots/v120-rc5-{light,dark}-picker.png` 已目检 |
+| `engines.dsh` 收紧为 `>=0.2.2 <0.3.0` | **PASS**：dev4090 DSH 0.2.2-rc.5，npm 源直接安装成功（INSTALLED_VERSION=1.2.0，无需 allow-version） |
 | 测试 | 95 tests / 23 suites / pass 95 / fail 0（脚本形式 `pnpm run test`）；目录形式 `node --test tests/` 报告 99/23（4 个 `.test.ts` 薄壳各计 1 条，同一批断言） |
 | 打包 | `pnpm pack` → `dsh-session-status-marker-1.2.0.tgz`（70,350 B）；`lib/client.js` 72,264 B |
 | 发布 | 已完成（2026-11-19）：提交 `27e06d1` + `24e70be`、标签 `v1.2.0`（24e70be）已推送；GitHub Release v1.2.0 附 tgz（70,350 B，直连下载 200）；npm publish shasum `b7fb2b8bc331f3d79cf0d466d70e6a9550096f3a`，`dist-tags.latest=1.2.0` 生效（tarball 端点复制稍滞后） |
+| 发布状态文档 | 提交 `a455915`（docs: 记录 1.2.0 发布状态）已推送 |
