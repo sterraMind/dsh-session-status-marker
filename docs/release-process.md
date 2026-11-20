@@ -19,8 +19,8 @@
 | 插件版本号 | `package.json:3` | 本文件定稿时读到的值为 `1.2.3-rc.2`。工作区可能已有并发改动把该字段递增，核对时以实际读取的值为准 |
 | Harness 版本下限 | `package.json:33` | `>=0.2.2-rc.1 <0.3.0` |
 | Node 版本下限 | `package.json:34` | `>=24.9.0` |
-| npm 分发标签 | `npm dist-tag ls dsh-session-status-marker` 于 2026-11-20 执行 | `latest: 1.2.2`，`rc: 1.2.3-rc.1` |
-| git 标签 | `git tag --sort=-creatordate` | `v1.2.3-rc.1`、`v1.2.2`、`v1.2.1`、`v1.2.0`、`v1.1.6` 依次排列 |
+| npm 分发标签 | `npm dist-tag ls dsh-session-status-marker` 于 2026-11-20 执行 | `latest: 1.2.2`，`rc: 1.2.3-rc.2` |
+| git 标签 | `git tag --sort=-creatordate` | `v1.2.3-rc.2`、`v1.2.3-rc.1`、`v1.2.2`、`v1.2.1`、`v1.2.0`、`v1.1.6` 依次排列 |
 | 发布政策原文 | `AGENTS.md:68` | 正式版本必须在用户实际前端验收通过之后发布，验收之前只能发预版本 |
 
 ---
@@ -278,19 +278,19 @@ npm 走暂存发布流程，命令输出 `+ name@version` 只代表请求被接�
 | 分发标签 | 指向版本 | 状态 | 说明 |
 |---|---|---|---|
 | `latest` | 1.2.2 | 正式版 | 用户已验收的版本，普通安装得到这个版本 |
-| `rc` | 1.2.3-rc.1 | 预发布 | 等待用户实际验收，安装需要写 `@rc` |
+| `rc` | 1.2.3-rc.2 | 预发布 | 等待用户实际验收，安装需要写 `@rc` |
 | `next` | 未使用 | 保留 | 供实验性改动使用 |
 
 ### 10.2 下一次发布计划
 
 | 顺序 | 版本 | 前提 | 动作 |
 |---|---|---|---|
-| 1 | 1.2.3-rc.2 | 1.2.3-rc.1 需要改动，或者用户验收提出新的修改要求 | 修完缺陷后把 `N` 加一，执行 `npm publish --tag rc`，GitHub Release 勾选 prerelease |
+| 1 | 1.2.3-rc.2（已于 2026-11-20 发布） | 1.2.3-rc.1 之后用户又提出「行内那一排要删掉」的修改要求 | 已执行：提交 `fef847c`/`fbabcec`/`3da65dd`/`8d501a4`、标签 `v1.2.3-rc.2`、GitHub Release 勾选 prerelease、`npm publish --tag rc` |
 | 2 | 1.2.3 | 用户在实际前端验收通过 | 去掉预发布标识，执行 `npm publish` 让 `latest` 指向 1.2.3，GitHub Release 取消 prerelease 标记 |
 
 如果 1.2.3-rc.1 不需要任何改动就通过用户验收，可以越过 1.2.3-rc.2 直接发布 1.2.3。`docs/research/10-release-and-versioning.md` §4.7 采用这个做法。两种路径的判定标准相同，都要求用户验收结论已经写进验收文档。
 
-本文件定稿期间，工作区的 `package.json` 已经有一处未提交改动把 `version` 从 `1.2.3-rc.1` 改成 `1.2.3-rc.2`，而 `npm dist-tag ls` 的 `rc` 仍然指向 `1.2.3-rc.1`。因此 1.2.3-rc.2 处于「版本号已改、尚未发布」的状态。发布该版本时按 §7.2 的顺序执行，`rc` 标签随之指向 `1.2.3-rc.2`。
+1.2.3-rc.2 已于 2026-11-20 发布完毕：`package.json` 版本、git 标签 `v1.2.3-rc.2`、GitHub Release（prerelease，附 82,987 B 的 tgz）、npm `rc` 标签四者一致，`latest` 仍指向 1.2.2。当前等待用户在实际前端验收，验收结论写进 `docs/acceptance-and-regression.md` §3.21 之后再按 §8.2 发布 1.2.3 正式版。
 
 ### 10.3 已知的待办事项
 

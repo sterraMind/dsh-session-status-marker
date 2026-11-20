@@ -22,7 +22,8 @@
 
 ### 发布
 
-- GitHub Release v1.2.3-rc.2（prerelease 标记）附 tgz（82,987 B）；npm 以 `--tag rc` 发布，`latest` 保持 1.2.2 不动。
+- GitHub Release v1.2.3-rc.2（prerelease 标记）附 tgz（82,987 B），发布页 https://github.com/sterraMind/dsh-session-status-marker/releases/tag/v1.2.3-rc.2 ，资源 `dsh-session-status-marker-1.2.3-rc.2.tgz` 已上传（82,987 B）。
+- npm 以 `--tag rc` 发布 `1.2.3-rc.2`（67 个文件，shasum `623d7996ba65ac925aba67194ebecdf419d9ab0b`）；发布后直连 registry 核对 `latest: 1.2.2`、`rc: 1.2.3-rc.2`，`latest` 未变动，tarball 返回 200。
 
 ### 已知限制
 
