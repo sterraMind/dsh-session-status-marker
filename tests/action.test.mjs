@@ -65,10 +65,16 @@ describe('row action registration', () => {
   it('wires the row button to the shared picker and stops propagation', () => {
     expect(ROW).toContain('StatusPicker')
     expect(ROW).toContain("t('action.aria')")
-    expect(ROW).toContain("t('action.trigger')")
     expect(ROW).toContain('onClick={stop}')
     expect(ROW).toContain('onKeyDown={stop}')
     expect(ROW).toContain('stopPropagation()')
+    // The trigger is a 24px icon button carrying the current status glyph,
+    // matching the host's own icon buttons — never a text label.
+    expect(ROW).not.toContain("t('action.trigger')")
+    expect(ROW).toContain('css.triggerIcon')
+    expect(ROW).toContain('ICONS[icon]')
+    expect(ROW).toContain('STATUS_META[mark.status].icon')
+    expect(ROW).toContain('FALLBACK_ICON')
   })
 })
 
@@ -122,6 +128,24 @@ describe('shared picker contract', () => {
     expect(CSS).toMatch(/--dsw-alias-/)
     expect(CSS).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
     expect(CSS).not.toMatch(/\brgba?\(/)
+  })
+
+  it('styles the trigger as the host 24px icon button and the popover as a floating card', () => {
+    // Trigger copies `Rows.module.css:453-470`: 24x24, negative margin, no border.
+    expect(CSS).toMatch(/\.trigger \{[\s\S]*?width: 24px/)
+    expect(CSS).toMatch(/\.trigger \{[\s\S]*?height: 24px/)
+    expect(CSS).toMatch(/\.trigger \{[\s\S]*?margin: -4px/)
+    expect(CSS).toMatch(/\.trigger \{[\s\S]*?border: none/)
+    expect(CSS).toMatch(/\.triggerIcon \{[\s\S]*?color: var\(--dsw-alias-label-tertiary\)/)
+    // The popover floats like the hover card: own surface, radius-lg, shadow,
+    // and wide enough for the eight cells plus padding on one line.
+    expect(CSS).toMatch(/\.popover \{[\s\S]*?position: absolute/)
+    expect(CSS).toMatch(/\.popover \{[\s\S]*?width: 214px/)
+    expect(CSS).toMatch(/\.popover \{[\s\S]*?border-radius: var\(--dsw-radius-lg\)/)
+    expect(CSS).toMatch(/\.popover \{[\s\S]*?background: var\(--dsw-alias-bg-layer-2\)/)
+    expect(CSS).toMatch(/\.popover \{[\s\S]*?box-shadow:/)
+    // The expanded row panel carries the hover-card summary lines.
+    expect(ROW).toContain('showSummary')
   })
 })
 
