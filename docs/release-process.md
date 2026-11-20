@@ -295,7 +295,8 @@ npm 走暂存发布流程，命令输出 `+ name@version` 只代表请求被接�
 1.3.0 预版本序列（2026-11-20）：`1.3.0-rc.1`（122 项测试 / tgz 93,874 B）→ `1.3.0-rc.2`（130 项 / tgz 98,388 B，修看板空 400、悬停卡备注编辑、换状态保留备注）→ `1.3.0-rc.3`（130 项 / tgz 98,666 B，修看板标题与未标记区块：未 inject 的服务改经 `ctx.reflect.get` 读取）。三者都只发预版本，GitHub Release 勾 prerelease、npm 用 `--tag rc`，`latest` 保持 `1.2.3`。用户在实际前端验收通过后再把当前 rc 转正式版 `1.3.0`。
 ### 10.3 已知的待办事项
 
-- `.github` 目录尚不存在，Issue 模板与 Pull Request 模板属于待创建项。
+- .github 目录尚不存在，Issue 模板与 Pull Request 模板属于待创建项。LICENSE（MIT）与 package.json 的 license 字段已于 2026-11-20 补齐，目录站提交所需的前置条件只剩 homepage 与模板。
+- 分发执行按 docs/distribution-plan.md 走：仓库话题已加，六个目录站与三个社区渠道待 1.3.0 转正后执行。
 - `CHANGELOG.md` 的「验证」「发布」两个标题需要在下次发布时按 §6.3 归并。
 - 提交信息风格不统一的历史记录不做回溯修改，新提交按 `CONTRIBUTING.md` 的提交规范执行。
 

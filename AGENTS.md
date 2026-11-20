@@ -15,7 +15,7 @@
 
 - **目标**：为 DeepSeek Harness 编写「会话状态标记」插件，支持用户手动标记会话状态（8 种：todo / done / stopped / blocked / review / pending-subagent / awaiting-answer / feedback）以及 AI 自主推断，Client 侧用徽标 + 悬停卡展示。
 - **约束**：必须是仓库外的独立 npm bundle，不修改 DSH 主仓库源码；遵循 DSH 工程化规范（ESM、strict TS、JSDoc、declaration merging、effect-based lifecycle）。
-- **入口文档**：`docs/architecture.md`（V2 最终架构）、`docs/research/01..11.md`（调研）、`docs/feasibility-and-risks.md`、`docs/implementation-plan.md`、`docs/acceptance-and-regression.md`、`docs/release-process.md`（版本规划与发布流程）、`CONTRIBUTING.md`（提交规范与协作规范）。
+- **入口文档**：`docs/architecture.md`（V2 最终架构）、`docs/research/01..11.md`（调研）、`docs/feasibility-and-risks.md`、`docs/implementation-plan.md`、`docs/acceptance-and-regression.md`、`docs/release-process.md`（版本规划与发布流程）、`docs/distribution-plan.md`（目录站与社区投放计划）、`CONTRIBUTING.md`（提交规范与协作规范）。
 - **官方镜像位置**：`.research/dsh-repo/`（来源 `https://codeload.github.com/deepseek-ai/deepseek-harness/zip/refs/heads/master`）。
 
 ## 架构红线（最重要，勿回退）
