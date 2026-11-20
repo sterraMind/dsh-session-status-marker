@@ -54,20 +54,24 @@ describe('hover card copy guard', () => {
 })
 
 describe('single floating surface on a session row', () => {
-  it('yields the inline picker while the host hover card is open', () => {
-    expect(rowAction).toContain("const SLOT_SELECTOR = '[data-status-slot]'")
-    expect(rowAction).toContain('document.querySelector(SLOT_SELECTOR) !== null')
-    expect(rowAction).toContain('const showPicker = expanded && !cardOpen')
+  it('owns no panel of its own: the row hover card is the only surface', () => {
+    expect(rowAction).not.toContain('popover')
+    expect(rowAction).not.toContain('StatusPicker')
+    expect(rowAction).not.toContain('aria-expanded')
   })
 
-  it('watches the document for the hover slot mounting or leaving', () => {
-    expect(rowAction).toContain('new MutationObserver(update)')
-    expect(rowAction).toContain('observer.observe(document.body, { childList: true, subtree: true })')
-    expect(rowAction).toContain('observer.disconnect()')
+  it('swallows the glyph press before React reaches the host card handlers', () => {
+    expect(rowAction).toContain("const ACTION_ANCHOR = 'data-status-action'")
+    expect(rowAction).toContain("document.addEventListener('pointerdown', guard, true)")
+    expect(rowAction).toContain("document.addEventListener('click', guard, true)")
+    expect(rowAction).toContain("document.removeEventListener('pointerdown', guard, true)")
+    expect(rowAction).toContain("document.removeEventListener('click', guard, true)")
+    expect(rowAction).toContain('event.stopPropagation()')
   })
 
-  it('does not open a second panel while the card is showing', () => {
-    expect(rowAction).toContain('onClick={() => { if (!cardOpen) setExpanded((value) => !value) }}')
-    expect(rowAction).toContain('aria-expanded={showPicker}')
+  it('replays the pointer entry the host card listens for', () => {
+    expect(rowAction).toContain("row.dispatchEvent(new PointerEvent('pointerover'")
+    expect(rowAction).toContain("pointerType: 'mouse'")
+    expect(rowAction).toContain("if (event.type === 'click') openRowCard(glyph)")
   })
 })

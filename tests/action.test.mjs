@@ -62,12 +62,11 @@ describe('row action registration', () => {
     expect(300).toBeGreaterThan(officialOrders[1])
   })
 
-  it('wires the row button to the shared picker and stops propagation', () => {
-    expect(ROW).toContain('StatusPicker')
+  it('wires the row glyph to the row hover card and stops propagation', () => {
+    // The glyph opens the row hover card, which owns the only status picker.
+    expect(ROW).not.toContain('StatusPicker')
     expect(ROW).toContain("t('action.aria')")
-    expect(ROW).toContain('onClick={stop}')
-    expect(ROW).toContain('onKeyDown={stop}')
-    expect(ROW).toContain('stopPropagation()')
+    expect(ROW).toContain('event.stopPropagation()')
     // The trigger is a 24px icon button carrying the current status glyph,
     // matching the host's own icon buttons — never a text label.
     expect(ROW).not.toContain("t('action.trigger')")
@@ -130,22 +129,17 @@ describe('shared picker contract', () => {
     expect(CSS).not.toMatch(/\brgba?\(/)
   })
 
-  it('styles the trigger as the host 24px icon button and the popover as a floating card', () => {
+  it('styles the glyph as the host 24px icon button and ships no row panel', () => {
     // Trigger copies `Rows.module.css:453-470`: 24x24, negative margin, no border.
     expect(CSS).toMatch(/\.trigger \{[\s\S]*?width: 24px/)
     expect(CSS).toMatch(/\.trigger \{[\s\S]*?height: 24px/)
     expect(CSS).toMatch(/\.trigger \{[\s\S]*?margin: -4px/)
     expect(CSS).toMatch(/\.trigger \{[\s\S]*?border: none/)
     expect(CSS).toMatch(/\.triggerIcon \{[\s\S]*?color: var\(--dsw-alias-label-tertiary\)/)
-    // The popover floats like the hover card: own surface, radius-lg, shadow,
-    // and wide enough for the eight cells plus padding on one line.
-    expect(CSS).toMatch(/\.popover \{[\s\S]*?position: absolute/)
-    expect(CSS).toMatch(/\.popover \{[\s\S]*?width: 214px/)
-    expect(CSS).toMatch(/\.popover \{[\s\S]*?border-radius: var\(--dsw-radius-lg\)/)
-    expect(CSS).toMatch(/\.popover \{[\s\S]*?background: var\(--dsw-alias-bg-layer-2\)/)
-    expect(CSS).toMatch(/\.popover \{[\s\S]*?box-shadow:/)
-    // The expanded row panel carries the hover-card summary lines.
-    expect(ROW).toContain('showSummary')
+    // The row glyph opens the host hover card; it must not bring a panel of its
+    // own, otherwise one row shows two floating surfaces at once.
+    expect(CSS).not.toContain('.popover')
+    expect(ROW).not.toContain('showSummary')
   })
 })
 
