@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-status-marker",
-  "version": "1.2.3-rc.1",
+  "version": "1.2.3-rc.2",
   "description": "Manual and AI-inferred session status marks for DeepSeek Harness sessions",
   "type": "module",
   "main": "lib/index.js",
