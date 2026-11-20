@@ -1,6 +1,6 @@
 # Acceptance & Regression
 
-> **文档版本**：v1.2.1 · 2026-11-19（对应插件 1.2.1）
+> **文档版本**：v1.2.2 · 2026-11-20（对应插件 1.2.2）
 
 > 记录验收标准、已通过证据、待执行集成 smoke 与回归清单。
 > 对应实现进度见 `docs/implementation-plan.md` §2，风险优先级见 `docs/feasibility-and-risks.md`。
@@ -347,3 +347,20 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 | rc.3 CLI 坑（主会话实测） | `dsh plugin add` 在「Already up to date」分支（依赖已存在）**不写 bundles**——add 后 bundles 只剩官方两件套、`__DSH_BOOT__` 75 个 entry 无插件、client.js fetch 404；`plugin remove` 后重新 add（全新安装分支）bundles 恢复三件套。1.1.6 全新安装同样写 bundles → 坑与插件版本无关 |
 | 处置 | npm `unpublish` E403（granular token 不可撤版）→ `npm deprecate` 1.2.0/1.2.1（文案说明根因与恢复路径）；`npm dist-tag add dsh-session-status-marker@1.1.6 latest` 回指；GitHub Release v1.2.0/v1.2.1 PATCH 补故障说明 + prerelease=true |
 | 给用户的恢复路径 | 桌面端插件管理先卸载残留再重装，安装确认弹窗点「立即启用」（rc.3 市场装完默认 `enabled:false`）；或 CLI `dsh plugin remove` 后 `plugin add` 全新安装。重装后标记数据仍在（`$DSH_HOME/storages/session_status_marker/marks/` 不随卸载删除） |
+
+### 3.19 1.2.2 行内图标入口、浮窗面板与触屏备注（2026-11-20）
+
+用户在 1.2.1 上反馈四点：行内入口是文字按钮而非图标、点开是行内展开一排按钮而非浮窗、面板看不到备注、点击仍触发整卡复制。1.2.2 逐项修复并在 dev4090（DSH 0.2.2-rc.3）真实页面复核：
+
+| 验收项 | 结果 |
+|---|---|
+| 触发按钮规格 | 24×24、svg 16×16、`textContent` 空（无「状态」文字）、`aria-label="Set session status"`、border 0px、radius 4px、颜色 `rgb(15,17,21)` —— 对齐官方 iconButton |
+| 浮窗几何 | 214×91、`[class*=popover]`、8 格 `cellRows:[360]` 单行、白底 `rgb(255,255,255)`、radius 16px、阴影开启 |
+| 摘要与备注 | `hasSummary:true`（「Manual: Awaiting answer」「Manual: Done/Blocked」随标记变化）；写入带备注的标记后 `noteText:"Note: 需要等待上游接口确认后再继续"` 真实渲染；`hasClear:true` |
+| 复制误触 | 点面板文本区 (154,346) `copiedShown:false, panelStillOpen:true`；点状态格 `panelClosed:true, copiedShown:false`，徽标从 `done` 变 `blocked` 后轮询更新 |
+| 触屏模拟 | `Emulation.setEmulatedMedia(hover:none, pointer:coarse)` 下面板 `panelOpen:true`（悬停卡忽略 touch 指针，此面板为触屏唯一入口） |
+| 主题跟随 | 深色主题浮窗 `bg rgb(44,44,46)`、文字 `rgb(249,250,251)`、首格 `rgb(122,170,255)`、`bodyBg rgb(21,21,23)`；浅色对照全相反 —— 全 `--dsw-alias-*` |
+| 「已复制」桌面个案根因 | `git show v1.2.1:src/client/HoverCard.tsx` 的 guard 代码与 1.2.2 完全一致（`stopPropagation` 两事件 + spread 到根 div）——1.2.1 代码无缺陷，桌面复发是激活层未更新（旧 client.js 残留），重装后消失 |
+| 截图 | `.drafts/shots/v122b-panel-light.png`、`v122b-panel-note.png`（含备注行）、`v122b-panel-dark.png`，均已目检 |
+
+发布：102 项测试全绿（新增 `tests/touch-icon.test.mjs` 6 例），tgz 74,526 B；提交 `6719b57`（fix）+ `b86dbb6`（test）+ tag `v1.2.2`；GitHub Release 附 tgz；npm publish `+ dsh-session-status-marker@1.2.2`（57 files，integrity `sha512-2m2Nbk8xCLCR6...`）。
