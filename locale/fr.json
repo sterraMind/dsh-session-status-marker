@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Marqueur d'état des sessions",
+    "description": "Marquez manuellement l'état des sessions DeepSeek Harness ou laissez l'IA le déduire (à faire, terminé, interrompu, bloqué, en revue…), avec badges dans la barre latérale, carte survolée et vue d'ensemble des états."
+  }
+}

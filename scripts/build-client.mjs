@@ -31,6 +31,7 @@ const MODULES = {
   'client/icons.ts': join(SRC, 'client', 'icons.ts'),
   'client/marks.ts': join(SRC, 'client', 'marks.ts'),
   'client/useMark.ts': join(SRC, 'client', 'useMark.ts'),
+  'client/copyGuard.ts': join(SRC, 'client', 'copyGuard.ts'),
   'client/badge.module.css': join(SRC, 'client', 'badge.module.css'),
   'client/hover.module.css': join(SRC, 'client', 'hover.module.css'),
   'client/action.module.css': join(SRC, 'client', 'action.module.css'),

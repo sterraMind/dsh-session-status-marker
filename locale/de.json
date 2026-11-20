@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Sitzungsstatus-Marker",
+    "description": "Markiert den Status von DeepSeek-Harness-Sitzungen manuell oder per KI-Vorhersage (offen, erledigt, gestoppt, blockiert, in Prüfung …) und zeigt ihn als Abzeichen in der Seitenleiste, in der Hover-Karte und in der Statusübersicht."
+  }
+}

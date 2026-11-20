@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Marcador de estado de sesiones",
+    "description": "Marca manualmente el estado de las sesiones de DeepSeek Harness y deja que la IA lo infiera (pendiente, hecho, detenido, bloqueado, en revisión…), con insignias en la barra lateral, tarjeta flotante y resumen de estados."
+  }
+}

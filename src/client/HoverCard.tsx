@@ -8,7 +8,9 @@
  * - DSH's own hover card copies the session title on any click inside the card
  *   (`packages/client/ui-primitives/src/HoverCard.tsx:293-303`) and on Enter or
  *   Space (`:304`). Every interactive surface here stops click and key
- *   propagation so a status change never reports "已复制".
+ *   propagation, and `useCardCopyGuard` additionally blocks clicks on the
+ *   card's non-interactive areas (title, path, time, status lines) at the
+ *   native capture phase, so clicking blank space no longer reports "已复制".
  * - The compact hover card spans the eight-pixel anchor gap with a 200 ms pointer
  *   grace and no bridge element (`pointer-grace.ts:8`, `HoverCard.tsx:222-224`),
  *   so a pointer travelling from the row to this content could lose the card on
@@ -28,6 +30,7 @@ import { NS } from './locales.js'
 import { ICONS } from './icons.js'
 import { useMark } from './useMark.js'
 import { publishLocalMark } from './marks.js'
+import { useCardCopyGuard } from './copyGuard.js'
 
 export type HoverProps = PropsRuntime<'sidebar.session.row.hover'> & PropsLocale<typeof NS>
 
@@ -42,6 +45,7 @@ async function postMutate(body: unknown): Promise<unknown> {
 }
 
 export function SessionStatusHover({ sessionId, t }: HoverProps) {
+  useCardCopyGuard()
   const { mark, loading } = useMark(sessionId)
   const [error, setError] = useState<string | null>(null)
 
