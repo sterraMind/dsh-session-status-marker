@@ -2,6 +2,25 @@
 
 本文件记录 `dsh-session-status-marker` 的对外可见变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.2.3-rc.1] - 2026-11-20
+
+针对用户 2026-11-20 反馈的三个问题发布预版本（按发布政策：正式版本需用户实际验收后发布，此前只能发预版本）。
+
+### 修复
+
+- **悬停卡空白点击不再复制标题**：官方 HoverCard 把整张卡注册成 `role="button"` 并在卡级 `onClick`（`HoverCard.tsx:293-303`）与 Enter/Space `onKeyDown`（`:304-310`）里复制会话标题，此前 1.0.2 的 `stopPropagation` 只覆盖插件槽位内部，点击卡的标题、路径、时间等空白区域仍会触发「已复制」替换整卡。新增 `src/client/copyGuard.ts`：在 `document` 上以 capture 阶段监听 `click` 与 `keydown`（React 合成事件绑在根容器元素上，`document` 是其祖先，原生 capture 先于 React 分发），只拦截「含插件槽位的悬停卡」上、槽位外、非交互元素的点击与 Enter/Space，`stopPropagation` 后事件不再到达 React 根容器，官方复制处理不执行；按钮、输入框、链接等交互元素与文本选择不受影响，不调用 `preventDefault`。
+- **行内浮窗与悬停卡只留一个**：`RowAction` 用 `MutationObserver` 监听悬停槽位挂载（悬停卡打开时宿主才挂载 `sidebar.session.row.hover` 槽位，`contract/slots.ts:160-163`），悬停卡可见时行内面板自动收起、点击行内图标不再开第二个浮层；悬停卡关闭后行内面板恢复。
+- **插件市场元数据补齐 8 种语言**：新增 `locale/{zh,ja,es,fr,de,ru,pt}.json`（`meta.title`/`meta.description`），插件市场与插件页在对应语言界面显示本地化名称与描述（此前只有英文）。
+
+### 验证
+
+- 111 项测试全绿（27 套件，新增 `tests/copy-guard.test.mjs` 9 例）。
+- dev4090（DSH 0.2.2-rc.3）真实页面复核（CDP）：浅色主题悬停卡空白点击（标题行、卡底部）不出现「已复制」、卡保持打开；选中文本后点击不复制且选区保留（「标记会话为完成」）；深色主题悬停卡整卡 `rgb(44,44,46)`、标题 `rgb(249,250,251)`、空白点击同样不复制；悬停卡打开时点行内图标不开第二个浮层（popover=1 且为悬停卡前已开的面板收起后重开路径）；行内面板 214×110、8 格、摘要「Manual: Blocked」、备注「Note: 需要等待上游接口确认后再继续」、清除齐全。截图 `.drafts/shots/v123-card-guard.png`、`v123-panel-light.png`、`v123-dark-card.png`。
+
+### 发布
+
+- GitHub Release v1.2.3-rc.1（prerelease 标记）附 tgz（81,880 B）；npm 以 `--tag rc` 发布 `1.2.3-rc.1`，`latest` 保持 1.2.2 不动。npm 对预发布版本强制要求显式 `--tag`（不带 `--tag` 直接报错退出），这是对 1.2.2 发布流程的补充认知。
+
 ## [1.2.2] - 2026-11-20
 
 修复用户在 1.2.1 上反馈的四个交互问题：行内入口是文字按钮而非图标、点开后是行内展开一排按钮而非浮窗、面板里看不到备注、点击仍会触发整卡复制。
