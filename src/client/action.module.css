@@ -11,43 +11,59 @@
   align-items: center;
 }
 
+/* Trigger copies the host's own 24px icon button (`Rows.module.css:453-470`)
+ * so it reads as the same kind of control as the built-in More button, with
+ * the session's current status glyph inside instead of a text label. */
 .trigger {
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  height: 18px;
-  padding: 1px 5px;
-  border: 1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 24%, transparent);
-  border-radius: var(--dsw-radius-sm);
+  width: 24px;
+  height: 24px;
+  margin: -4px;
+  border: none;
+  border-radius: var(--dsw-radius-xs);
+  padding: 0;
   background: transparent;
-  color: var(--dsw-alias-label-secondary);
-  font: inherit;
-  font-size: 10px;
-  line-height: 1;
   cursor: pointer;
-  opacity: 0.85;
+  color: inherit;
 }
 
-.trigger:hover,
-.trigger[aria-expanded='true'] {
+.triggerIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.triggerIcon svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.trigger:hover .triggerIcon,
+.trigger[aria-expanded='true'] .triggerIcon {
   color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-interactive-bg-hover);
-  opacity: 1;
 }
 
+/* The expanded picker floats like the hover card instead of stretching the
+ * row: same surface token, same border/shadow language, wide enough for the
+ * eight 22px cells (8 x 22 + 7 x 2 = 190px) plus 12px padding. */
 .popover {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 6px);
   right: 0;
   z-index: 20;
-  display: inline-flex;
-  padding: 6px;
+  display: block;
+  box-sizing: border-box;
+  width: 214px;
+  padding: 10px 12px;
   background: var(--dsw-alias-bg-layer-2);
-  border: 1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 24%, transparent);
-  border-radius: var(--dsw-radius-sm);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--dsw-alias-label-primary) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 18%, transparent);
+  border-radius: var(--dsw-radius-lg);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--dsw-alias-label-primary) 24%, transparent);
 }
 
 .grid {
@@ -100,30 +116,121 @@
   cursor: default;
 }
 
+/* Row-menu entry. The metrics copy the official MenuRow so this entry lines up
+ * with the built-in Pin and Archive rows: 34px row, 6px/8px padding, 6px gap,
+ * 13px/20px text, and a 14px icon column tinted by `--dsw-alias-menu-icon`
+ * (`ui-primitives/src/Menu.module.css:178-193,254-279`). */
 .menuItem {
   display: block;
 }
 
 .menuTrigger {
-  display: block;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   width: 100%;
-  padding: 4px 10px;
+  min-height: 34px;
+  padding: 6px 8px;
   border: none;
+  border-radius: var(--dsw-radius-md);
   background: transparent;
   color: var(--dsw-alias-label-primary);
   font: inherit;
+  font-size: 13px;
+  line-height: 20px;
   text-align: left;
   cursor: pointer;
 }
 
-.menuTrigger:hover,
-.menuTrigger[aria-expanded='true'] {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .menuTrigger:hover,
+  .menuTrigger[aria-expanded='true'] {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
-.menuPicker {
+.menuTrigger:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+  outline: none;
+}
+
+.menuIcon {
   display: inline-flex;
-  padding: 4px 10px 6px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--dsw-alias-menu-icon);
+}
+
+.menuIcon svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+
+.menuLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Expanded panel inside the menu, indented to the label column: 8px padding + 14px icon + 6px gap. */
+.menuPanel {
+  display: block;
+  padding: 2px 8px 8px 28px;
+}
+
+.panel {
+  display: block;
+}
+
+.panelSummary,
+.panelNote {
+  display: block;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 17px;
+  white-space: normal;
+}
+
+.panelNote {
+  margin-top: 2px;
+}
+
+.panel .grid {
+  margin-top: 6px;
+}
+
+.panelActions {
+  display: flex;
+  margin-top: 6px;
+}
+
+.clearBtn {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 11px;
+  line-height: 17px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.clearBtn:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+}
+
+.clearBtn:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .pickerError {
