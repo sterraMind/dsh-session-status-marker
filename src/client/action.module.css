@@ -1,8 +1,10 @@
-/** @module CSS Modules for the row-action status button and the row-menu fallback.
+/** @module CSS Modules for the row-action status glyph and the row-menu fallback.
  *
  * Both surfaces use only DSH theme aliases, so they follow light and dark
  * themes. The picker grid copies the hover card's 22px border-box cells, 2px
- * padding and 2px gap, which keeps all eight statuses on one line.
+ * padding and 2px gap, which keeps all eight statuses on one line. The row glyph
+ * owns no panel of its own: it opens the row hover card, which is the single
+ * floating surface on a row.
  */
 
 .rowAction {
@@ -43,27 +45,8 @@
   height: 16px;
 }
 
-.trigger:hover .triggerIcon,
-.trigger[aria-expanded='true'] .triggerIcon {
+.trigger:hover .triggerIcon {
   color: var(--dsw-alias-label-primary);
-}
-
-/* The expanded picker floats like the hover card instead of stretching the
- * row: same surface token, same border/shadow language, wide enough for the
- * eight 22px cells (8 x 22 + 7 x 2 = 190px) plus 12px padding. */
-.popover {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 20;
-  display: block;
-  box-sizing: border-box;
-  width: 214px;
-  padding: 10px 12px;
-  background: var(--dsw-alias-bg-layer-2);
-  border: 1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 18%, transparent);
-  border-radius: var(--dsw-radius-lg);
-  box-shadow: 0 8px 24px color-mix(in srgb, var(--dsw-alias-label-primary) 24%, transparent);
 }
 
 .grid {
