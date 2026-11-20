@@ -86,12 +86,17 @@ export function inferStatus(observation: InferenceObservation): InferenceResult 
       return { status: 'todo', autoReason: 'tool-write-todo', subjectId: stringField(observation.data, 'callId') ?? null, note: null }
     }
     case 'job/settled': {
+      // `JobSettledData extends JobRegisteredData`, whose identifier field is
+      // `jobId` — reading `id` would silently never match a real event.
       const status = stringField(observation.data, 'status')
       if (status !== 'failed' && status !== 'killed') return null
-      return { status: 'stopped', autoReason: 'job-failed', subjectId: stringField(observation.data, 'id') ?? null, note: null }
+      return { status: 'stopped', autoReason: 'job-failed', subjectId: stringField(observation.data, 'jobId') ?? null, note: null }
     }
     case 'goal/change': {
-      const phase = stringField(observation.data, 'phase')
+      // The phase lives on the nested snapshot (`GoalSnapshotChangeMeta.goal`),
+      // and only a `block` operation reports a blocked goal.
+      if (stringField(observation.data, 'operation') !== 'block') return null
+      const phase = stringField(field(observation.data, 'goal'), 'phase')
       if (phase !== 'blocked') return null
       return { status: 'blocked', autoReason: 'goal-blocked', subjectId: null, note: null }
     }
@@ -100,10 +105,14 @@ export function inferStatus(observation: InferenceObservation): InferenceResult 
   }
 }
 
-/** Whether an inferred mark may overwrite an existing stored row. */
+/** Whether an inferred mark may overwrite an existing stored row.
+ *
+ * Explicit intent (the user clicked, or the model called `set_session_status`)
+ * is never replaced by inference; only another explicit write can change it.
+ */
 export function shouldApplyInference(current: MarkRecord | null, proposed: InferenceResult): boolean {
   if (current === null) return true
-  if (current.source === 'manual') return false
+  if (current.source !== 'auto') return false
   return current.status !== proposed.status || current.autoReason !== proposed.autoReason
 }
 

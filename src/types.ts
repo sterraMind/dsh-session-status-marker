@@ -10,6 +10,7 @@ import {
   MARK_VERSION,
   STATUS_VALUES,
   MARK_SOURCES,
+  EXPLICIT_SOURCES,
   AUTO_REASON_VALUES,
   DEFAULT_MAX_NOTE_LENGTH,
   DEFAULT_REFRESH_INTERVAL_MS,
@@ -31,6 +32,7 @@ import {
   type StatusEnum,
   type AutoReasonCode,
   type MarkSource,
+  type ExplicitSource,
   STATUS_META,
   MARKER_STATE_PATH,
   MARKER_LIST_PATH,
@@ -50,6 +52,8 @@ export {
   type AutoReasonCode,
   MARK_SOURCES,
   type MarkSource,
+  EXPLICIT_SOURCES,
+  type ExplicitSource,
   DEFAULT_MAX_NOTE_LENGTH,
   DEFAULT_REFRESH_INTERVAL_MS,
   DEFAULT_ROW_ACTION_ORDER,
@@ -102,7 +106,7 @@ void _markRecordCheck
 export const AllMarksResponseSchema = z.object({
   marks: z.array(MarkRecordSchema).readonly(),
   refreshIntervalMs: z.number().int().min(250),
-  revision: z.string(),
+  revision: z.string().optional(),
   unchanged: z.boolean(),
 }).strict()
 
@@ -118,7 +122,7 @@ export const SetMarkBodySchema = z.object({
   action: z.literal('set'),
   sessionId: z.string().min(1),
   status: z.enum(STATUS_VALUES),
-  source: z.literal('manual').default('manual'),
+  source: z.enum(EXPLICIT_SOURCES).default('manual'),
   note: z.string().max(DEFAULT_MAX_NOTE_LENGTH).nullable().default(null),
   subjectId: z.string().min(1).nullable().default(null),
 }).strict()

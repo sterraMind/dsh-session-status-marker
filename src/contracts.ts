@@ -32,9 +32,22 @@ export const AUTO_REASON_VALUES = [
 /** Union of auto-inference rule codes. */
 export type AutoReasonCode = (typeof AUTO_REASON_VALUES)[number]
 
-/** Who set the mark. Manual marks always win over auto marks. */
-export const MARK_SOURCES = ['manual', 'auto'] as const
+/**
+ * Who set the mark.
+ *
+ * - `manual`: the user clicked a status cell or edited a note.
+ * - `agent`: the model called `set_session_status` / `clear_session_status`.
+ * - `auto`: the Host inferred the status from the session event log.
+ *
+ * `manual` and `agent` are both explicit intent and always win over `auto`;
+ * they stay separate so the hover card can say who decided.
+ */
+export const MARK_SOURCES = ['manual', 'agent', 'auto'] as const
 export type MarkSource = (typeof MARK_SOURCES)[number]
+
+/** Sources that express explicit intent and are never overwritten by inference. */
+export const EXPLICIT_SOURCES = ['manual', 'agent'] as const
+export type ExplicitSource = (typeof EXPLICIT_SOURCES)[number]
 
 /** Max characters accepted in a note when no boot-time `maxNoteLength` is set. */
 export const DEFAULT_MAX_NOTE_LENGTH = 200
@@ -50,6 +63,13 @@ export const DEFAULT_ROW_ACTION_ORDER = 300
 
 /** Default order of the row-menu status item, matching the row-action button. */
 export const DEFAULT_MENU_ITEM_ORDER = 300
+
+/**
+ * Upper bound on how many unmarked sessions the overview route returns. The
+ * board only needs enough to offer a few candidates; sending every historical
+ * session would bloat the response on installs with hundreds of sessions.
+ */
+export const DEFAULT_UNMARKED_LIMIT = 20
 
 /**
  * Global injected into the browser by the Host so the Client can read the
@@ -85,12 +105,30 @@ export function markRevisionPart(row: MarkRecord): string {
  *
  * Rows are sorted by session id so the result does not depend on storage
  * iteration order. An empty snapshot has the fixed revision `""`.
+ *
+ * The rows are folded into a 64-bit digest instead of being concatenated: the
+ * browser sends this value back as `?since=`, and a full snapshot text would put
+ * thousands of characters into the request URL and into every "unchanged"
+ * response. Two independent FNV-1a passes keep this module free of `node:crypto`
+ * so the Browser half can import it.
  */
 export function marksRevision(marks: readonly MarkRecord[]): string {
-  return [...marks]
-    .sort((a, b) => a.sessionId.localeCompare(b.sessionId))
-    .map(markRevisionPart)
-    .join('\n')
+  if (marks.length === 0) return ''
+  const sorted = [...marks].sort((a, b) => a.sessionId.localeCompare(b.sessionId))
+  let h1 = 0x811c9dc5
+  let h2 = 0x01000193
+  for (const row of sorted) {
+    const part = markRevisionPart(row)
+    for (let i = 0; i < part.length; i++) {
+      const code = part.charCodeAt(i)
+      h1 = Math.imul(h1 ^ code, 0x01000193) >>> 0
+      h2 = Math.imul(h2 ^ (code + i), 0x85ebca6b) >>> 0
+    }
+    // A separator keeps ["ab","c"] from hashing like ["a","bc"].
+    h1 = Math.imul(h1 ^ 0x1f, 0x01000193) >>> 0
+    h2 = Math.imul(h2 ^ 0x1f, 0x85ebca6b) >>> 0
+  }
+  return `${h1.toString(16).padStart(8, '0')}${h2.toString(16).padStart(8, '0')}`
 }
 
 /** One durable row. Mirrored by `MarkRecordSchema` in `./types.ts`. */
@@ -111,7 +149,7 @@ export interface SetMarkBody {
   readonly action: 'set'
   readonly sessionId: string
   readonly status: StatusEnum
-  readonly source: 'manual'
+  readonly source: ExplicitSource
   readonly note: string | null
   readonly subjectId: string | null
 }
@@ -133,8 +171,12 @@ export interface AllMarksResponse {
   readonly marks: readonly MarkRecord[]
   /** How often the Browser should re-read this route, from the Host config. */
   readonly refreshIntervalMs: number
-  /** Stable fingerprint of the full mark snapshot, derived only from its rows. */
-  readonly revision: string
+  /**
+   * Stable fingerprint of the full mark snapshot, derived only from its rows.
+   * Absent on an `unchanged` response: the client sent this revision as
+   * `?since=` and already holds it, so echoing it would only repeat bytes.
+   */
+  readonly revision?: string
   /** True when `revision` equals the client's last read, so `marks` is empty and subscribers must not repaint. */
   readonly unchanged: boolean
 }
@@ -160,12 +202,35 @@ export interface StatusGroup {
   readonly entries: readonly OverviewEntry[]
 }
 
+/**
+ * One session that carries no mark yet. The board lists a bounded slice of
+ * these so a session nobody has classified can still be marked from the
+ * overview page instead of only from its sidebar row.
+ */
+export interface UnmarkedEntry {
+  readonly sessionId: string
+  /** Session display title; `null` when the session has none. */
+  readonly title: string | null
+  /** Last activity time of the session, ms since epoch. */
+  readonly updatedAtMs: number
+}
+
+/** Sessions without a mark, newest first and capped by the Host. */
+export interface UnmarkedSessions {
+  /** Total number of unmarked sessions, even when `entries` is truncated. */
+  readonly count: number
+  /** Newest unmarked sessions, at most {@link DEFAULT_UNMARKED_LIMIT}. */
+  readonly entries: readonly UnmarkedEntry[]
+}
+
 /** Response returned by `GET /api/session-status-marker.overview`. */
 export interface OverviewResponse {
   /** Non-empty status groups in `STATUS_VALUES` order. */
   readonly groups: readonly StatusGroup[]
   /** Number of marked sessions across all groups. */
   readonly totalMarked: number
+  /** Sessions that still have no mark, so the board can offer them for marking. */
+  readonly unmarked: UnmarkedSessions
   /** How often the Browser should re-read this route, from the Host config. */
   readonly refreshIntervalMs: number
 }
@@ -229,13 +294,13 @@ export type StatusLabelKey = `status.${StatusEnum}`
 /** Per-status presentation metadata, shared by the Browser UI. */
 export const STATUS_META: Readonly<Record<StatusEnum, StatusMeta>> = {
   todo: { icon: 'checklist-outline', tone: 'var(--dsw-alias-state-business-primary)', hoverTone: 'var(--dsw-alias-state-business-primary)', labelKey: 'status.todo' },
-  done: { icon: 'check-circle-fill', tone: 'var(--dsw-alias-state-done-primary)', hoverTone: 'var(--dsw-alias-state-done-primary)', labelKey: 'status.done' },
+  done: { icon: 'check-circle-fill', tone: 'var(--dsw-alias-state-success-primary)', hoverTone: 'var(--dsw-alias-state-success-primary)', labelKey: 'status.done' },
   stopped: { icon: 'stop-fill', tone: 'var(--dsw-alias-state-error-primary)', hoverTone: 'var(--dsw-alias-state-error-primary)', labelKey: 'status.stopped' },
   blocked: { icon: 'warning-triangle-outline', tone: 'var(--dsw-alias-state-warn-primary)', hoverTone: 'var(--dsw-alias-state-warn-primary)', labelKey: 'status.blocked' },
   review: { icon: 'browse-outline', tone: 'var(--dsw-alias-state-business-primary)', hoverTone: 'var(--dsw-alias-state-business-primary)', labelKey: 'status.review' },
   'pending-subagent': { icon: 'agent-preset-outline', tone: 'var(--dsw-alias-state-success-primary)', hoverTone: 'var(--dsw-alias-state-success-primary)', labelKey: 'status.pending-subagent' },
   'awaiting-answer': { icon: 'pause-outline', tone: 'var(--dsw-alias-label-secondary)', hoverTone: 'var(--dsw-alias-label-secondary)', labelKey: 'status.awaiting-answer' },
-  feedback: { icon: 'like-outline', tone: 'var(--dsw-alias-state-success-primary)', hoverTone: 'var(--dsw-alias-state-success-primary)', labelKey: 'status.feedback' },
+  feedback: { icon: 'like-outline', tone: 'var(--dsw-alias-state-done-primary)', hoverTone: 'var(--dsw-alias-state-done-primary)', labelKey: 'status.feedback' },
 }
 
 /** Exact-route absolute paths (Host registration). */

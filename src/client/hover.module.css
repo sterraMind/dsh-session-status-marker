@@ -33,6 +33,12 @@
 [class*='card']:has([data-status-slot]) {
   --dsw-alias-hovercard-bg: var(--dsw-alias-bg-layer-2) !important;
   --dsw-hovercard-bg: var(--dsw-alias-bg-layer-2) !important;
+  /* The host marks the card `copyable` and styles it with `cursor: pointer`
+   * (`HoverCard.module.css:21-23`), which makes the whole floating surface look
+   * like one big button. Reading and selecting text is the normal intent there,
+   * so the card itself shows the default cursor; the cells and buttons inside
+   * our slot opt back into `cursor: pointer`. */
+  cursor: default;
 }
 
 [class*='card']:has([data-status-slot]) [class*='hoverTitle'] {
@@ -45,8 +51,15 @@
   color: var(--dsw-alias-label-secondary) !important;
 }
 
+/* The host card is `copyable` for sessions with a title, so the official
+ * stylesheet paints the whole card with `cursor: pointer`
+ * (`ui-primitives/HoverCard.module.css:21-23`). Inside our slot that reads as
+ * "everything is a button", which is wrong: only the cells and the action
+ * buttons act on click. Reset the inherited pointer here and let each
+ * interactive child opt back in. */
 .root {
   position: relative;
+  cursor: default;
   font-size: 12px;
   line-height: 1.4;
   color: var(--dsw-alias-label-primary);
@@ -101,6 +114,87 @@
 
 .clearBtn {
   opacity: 0.7;
+}
+
+/* Note editing inside the hover card summary: an underline trigger, a
+ * single-line input and Save/Cancel. Colors come from `--dsw-*` aliases so the
+ * field stays legible on the themed card surface in both themes. */
+.editBtn {
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 24%, transparent);
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.editBtn:hover:not(:disabled) {
+  opacity: 1;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.editBtn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.noteEditor {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.noteInput {
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 24%, transparent);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.noteInput::placeholder {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.noteInput:focus {
+  outline: 1px solid var(--dsw-alias-label-primary);
+  outline-offset: 0;
+}
+
+.noteEditor .saveBtn,
+.noteEditor .cancelBtn {
+  flex: none;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 24%, transparent);
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.noteEditor .saveBtn:hover:not(:disabled),
+.noteEditor .cancelBtn:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.noteEditor .saveBtn:disabled,
+.noteEditor .cancelBtn:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .grid {

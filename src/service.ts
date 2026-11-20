@@ -12,7 +12,7 @@
 import { Service, type Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 // Type-only: pull the `sessions` Context merge so the overview route can join
 // marks with session titles. `sessionTitle` is merged onto Context locally
 // below (the `@deepseek-ai/dsh-session-title` package is not installed here).
@@ -37,7 +37,10 @@ import {
   type StatusEnum,
   type StatusGroup,
   type OverviewEntry,
+  type ExplicitSource,
 } from './types.js'
+import { DEFAULT_UNMARKED_LIMIT } from './contracts.js'
+import type { UnmarkedEntry, UnmarkedSessions } from './contracts.js'
 import { inferStatus, shouldApplyInference, isAutoMarkExpired } from './inference.js'
 
 /** Deployment configuration. Required fields fail at load; `refreshIntervalMs` defaults. */
@@ -86,11 +89,42 @@ declare module '@deepseek-ai/cordis' {
      * live session, or `undefined` before eligible input.
      */
     sessionTitle: { get(session: Session): { readonly title: string } | undefined }
+    /**
+     * Optional session-query engine (from `@deepseek-ai/dsh-session-query`, not
+     * installed here). When the Host mounts it, `readTitleSnapshots` resolves
+     * titles for sessions that are no longer loaded into memory, which is what
+     * turns the board's "untitled" rows into real names. Declared optional and
+     * read with `ctx.get` so a composition without it keeps working.
+     */
+    sessionQuery?: SessionQueryLike
   }
   interface Events {
     /** Collect structured index-injection rows for the rendered Web GUI page. */
     'webserver/index-inject'(table: IndexGlobalInjection[], peer: unknown): void
   }
+}
+
+/** Structural slice of the Host's session-query engine that this plugin uses. */
+interface SessionQueryLike {
+  readTitleSnapshots(
+    ids: readonly string[],
+    signal?: AbortSignal,
+  ): Promise<readonly TitleObservationResult[]>
+}
+
+/** One entry of {@link SessionQueryLike.readTitleSnapshots}. */
+interface TitleObservationResult {
+  readonly sessionId: string
+  readonly status: 'fulfilled' | 'rejected'
+  readonly value?: {
+    readonly session: { readonly id: string }
+    readonly title?: { readonly title: string }
+  }
+}
+
+/** Structural slice of one session record returned by `listSessions`. */
+interface SessionRecordLike {
+  readonly header: { readonly id: SessionId; readonly createdAt?: number }
 }
 
 /**
@@ -111,6 +145,14 @@ export class SessionStatusService extends Service {
   static Config = Config
 
   #domain?: MarkerDomain
+
+  /**
+   * Title cache for sessions that are not loaded in memory. `sessionTitle.get`
+   * only answers for live sessions, so cold sessions are resolved once through
+   * the optional session-query engine and reused for a short window instead of
+   * re-reading their transcripts on every overview refresh.
+   */
+  #titleCache = new Map<string, { readonly title: string; readonly at: number }>()
 
   constructor(ctx: Context, public readonly config: Config) {
     super(ctx, 'sessionStatus')
@@ -232,15 +274,29 @@ export class SessionStatusService extends Service {
     return await this.#table().delete(sessionId)
   }
 
-  /** Build an explicit (user- or tool-driven) row. */
-  explicitRow(sessionId: string, status: StatusEnum, note: string | null, subjectId: string | null): MarkRecord {
+  /**
+   * Build an explicit row.
+   * @param sessionId - Session the row belongs to.
+   * @param status - Status to store.
+   * @param note - Already validated note, or `null`.
+   * @param subjectId - Optional turn/goal/job/subagent id the mark refers to.
+   * @param source - `manual` for user actions, `agent` for model tool calls.
+   * @returns The row to persist.
+   */
+  explicitRow(
+    sessionId: string,
+    status: StatusEnum,
+    note: string | null,
+    subjectId: string | null,
+    source: ExplicitSource = 'manual',
+  ): MarkRecord {
     return {
       version: MARK_VERSION,
       insertedAtMs: Date.now(),
       seq: 0,
       sessionId,
       status,
-      source: 'manual',
+      source,
       subjectId,
       autoReason: null,
       note,
@@ -303,7 +359,10 @@ export class SessionStatusService extends Service {
     const since = new URL(request.url).searchParams.get('since')
     const refreshIntervalMs = this.config.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS
     if (since !== null && since === revision) {
-      return Response.json({ marks: [], refreshIntervalMs, revision, unchanged: true })
+      // The caller already holds this revision, so echoing it back would only
+      // repeat a string the client already has. Omitting it keeps the
+      // unchanged response to the two fields the client actually needs.
+      return Response.json({ marks: [], refreshIntervalMs, unchanged: true })
     }
     return Response.json({ marks, refreshIntervalMs, revision, unchanged: false })
   }
@@ -320,13 +379,21 @@ export class SessionStatusService extends Service {
       for (const session of this.ctx.sessions.list()) sessions.set(session.id, session)
     } catch { /* sessions unavailable — every title falls back to null */ }
 
+    const rows: MarkRecord[] = []
+    for (const [, row] of this.listAll()) rows.push(row)
+    const marked = new Set(rows.map((row) => row.sessionId))
+    const coldIds = rows.filter((row) => !sessions.has(row.sessionId)).map((row) => row.sessionId)
+    const coldTitles = await this.#readColdTitles(coldIds)
+
     const byStatus = new Map<StatusEnum, OverviewEntry[]>()
     let totalMarked = 0
-    for (const [, row] of this.listAll()) {
+    for (const row of rows) {
       let title: string | null = null
       const session = sessions.get(row.sessionId)
       if (session !== undefined) {
         try { title = this.ctx.sessionTitle.get(session)?.title ?? null } catch { title = null }
+      } else {
+        title = coldTitles.get(row.sessionId) ?? null
       }
       const entry: OverviewEntry = {
         sessionId: row.sessionId,
@@ -351,11 +418,79 @@ export class SessionStatusService extends Service {
         groups.push({ status, count: entries.length, entries })
       }
     }
+    const unmarked = await this.#collectUnmarked(marked)
     return Response.json({
       groups,
       totalMarked,
+      unmarked,
       refreshIntervalMs: this.config.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS,
     })
+  }
+
+  /**
+   * Resolve display titles for sessions that are not loaded in memory.
+   *
+   * `sessionTitle.get` only answers for live sessions, so a session that was
+   * closed since it was marked would show as "untitled" forever. When the Host
+   * mounts the optional session-query engine this reads their titles from the
+   * projection cache and remembers them for a short window so frequent overview
+   * refreshes do not re-read transcripts.
+   */
+  async #readColdTitles(ids: readonly string[]): Promise<Map<string, string>> {
+    const resolved = new Map<string, string>()
+    if (ids.length === 0) return resolved
+    const now = Date.now()
+    const stale = ids.filter((id) => {
+      const hit = this.#titleCache.get(id)
+      return hit === undefined || now - hit.at > 10_000
+    })
+    if (stale.length > 0) {
+      const query = this.ctx.sessionQuery
+      if (query !== undefined) {
+        try {
+          for (const result of await query.readTitleSnapshots(stale)) {
+            if (result.status === 'fulfilled' && result.value?.title !== undefined) {
+              this.#titleCache.set(result.sessionId, { title: result.value.title.title, at: now })
+            }
+          }
+        } catch { /* query unavailable — titles fall back to null */ }
+      }
+    }
+    for (const id of ids) {
+      const hit = this.#titleCache.get(id)
+      if (hit !== undefined) resolved.set(id, hit.title)
+    }
+    return resolved
+  }
+
+  /**
+   * List a bounded slice of sessions that carry no mark, newest first, so the
+   * board can offer them for marking. Only sessions the Host exposes through the
+   * optional session-query engine are considered; when that engine is absent
+   * the list is empty and the board simply shows the marked groups.
+   */
+  async #collectUnmarked(marked: ReadonlySet<string>): Promise<UnmarkedSessions> {
+    const query = this.ctx.sessionQuery as
+      | (SessionQueryLike & { listSessions?: (signal?: AbortSignal) => Promise<readonly SessionRecordLike[]> })
+      | undefined
+    if (query?.listSessions === undefined) return { count: 0, entries: [] }
+    let records: readonly SessionRecordLike[]
+    try { records = await query.listSessions() } catch { return { count: 0, entries: [] } }
+    const candidates = records.filter((record) => !marked.has(record.header.id))
+    candidates.sort((a, b) => (b.header.createdAt ?? 0) - (a.header.createdAt ?? 0))
+    const slice = candidates.slice(0, DEFAULT_UNMARKED_LIMIT)
+    const titles = await this.#readColdTitles(slice.map((record) => record.header.id))
+    const entries: UnmarkedEntry[] = slice.map((record) => {
+      let title: string | null = titles.get(record.header.id) ?? null
+      if (title === null) {
+        const live = this.ctx.sessions.get(record.header.id)
+        if (live !== undefined) {
+          try { title = this.ctx.sessionTitle.get(live)?.title ?? null } catch { title = null }
+        }
+      }
+      return { sessionId: record.header.id, title, updatedAtMs: record.header.createdAt ?? 0 }
+    })
+    return { count: candidates.length, entries }
   }
 
   async #handleMutate(request: Request): Promise<Response> {
@@ -379,7 +514,13 @@ export class SessionStatusService extends Service {
     if (action === 'set') {
       const parsed = SetMarkBodySchema.safeParse(body)
       if (!parsed.success) return Response.json({ ok: false, code: 'invalid-body', message: parsed.error.message }, { status: 400 })
-      const row = this.explicitRow(parsed.data.sessionId, parsed.data.status, this.#checkedNote(parsed.data.note), parsed.data.subjectId)
+      const row = this.explicitRow(
+        parsed.data.sessionId,
+        parsed.data.status,
+        this.#checkedNote(parsed.data.note),
+        parsed.data.subjectId,
+        parsed.data.source,
+      )
       await this.putMark(row)
       return Response.json({ ok: true, sessionId: row.sessionId, mark: row })
     }
@@ -397,8 +538,8 @@ export class SessionStatusService extends Service {
         'Set an explicit status label on the current session so the session list shows where it stands.',
         'WHEN TO USE: the conversation reaches a state another person needs to see in the session list, such as waiting on the user, a subagent still running, work blocked, or a task genuinely finished.',
         'WHEN NOT TO USE: Do not mark a normally finished session done automatically. A turn ending only means this reply finished; it does not mean the user goal is complete. Leave done to a deliberate user request or your own confirmed judgement.',
-        'DO NOT USE FOR: do not use this tool to record intermediate tool progress or an inference you are guessing at. Automatic inference never overwrites a manual mark or a mark made with this tool, and a later call to this tool replaces an earlier mark of either kind.',
-        'USAGE: pass one status from todo, done, stopped, blocked, review, pending-subagent, awaiting-answer, feedback. Statuses written by you through this tool are manual. Add a short note when the reason is not obvious, and a subjectId when the mark refers to a specific turn, goal, job, or subagent.',
+        'DO NOT USE FOR: do not use this tool to record intermediate tool progress or an inference you are guessing at. Automatic inference never overwrites a mark you set with this tool, and a later call to this tool replaces an earlier mark of either kind.',
+        'USAGE: pass one status from todo, done, stopped, blocked, review, pending-subagent, awaiting-answer, feedback. Statuses written by you through this tool are recorded with source agent, so the hover card can show that a model decided. Add a short note when the reason is not obvious, and a subjectId when the mark refers to a specific turn, goal, job, or subagent.',
         'EXAMPLES: user asks you to pause and wait for their answer, call with status awaiting-answer and a note naming what you need. A subagent is launched and still running, call with status pending-subagent and its id as subjectId. Work is genuinely complete and confirmed, call with status done. To remove an incorrect mark, use clear_session_status instead of this tool.',
       ].join(' '),
       parameters: {
@@ -422,7 +563,7 @@ export class SessionStatusService extends Service {
       async execute(args, exec) {
         const sessionId = agentSessionId(exec)
         const note = service.#checkedNote(args.note ?? null)
-        const row = service.explicitRow(sessionId, args.status, note, args.subjectId ?? null)
+        const row = service.explicitRow(sessionId, args.status, note, args.subjectId ?? null, 'agent')
         await service.putMark(row)
         return { ok: true, sessionId, status: row.status, source: row.source }
       },

@@ -92,7 +92,9 @@ export function SessionStatusHover({ sessionId, t }: HoverProps) {
           ? t('hover.empty')
           : mark.source === 'auto'
             ? t('hover.auto', { status: t(meta!.labelKey), reason: mark.autoReason ?? '' })
-            : t('hover.manual', { status: t(meta!.labelKey) })}
+            : mark.source === 'agent'
+              ? t('hover.agent', { status: t(meta!.labelKey) })
+              : t('hover.manual', { status: t(meta!.labelKey) })}
       </div>
       {mark?.note && <div className={css.note}>{t('hover.note', { note: mark.note.slice(0, 64) })}</div>}
       <div className={css.grid}>

@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from './vitest-shim.mjs'
 // Canonical imports are through contracts.ts so they compile without DSH deps.
-import { STATUS_VALUES, STATUS_META, AUTO_REASON_VALUES, MARK_SOURCES, DEFAULT_MAX_NOTE_LENGTH } from '../lib/contracts.js'
+import { STATUS_VALUES, STATUS_META, AUTO_REASON_VALUES, MARK_SOURCES, EXPLICIT_SOURCES, DEFAULT_MAX_NOTE_LENGTH } from '../lib/contracts.js'
 import { ICONS, ICON_PIXEL_SIZE } from '../lib/client/icons.js'
 import { DICTIONARIES, zh } from '../lib/client/locales.js'
 
@@ -36,8 +36,15 @@ describe('i18n consistency', () => {
     for (const r of AUTO_REASON_VALUES) expect(typeof r).toBe('string')
   })
 
-  it('MARK_SOURCES contains manual first, then auto', () => {
-    expect(MARK_SOURCES).toEqual(['manual', 'auto'])
+  // Explicit intent (user click, model tool call) comes before inference, and the
+  // two explicit sources stay separate so the UI can say who decided.
+  it('MARK_SOURCES lists manual, then agent, then auto', () => {
+    expect(MARK_SOURCES).toEqual(['manual', 'agent', 'auto'])
+  })
+
+  it('EXPLICIT_SOURCES holds the two sources inference must not overwrite', () => {
+    expect(EXPLICIT_SOURCES).toEqual(['manual', 'agent'])
+    for (const source of EXPLICIT_SOURCES) expect(MARK_SOURCES).toContain(source)
   })
 
   it('DEFAULT_MAX_NOTE_LENGTH is a positive integer', () => {

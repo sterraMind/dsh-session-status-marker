@@ -82,13 +82,33 @@ describe('inferStatus', () => {
   })
 
   it('maps job/settled failed/killed → stopped/job-failed', () => {
-    const r = inferStatus({ type: 'job/settled', seq: 7, time: NOW, data: { id: 'j2', status: 'failed' } })
+    const r = inferStatus({
+      type: 'job/settled',
+      seq: 7,
+      time: NOW,
+      data: { jobId: 'j2', owner: 'session', kind: 'bash', label: 'pnpm test', startedAt: 1, finishedAt: 2, status: 'failed', cause: 'producer', producerReported: true },
+    })
     expect(r).toMatchObject({ status: 'stopped', autoReason: 'job-failed', subjectId: 'j2' })
   })
 
+  it('reads job/settled subject from jobId, not from a stale id field', () => {
+    const r = inferStatus({ type: 'job/settled', seq: 7, time: NOW, data: { id: 'j2', status: 'failed' } })
+    expect(r).toMatchObject({ status: 'stopped', autoReason: 'job-failed', subjectId: null })
+  })
+
   it('maps goal/change blocked → blocked/goal-blocked', () => {
-    const r = inferStatus({ type: 'goal/change', seq: 9, time: NOW, data: { phase: 'blocked' } })
+    const r = inferStatus({
+      type: 'goal/change',
+      seq: 9,
+      time: NOW,
+      data: { kind: 'goal/change', version: 1, operation: 'block', goal: { id: 'g1', phase: 'blocked' }, roundsStarted: 2, createdAt: 1, updatedAt: 2 },
+    })
     expect(r).toMatchObject({ status: 'blocked', autoReason: 'goal-blocked' })
+  })
+
+  it('ignores goal/change whose phase is not nested under goal', () => {
+    const r = inferStatus({ type: 'goal/change', seq: 9, time: NOW, data: { phase: 'blocked' } })
+    expect(r).toBeNull()
   })
 
   it('does not infer from user/message (real payload is a UserMessage, not text)', () => {
