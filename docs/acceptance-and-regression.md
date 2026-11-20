@@ -1,6 +1,6 @@
 # Acceptance & Regression
 
-> **文档版本**：v1.2.2 · 2026-11-20（对应插件 1.2.2）
+> **文档版本**：v1.2.3-rc.1 · 2026-11-20（对应插件 1.2.3-rc.1）
 
 > 记录验收标准、已通过证据、待执行集成 smoke 与回归清单。
 > 对应实现进度见 `docs/implementation-plan.md` §2，风险优先级见 `docs/feasibility-and-risks.md`。
@@ -364,3 +364,18 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 | 截图 | `.drafts/shots/v122b-panel-light.png`、`v122b-panel-note.png`（含备注行）、`v122b-panel-dark.png`，均已目检 |
 
 发布：102 项测试全绿（新增 `tests/touch-icon.test.mjs` 6 例），tgz 74,526 B；提交 `6719b57`（fix）+ `b86dbb6`（test）+ tag `v1.2.2`；GitHub Release 附 tgz；npm publish `+ dsh-session-status-marker@1.2.2`（57 files，integrity `sha512-2m2Nbk8xCLCR6...`）。
+
+### 3.20 1.2.3-rc.1 悬停卡防复制、单一浮层与市场元数据 8 语言（2026-11-20）
+
+用户在 1.2.2 上反馈三点：悬停卡与行内浮窗并存（应只留一个）、悬停卡空白点击仍出现「已复制」、插件市场元数据只有英文。1.2.3-rc.1（预版本，按发布政策等待用户实际验收）逐项修复并在 dev4090（DSH 0.2.2-rc.3）真实页面复核：
+
+| 验收项 | 结果 |
+|---|---|
+| 悬停卡空白点击防复制 | 标题行 (310,314) 点击后 `copied:false, cardOpen:true`；卡底部空白点击同样 `copied:false`；深色主题复测一致。守卫原理：`document` capture 监听 `click`/`keydown`，只拦「含 `[data-status-slot]` 的卡」上槽位外非交互元素，`stopPropagation` 阻断 React 根容器的合成事件分发 |
+| 文本选择保留 | 在卡标题拖选得到「标记会话为完成」，`copied:false` 且选区保留（守卫不调用 `preventDefault`） |
+| 单一浮层 | 悬停卡打开时点行内图标：popover=1（不开第二个浮层）；悬停卡关闭后行内面板恢复 214×110、8 格、摘要/备注/清除齐全 |
+| 深色主题悬停卡 | 整卡 `rgb(44,44,46)`、标题 `rgb(249,250,251)`、8 格、空白点击不复制 —— 1.1.2 的整卡主题接管继续生效 |
+| 市场元数据 8 语言 | `locale/{de,en,es,fr,ja,pt,ru,zh}.json` 全部随包发布（tarball 67 项），`meta.title` 各语言齐全（「会话状态标记」「セッション状態マーカー」「Sitzungsstatus-Marker」等） |
+| 截图 | `.drafts/shots/v123-card-guard.png`（浅色卡+摘要/备注/格）、`v123-panel-light.png`（行内面板局部）、`v123-dark-card.png`（深色整卡），均已目检 |
+
+发布：111 项测试全绿（27 套件，新增 `tests/copy-guard.test.mjs` 9 例），tgz 81,880 B；提交 `586bbb9`（fix）+ tag `v1.2.3-rc.1`；GitHub Release **prerelease** 标记附 tgz；npm `--tag rc` 发布，`latest` 保持 1.2.2。发布政策（用户 2026-11-20 指定）：正式版本需用户实际前端验收通过后发布，此前只能发预版本。npm 对预发布版本强制要求显式 `--tag`（缺省报错退出）。
