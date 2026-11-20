@@ -24,10 +24,12 @@ function makeTable() {
 
 /**
  * @param {object} opts
- * @param {Map<string,string>} [opts.titles] session id -> title
+ * @param {Map<string,string>} [opts.titles] session id -> title (live sessions)
  * @param {Set<string>} [opts.throwTitles] ids whose title read throws
+ * @param {Map<string,string>} [opts.coldTitles] session id -> title from the query engine
+ * @param {Array<{id:string,createdAt:number}>} [opts.allSessions] every session the query engine can list
  */
-function makeCtx({ titles = new Map(), throwTitles = new Set() } = {}) {
+function makeCtx({ titles = new Map(), throwTitles = new Set(), coldTitles, allSessions } = {}) {
   const table = makeTable()
   const routes = []
   const connection = { fetch: { register: (r) => { routes.push(r); return () => {} } } }
@@ -38,9 +40,22 @@ function makeCtx({ titles = new Map(), throwTitles = new Set() } = {}) {
       return titles.has(session.id) ? { title: titles.get(session.id) } : undefined
     },
   }
+  let sessionQuery
+  if (coldTitles !== undefined || allSessions !== undefined) {
+    sessionQuery = {
+      readTitleSnapshots: async (ids) => ids.map((id) => (
+        coldTitles !== undefined && coldTitles.has(id)
+          ? { sessionId: id, status: 'fulfilled', value: { session: { id }, title: { title: coldTitles.get(id) } } }
+          : { sessionId: id, status: 'rejected', reason: 'not found' }
+      )),
+    }
+    if (allSessions !== undefined) {
+      sessionQuery.listSessions = async () => allSessions.map((s) => ({ header: { id: s.id, createdAt: s.createdAt } }))
+    }
+  }
   const ctx = {
     reflect: { provide: () => {} },
-    get: (name) => (name === 'connection' ? connection : undefined),
+    get: (name) => (name === 'connection' ? connection : name === 'sessionQuery' ? sessionQuery : undefined),
     inject: (deps, callback) => {
       if (deps.includes('connection') && connection === undefined) return
       callback({ ...ctx, connection, effect: (fn) => fn() })
@@ -48,7 +63,8 @@ function makeCtx({ titles = new Map(), throwTitles = new Set() } = {}) {
     storageDomain: { open: async () => ({ table: () => table }) },
     tools: { register: () => () => {} },
     connection,
-    sessions: { list: () => sessions },
+    sessionQuery,
+    sessions: { list: () => sessions, get: (id) => sessions.find((s) => s.id === id) },
     sessionTitle,
     effect: (fn) => fn(),
     on: () => {},
@@ -63,8 +79,8 @@ function row(sessionId, status, insertedAtMs) {
   return { version: 1, insertedAtMs, seq: 0, sessionId, status, source: 'manual', subjectId: null, autoReason: null, note: null }
 }
 
-async function boot({ titles, throwTitles }) {
-  const { ctx, routes, table } = makeCtx({ titles, throwTitles })
+async function boot({ titles, throwTitles, coldTitles, allSessions } = {}) {
+  const { ctx, routes, table } = makeCtx({ titles, throwTitles, coldTitles, allSessions })
   const svc = new SessionStatusService(ctx, { ...CONFIG })
   await svc[Service.init]()
   const overviewRoute = routes.find((r) => r.path.endsWith('.overview'))
@@ -135,5 +151,40 @@ describe('overview route', () => {
     expect(data.groups).toEqual([])
     expect(data.totalMarked).toBe(0)
     expect(data.refreshIntervalMs).toBe(2000)
+    expect(data.unmarked).toEqual({ count: 0, entries: [] })
+  })
+
+  it('fills a cold session title from the query engine', async () => {
+    // s1 is marked but not live; only the query engine knows its title.
+    const coldTitles = new Map([['s1', 'Cold session']])
+    const { table, overviewRoute } = await boot({ titles: new Map(), coldTitles })
+    await table.put('s1', row('s1', 'todo', 100))
+    const data = await callOverview(overviewRoute)
+    expect(data.groups[0].entries[0].title).toBe('Cold session')
+  })
+
+  it('lists unmarked sessions newest-first and caps the slice', async () => {
+    const allSessions = [
+      { id: 'm1', createdAt: 100 },
+      { id: 'u1', createdAt: 900 },
+      { id: 'u2', createdAt: 500 },
+      { id: 'u3', createdAt: 700 },
+    ]
+    const coldTitles = new Map([['u1', 'Newest unmarked'], ['u2', 'Older unmarked'], ['u3', 'Middle unmarked']])
+    const { table, overviewRoute } = await boot({ titles: new Map(), coldTitles, allSessions })
+    await table.put('m1', row('m1', 'todo', 100))
+    const data = await callOverview(overviewRoute)
+    expect(data.unmarked.count).toBe(3)
+    expect(data.unmarked.entries.map((e) => e.sessionId)).toEqual(['u1', 'u3', 'u2'])
+    expect(data.unmarked.entries[0].title).toBe('Newest unmarked')
+    // The marked session never appears in the unmarked list.
+    expect(data.unmarked.entries.some((e) => e.sessionId === 'm1')).toBe(false)
+  })
+
+  it('returns an empty unmarked list when no query engine is mounted', async () => {
+    const { table, overviewRoute } = await boot({ titles: new Map(), throwTitles: new Set() })
+    await table.put('s1', row('s1', 'todo', 100))
+    const data = await callOverview(overviewRoute)
+    expect(data.unmarked).toEqual({ count: 0, entries: [] })
   })
 })

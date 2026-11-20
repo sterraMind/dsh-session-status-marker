@@ -141,7 +141,9 @@ describe('SessionStatusService exact routes', () => {
     expect(first.unchanged).toBe(false)
 
     const second = await (await route.fetch(new Request(`http://x/api/session-status-marker.list?since=${encodeURIComponent(first.revision)}`))).json()
-    expect(second).toMatchObject({ marks: [], revision: first.revision, unchanged: true, refreshIntervalMs: 2000 })
+    expect(second).toMatchObject({ marks: [], unchanged: true, refreshIntervalMs: 2000 })
+    // The caller already holds this revision, so it is not echoed back.
+    expect('revision' in second).toBe(false)
   })
 
   it('derives the same revision from the same rows after a fresh service instance', async () => {
@@ -204,12 +206,12 @@ describe('SessionStatusService tools', () => {
     expect(names).toContain('clear_session_status')
   })
 
-  it('set_session_status records a mark for the agent session', async () => {
+  it('set_session_status records an agent-sourced mark for the agent session', async () => {
     const { svc, tools } = await bootService()
     const tool = tools.find((t) => t.name === 'set_session_status')
     const result = await tool.execute({ status: 'stopped', note: 'boom' }, { agent: { id: 'session-7' } })
-    expect(result).toMatchObject({ ok: true, sessionId: 'session-7', status: 'stopped' })
-    expect(svc.getMark('session-7')?.source).toBe('manual')
+    expect(result).toMatchObject({ ok: true, sessionId: 'session-7', status: 'stopped', source: 'agent' })
+    expect(svc.getMark('session-7')?.source).toBe('agent')
   })
 
   it('set_session_status lists all eight statuses and the override rules', async () => {
@@ -218,7 +220,8 @@ describe('SessionStatusService tools', () => {
     for (const status of ['todo', 'done', 'stopped', 'blocked', 'review', 'pending-subagent', 'awaiting-answer', 'feedback']) {
       expect(description).toContain(status)
     }
-    expect(description).toContain('inference never overwrites a manual mark')
+    expect(description).toContain('Automatic inference never overwrites a mark you set with this tool')
+    expect(description).toContain('recorded with source agent')
     expect(description).toContain('Do not mark a normally finished session done automatically')
   })
 

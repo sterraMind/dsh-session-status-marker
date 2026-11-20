@@ -191,7 +191,89 @@
 
 .panelActions {
   display: flex;
+  gap: 8px;
   margin-top: 6px;
+}
+
+/* Note editing: the same underline text button as Clear, plus a single-line
+ * input and Save/Cancel. All colors come from `--dsw-*` aliases so the field
+ * reads on both the light and the dark card surface. */
+.editBtn {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 11px;
+  line-height: 17px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.editBtn:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+}
+
+.editBtn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.noteEditor {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.noteInput {
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 24%, transparent);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.noteInput::placeholder {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.noteInput:focus {
+  outline: 1px solid var(--dsw-alias-label-primary);
+  outline-offset: 0;
+}
+
+.noteEditor .saveBtn,
+.noteEditor .cancelBtn {
+  flex: none;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 24%, transparent);
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 11px;
+  line-height: 17px;
+  cursor: pointer;
+}
+
+.noteEditor .saveBtn:hover:not(:disabled),
+.noteEditor .cancelBtn:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.noteEditor .saveBtn:disabled,
+.noteEditor .cancelBtn:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .clearBtn {

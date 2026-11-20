@@ -14,7 +14,7 @@ import type { SyntheticEvent } from 'react'
 import css from './overview.module.css'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { STATUS_META } from '../contracts.js'
-import type { OverviewResponse, StatusGroup } from '../contracts.js'
+import type { OverviewResponse, StatusGroup, UnmarkedSessions } from '../contracts.js'
 
 /**
  * `settings.section` is owned by the (not-installed-here) settings shell
@@ -84,9 +84,33 @@ function GroupBlock({ group, t }: { group: StatusGroup; t: StatusOverviewInjecte
   )
 }
 
+function UnmarkedBlock({ unmarked, t }: { unmarked: UnmarkedSessions; t: StatusOverviewInjected['t'] }) {
+  if (unmarked.count === 0) return null
+  return (
+    <div className={css.group}>
+      <div className={css.groupHead}>
+        <span className={css.groupTitle}>{t('overview.unmarked', { count: String(unmarked.count) })}</span>
+      </div>
+      <ul className={css.list}>
+        {unmarked.entries.map((entry) => (
+          <li key={entry.sessionId} className={css.row}>
+            <span className={css.rowTitle} title={entry.title ?? entry.sessionId}>
+              {entry.title ?? t('overview.noTitle')}
+            </span>
+            <span className={css.rowMeta}>
+              {t('overview.updatedAt', { time: formatTime(entry.updatedAtMs) })}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 export function StatusOverview(props: StatusOverviewProps) {
   const { t, fetchOverview } = props
   const [groups, setGroups] = useState<readonly StatusGroup[]>([])
+  const [unmarked, setUnmarked] = useState<UnmarkedSessions>({ count: 0, entries: [] })
   const [totalMarked, setTotalMarked] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -106,6 +130,7 @@ export function StatusOverview(props: StatusOverviewProps) {
         }
         setGroups(data.groups)
         setTotalMarked(data.totalMarked)
+        setUnmarked(data.unmarked ?? { count: 0, entries: [] })
         setError(false)
       } catch {
         if (!disposed) setError(true)
@@ -150,13 +175,14 @@ export function StatusOverview(props: StatusOverviewProps) {
   if (error) {
     return <div className={css.page} {...guard}><div className={css.loading}>{t('hover.error')}</div></div>
   }
-  if (totalMarked === 0) {
+  if (totalMarked === 0 && unmarked.count === 0) {
     return <div className={css.page} {...guard}><div className={css.empty}>{t('overview.empty')}</div></div>
   }
   return (
     <div className={css.page} {...guard}>
       <div className={css.title}>{t('overview.title')}</div>
       {groups.map((group) => <GroupBlock key={group.status} group={group} t={t} />)}
+      <UnmarkedBlock unmarked={unmarked} t={t} />
     </div>
   )
 }
