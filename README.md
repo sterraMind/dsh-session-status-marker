@@ -31,17 +31,19 @@
 
 ## 安装
 
-**从 npm 安装**（当前版本 1.2.1）：
+**从 npm 安装**（当前稳定版 1.2.2）：
 
 ```bash
 dsh plugin --profile desktop add dsh-session-status-marker
 ```
 
-**从 GitHub Release 安装**：到 <https://github.com/sterraMind/dsh-session-status-marker/releases> 下载 `dsh-session-status-marker-1.2.1.tgz`，然后：
+**从 GitHub Release 安装**：到 <https://github.com/sterraMind/dsh-session-status-marker/releases> 下载 `dsh-session-status-marker-1.2.2.tgz`，然后：
 
 ```bash
-dsh plugin --profile desktop add ./dsh-session-status-marker-1.2.1.tgz
+dsh plugin --profile desktop add ./dsh-session-status-marker-1.2.2.tgz
 ```
+
+> 下一版的预版本 `1.2.3-rc.2` 已在 Release 页以预发布形式提供（删除了行内重复浮层，行内图标改为直接打开右侧状态卡）。预版本按发布政策等用户实际验收后才转正式版；想提前试用可下载对应的 tgz，或用 `npm install dsh-session-status-marker@rc` 装到 profile 里。
 
 装完核对一下是否生效：
 
@@ -96,7 +98,7 @@ dsh --profile desktop --dump-config   # 输出里应出现 session-status-marker
 ```bash
 pnpm run typecheck     # 类型检查
 pnpm run build         # 编译 Host 与浏览器端产物
-pnpm run test          # 73 项测试
+pnpm run test          # 111 项测试
 pnpm pack              # 打包成 .tgz 压缩包
 ```
 
@@ -106,6 +108,8 @@ pnpm pack              # 打包成 .tgz 压缩包
 
 - [架构设计](https://github.com/sterraMind/dsh-session-status-marker/blob/main/docs/architecture.md)
 - [验收与回归测试](https://github.com/sterraMind/dsh-session-status-marker/blob/main/docs/acceptance-and-regression.md)
+- [版本规划与发布流程](https://github.com/sterraMind/dsh-session-status-marker/blob/main/docs/release-process.md)
+- [参与开发与提交规范](https://github.com/sterraMind/dsh-session-status-marker/blob/main/CONTRIBUTING.md)
 - [项目记忆与经验教训](https://github.com/sterraMind/dsh-session-status-marker/blob/main/docs/project-memory.md)
 - [调研与设计文档总目录](https://github.com/sterraMind/dsh-session-status-marker/tree/main/docs)
 
