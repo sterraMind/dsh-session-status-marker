@@ -28,8 +28,11 @@ function makeTable() {
  * @param {Set<string>} [opts.throwTitles] ids whose title read throws
  * @param {Map<string,string>} [opts.coldTitles] session id -> title from the query engine
  * @param {Array<{id:string,createdAt:number}>} [opts.allSessions] every session the query engine can list
+ * @param {unknown} [opts.rawListSessions] exact value `listSessions` resolves to (for odd Host envelopes)
+ * @param {Array<{id:string,createdAt:number}>} [opts.persisted] headers the persistence service can list
+ * @param {Map<string,string>} [opts.projectionTitles] session id -> folded title in the projection cache
  */
-function makeCtx({ titles = new Map(), throwTitles = new Set(), coldTitles, allSessions } = {}) {
+function makeCtx({ titles = new Map(), throwTitles = new Set(), coldTitles, allSessions, rawListSessions, persisted, projectionTitles } = {}) {
   const table = makeTable()
   const routes = []
   const connection = { fetch: { register: (r) => { routes.push(r); return () => {} } } }
@@ -41,7 +44,7 @@ function makeCtx({ titles = new Map(), throwTitles = new Set(), coldTitles, allS
     },
   }
   let sessionQuery
-  if (coldTitles !== undefined || allSessions !== undefined) {
+  if (coldTitles !== undefined || allSessions !== undefined || rawListSessions !== undefined) {
     sessionQuery = {
       readTitleSnapshots: async (ids) => ids.map((id) => (
         coldTitles !== undefined && coldTitles.has(id)
@@ -51,6 +54,9 @@ function makeCtx({ titles = new Map(), throwTitles = new Set(), coldTitles, allS
     }
     if (allSessions !== undefined) {
       sessionQuery.listSessions = async () => allSessions.map((s) => ({ header: { id: s.id, createdAt: s.createdAt } }))
+    }
+    if (rawListSessions !== undefined) {
+      sessionQuery.listSessions = async () => rawListSessions
     }
   }
   const ctx = {
@@ -66,6 +72,10 @@ function makeCtx({ titles = new Map(), throwTitles = new Set(), coldTitles, allS
     sessionQuery,
     sessions: { list: () => sessions, get: (id) => sessions.find((s) => s.id === id) },
     sessionTitle,
+    sessionPersistence: persisted === undefined ? undefined : { list: async () => persisted.map((p) => ({ header: { id: p.id, createdAt: p.createdAt } })) },
+    sessionProjectionCache: projectionTitles === undefined ? undefined : {
+      cachedSnapshot: (meta) => ({ values: { title: projectionTitles.get(meta.id) } }),
+    },
     effect: (fn) => fn(),
     on: () => {},
     logger: { warn: () => {} },
@@ -79,8 +89,8 @@ function row(sessionId, status, insertedAtMs) {
   return { version: 1, insertedAtMs, seq: 0, sessionId, status, source: 'manual', subjectId: null, autoReason: null, note: null }
 }
 
-async function boot({ titles, throwTitles, coldTitles, allSessions } = {}) {
-  const { ctx, routes, table } = makeCtx({ titles, throwTitles, coldTitles, allSessions })
+async function boot({ titles, throwTitles, coldTitles, allSessions, rawListSessions, persisted, projectionTitles } = {}) {
+  const { ctx, routes, table } = makeCtx({ titles, throwTitles, coldTitles, allSessions, rawListSessions, persisted, projectionTitles })
   const svc = new SessionStatusService(ctx, { ...CONFIG })
   await svc[Service.init]()
   const overviewRoute = routes.find((r) => r.path.endsWith('.overview'))
@@ -186,5 +196,48 @@ describe('overview route', () => {
     await table.put('s1', row('s1', 'todo', 100))
     const data = await callOverview(overviewRoute)
     expect(data.unmarked).toEqual({ count: 0, entries: [] })
+  })
+
+  it('keeps the marked groups when listSessions resolves to a non-array envelope', async () => {
+    // A Host whose cross-corpus list returns an object must not break the board.
+    const { table, overviewRoute } = await boot({ titles: new Map(), coldTitles: new Map(), rawListSessions: { sessions: [] } })
+    await table.put('s1', row('s1', 'todo', 100))
+    const data = await callOverview(overviewRoute)
+    expect(data.totalMarked).toBe(1)
+    expect(data.groups[0].sessionId ?? data.groups[0].entries[0].sessionId).toBe('s1')
+    expect(data.unmarked).toEqual({ count: 0, entries: [] })
+  })
+
+  it('drops list entries without a string header id instead of throwing', async () => {
+    const rawListSessions = [null, {}, { header: {} }, { header: { id: 'u9', createdAt: 1 } }]
+    const coldTitles = new Map([['u9', 'Survivor']])
+    const { table, overviewRoute } = await boot({ titles: new Map(), coldTitles, rawListSessions })
+    await table.put('s1', row('s1', 'todo', 100))
+    const data = await callOverview(overviewRoute)
+    expect(data.unmarked.count).toBe(1)
+    expect(data.unmarked.entries[0].sessionId).toBe('u9')
+    expect(data.unmarked.entries[0].title).toBe('Survivor')
+  })
+
+  it('lists live sessions as unmarked even without a query engine', async () => {
+    // The sidebar shows these live sessions; the board must offer them too.
+    const titles = new Map([['m1', 'Marked live'], ['u1', 'Live unmarked']])
+    const { table, overviewRoute } = await boot({ titles, throwTitles: new Set() })
+    await table.put('m1', row('m1', 'todo', 100))
+    const data = await callOverview(overviewRoute)
+    expect(data.unmarked.count).toBe(1)
+    expect(data.unmarked.entries[0].sessionId).toBe('u1')
+    expect(data.unmarked.entries[0].title).toBe('Live unmarked')
+  })
+
+  it('names a cold session from the projection cache using persisted headers', async () => {
+    const persisted = [{ id: 'c1', createdAt: 500 }]
+    const projectionTitles = new Map([['c1', 'Cold cached title']])
+    const { table, overviewRoute } = await boot({ titles: new Map(), persisted, projectionTitles })
+    await table.put('c1', row('c1', 'done', 100))
+    const data = await callOverview(overviewRoute)
+    expect(data.groups[0].entries[0].title).toBe('Cold cached title')
+    // The same cold session is also offered in the unmarked block? No: it is marked.
+    expect(data.unmarked.count).toBe(0)
   })
 })

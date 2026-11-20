@@ -113,7 +113,9 @@ describe('shared picker contract', () => {
     expect(PICKER).toContain('MARKER_MUTATE_ROUTE')
     expect(PICKER).toContain("action: 'set'")
     expect(PICKER).toContain("source: 'manual'")
-    expect(PICKER).toContain('note: null')
+    // The picked status carries the mark's current note so switching status
+    // never erases a note the user typed earlier.
+    expect(PICKER).toContain('setSessionStatus(sessionId, status, previous?.note ?? null)')
     expect(PICKER).toContain('subjectId: null')
     expect(PICKER).toContain('publishLocalMark(sessionId')
   })

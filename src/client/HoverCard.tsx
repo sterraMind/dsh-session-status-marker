@@ -24,7 +24,7 @@ import type { SyntheticEvent } from 'react'
 import css from './hover.module.css'
 import type { PropsRuntime, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
-import { STATUS_VALUES, STATUS_META, MARKER_MUTATE_ROUTE } from '../contracts.js'
+import { STATUS_VALUES, STATUS_META, MARKER_MUTATE_ROUTE, DEFAULT_MAX_NOTE_LENGTH } from '../contracts.js'
 import type { MarkRecord, StatusEnum } from '../contracts.js'
 import { NS } from './locales.js'
 import { ICONS } from './icons.js'
@@ -44,17 +44,30 @@ async function postMutate(body: unknown): Promise<unknown> {
   return resp.json()
 }
 
+/** Trim a note and collapse an empty result to null, matching the Host schema. */
+function normalizeNote(note: string): string | null {
+  const trimmed = note.trim()
+  return trimmed.length === 0 ? null : trimmed
+}
+
 export function SessionStatusHover({ sessionId, t }: HoverProps) {
   useCardCopyGuard()
   const { mark, loading } = useMark(sessionId)
   const [error, setError] = useState<string | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [busy, setBusy] = useState(false)
 
-  async function handleSet(status: StatusEnum, note: string | null = null) {
+  async function handleSet(status: StatusEnum, note: string | null) {
+    setBusy(true)
     try {
       const res = await postMutate({ action: 'set', sessionId, status, source: 'manual', note, subjectId: null }) as { mark: MarkRecord | null }
       publishLocalMark(sessionId, res.mark ?? null)
+      setEditing(false)
     } catch {
       setError(t('hover.error'))
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -65,6 +78,20 @@ export function SessionStatusHover({ sessionId, t }: HoverProps) {
     } catch {
       setError(t('hover.error'))
     }
+  }
+
+  function startEdit() {
+    setDraft(mark?.note ?? '')
+    setEditing(true)
+  }
+
+  function cancelEdit() {
+    setEditing(false)
+    setDraft('')
+  }
+
+  async function saveNote() {
+    await handleSet(mark?.status ?? 'todo', normalizeNote(draft))
   }
 
   /** Stop pointer and keyboard events from reaching the card's copy handler. */
@@ -85,6 +112,8 @@ export function SessionStatusHover({ sessionId, t }: HoverProps) {
   // the user open a picker first added a step to every change; showing the cells
   // directly lets one click switch status, and the active cell marks the current
   // one. The heading below doubles as the label the change button used to carry.
+  // Clicking a cell keeps whatever note the mark already carries, so switching
+  // status never silently drops the user's note.
   return (
     <div className={css.root} data-mark={mark ? 'present' : 'absent'} {...slotAnchor} {...guard}>
       <div className={css.label}>
@@ -96,7 +125,7 @@ export function SessionStatusHover({ sessionId, t }: HoverProps) {
               ? t('hover.agent', { status: t(meta!.labelKey) })
               : t('hover.manual', { status: t(meta!.labelKey) })}
       </div>
-      {mark?.note && <div className={css.note}>{t('hover.note', { note: mark.note.slice(0, 64) })}</div>}
+      {mark?.note && !editing && <div className={css.note}>{t('hover.note', { note: mark.note.slice(0, 64) })}</div>}
       <div className={css.grid}>
         {STATUS_VALUES.map((s) => {
           const m = STATUS_META[s]
@@ -109,14 +138,37 @@ export function SessionStatusHover({ sessionId, t }: HoverProps) {
               aria-label={t(m.labelKey)}
               aria-pressed={active}
               style={{ color: m.hoverTone }}
-              onClick={() => { void handleSet(s, null) }}
+              onClick={() => { void handleSet(s, mark?.note ?? null) }}
             >
               <span className={css.iconCell} dangerouslySetInnerHTML={{ __html: ICONS[m.icon] ?? '' }} />
             </button>
           )
         })}
       </div>
-      {mark && <div className={css.actions}><button className={css.clearBtn} onClick={() => void handleClear()}>{t('hover.clearBtn')}</button></div>}
+      {editing && (
+        <div className={css.noteEditor}>
+          <input
+            className={css.noteInput}
+            value={draft}
+            maxLength={DEFAULT_MAX_NOTE_LENGTH}
+            autoFocus
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              stop(event)
+              if (event.key === 'Enter') void saveNote()
+              if (event.key === 'Escape') cancelEdit()
+            }}
+          />
+          <button className={css.saveBtn} disabled={busy} onClick={() => void saveNote()}>{t('hover.noteSave')}</button>
+          <button className={css.cancelBtn} disabled={busy} onClick={cancelEdit}>{t('hover.noteCancel')}</button>
+        </div>
+      )}
+      {mark && (
+        <div className={css.actions}>
+          {!editing && <button className={css.editBtn} disabled={busy} onClick={startEdit}>{t('hover.noteEdit')}</button>}
+          <button className={css.clearBtn} onClick={() => void handleClear()}>{t('hover.clearBtn')}</button>
+        </div>
+      )}
     </div>
   )
 }
