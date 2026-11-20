@@ -2,6 +2,32 @@
 
 本文件记录 `dsh-session-status-marker` 的对外可见变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.2.3-rc.2] - 2026-11-20
+
+针对用户 2026-11-20 反馈的「点击行内图标后还是会出现下面一排，这一排要删掉，点击图标应该出现右侧浮窗」发布预版本（按发布政策，正式版本需用户实际验收后发布）。
+
+### 变更
+
+- **删除行内自建浮层，行内图标只负责打开宿主悬停卡**：会话行右侧那个 24×24 状态图标不再拥有自己的面板，点击它改为让宿主悬停卡出现，一条行上只有一个浮层。
+  - 原因一：宿主在 `@media (hover: none)` 下把我们的行内插槽隐藏（`Rows.module.css:340-359` 的 `.rowQuickActions > [data-slot] > :not(.pinnedAction)`，而 `pinnedAction` 是宿主内部哈希类，插件拿不到），触屏本来就看不到这个图标，1.2.2 的行内面板实际只在桌面出现、与悬停卡重复。触屏入口仍然是会话菜单里的「设置状态」。
+  - 原因二：官方 `HoverCard` 没有受控 open 属性，但卡根元素监听 `onPointerEnter`（`HoverCard.tsx:326-336`），React 由原生 `pointerover` 合成该事件。所以点击时向所在行派发一个 `pointerover`（`pointerType: 'mouse'`、`bubbles`/`cancelable`/`composed`、`pointerId: 1`、`isPrimary: true`、`relatedTarget: null`）即可让宿主自己打开卡片。
+  - 实现：`src/client/RowAction.tsx` 的 `useRowCardTrigger()` 在 `document` 上以 capture 阶段注册 `pointerdown` 与 `click`，命中 `[data-status-action]` 时 `stopPropagation()`，`click` 时调 `openRowCard()` 派发 `pointerover`。必须绑在 `document`：React 合成事件监听在根容器元素上，绑在按钮自身拦不住宿主的 `onPointerDownCapture`/`onClickCapture`（卡片已开时会被关掉）与整卡复制。`src/client/action.module.css` 删除 `.popover` 整段样式，展开时的图标配色只保留 `:hover`。
+- **新增发布与协作规范文档**：`docs/release-process.md`（语义化版本、`-rc.N` 递增、dist-tag 策略、GitHub Release、标签、CHANGELOG、分支与发布检查、发布门槛、回退与弃用）、`CONTRIBUTING.md`（环境、命令、代码风格、提交规范、合并请求评审、智能体协作要求、禁止事项），以及两份调研 `docs/research/10-release-and-versioning.md`、`docs/research/11-agent-team-practices.md`。
+- **AGENTS.md 增两条规范**：Standing Order 1 增「搜索时把问题拆成原子化关键词再检索（`research` 除外），避开内容农场与云厂商营销站」；新增 Standing Order 8「智能体团队原子化拆解」，规定派发单必写输入、产出、验收判据、写入范围白名单、时间预算五项，共享文件由主会话独占，子代理完成后主会话必须逐条复核并自己跑测试，产物 10 分钟无改动先询问、30 分钟无改动中断接手。
+
+### 验证
+
+- 111 项测试全绿（27 套件）。
+- dev4090（DSH 0.2.2-rc.3）真实页面复核（CDP）：点击行内图标后 822ms 悬停卡打开（822ms 是宿主自己的 800ms 停留计时，与鼠标悬停同一延迟）、`popover: 0` 只有一个浮层、`copied: false`、再点一次图标卡片不会被关掉、点卡片标题与卡底空白均 `copied: false`。截图 `.drafts/shots/v123rc2-row.png`。
+
+### 发布
+
+- GitHub Release v1.2.3-rc.2（prerelease 标记）附 tgz（82,987 B）；npm 以 `--tag rc` 发布，`latest` 保持 1.2.2 不动。
+
+### 已知限制
+
+- 第三方插件市场 `dshmarket` 的已装列表描述只读包 `package.json` 的字符串 `description`，不读 `locale/*.json`，仓库内无法改变那一页的显示语言。官方「插件」页读包内 locale 元数据，我们的 8 种语言文件在那里生效。
+
 ## [1.2.3-rc.1] - 2026-11-20
 
 针对用户 2026-11-20 反馈的三个问题发布预版本（按发布政策：正式版本需用户实际验收后发布，此前只能发预版本）。

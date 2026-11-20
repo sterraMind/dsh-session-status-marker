@@ -1,6 +1,6 @@
 # Acceptance & Regression
 
-> **文档版本**：v1.2.3-rc.1 · 2026-11-20（对应插件 1.2.3-rc.1）
+> **文档版本**：v1.2.3-rc.2 · 2026-11-20（对应插件 1.2.3-rc.2）
 
 > 记录验收标准、已通过证据、待执行集成 smoke 与回归清单。
 > 对应实现进度见 `docs/implementation-plan.md` §2，风险优先级见 `docs/feasibility-and-risks.md`。
@@ -17,8 +17,8 @@
 | Service 集成测试 | `tests/service.test.mjs` | 20 项全绿 |
 | 行操作 / 菜单入口 / 共享状态选择器 | `tests/action.test.mjs` | 12 项全绿 |
 | i18n / 图标 / 样式契约 | `tests/i18n.test.mjs`、`tests/theme.test.mjs` | i18n 11 项 + theme 11 项全绿 |
-| `pnpm run test` | `tests 95 / suites 23 / pass 95 / fail 0`（目录形式 `node --test tests/` 在 Node 26 下另计入 4 个 `.test.ts` 薄壳，报告 99/23，同一批断言） |
-| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.2.0.tgz`（70,350 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md`；`docs/` 与截图不入包 |
+| `pnpm run test` | `tests 111 / suites 27 / pass 111 / fail 0`（目录形式 `node --test tests/` 在 Node 26 下另计入 4 个 `.test.ts` 薄壳，同一批断言） |
+| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.2.3-rc.2.tgz`（82,987 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md`；`docs/` 与截图不入包 |
 | 真实装载 | `dsh plugin --profile smoke add <tgz>`（dev4090） | profile 初始化成功并安装插件，详见 §3 |
 | **前端视觉与交互** | 真实 GUI 上操作（dev4090 + CDP） | sidebar 行尾标记、hover card、状态改写/清除、跨进程持久化全部实测通过，见 §3.4 与 §4 |
 
@@ -36,8 +36,10 @@
 | `tests/theme.test.mjs` | 11 | 零字面颜色、inline glyph 盒、active 格不重设 color、badge 尺寸、`:has([data-status-slot])` 整卡覆盖宿主（同时覆盖 `--dsw-alias-hovercard-bg` 与 `--dsw-hovercard-bg`）、面板与状态色用主题别名、hover/active 用 interactive 令牌、桥接命中区、8 格盒尺寸、总览页主题别名 |
 | `tests/marks.test.mjs` | 9 | 共享读取器：快照分发、本地写透、消失会话分发 `null`、采纳 Host 读取间隔、读取失败保留上次、`?since` + host 判 unchanged 时跳过 publish、读取失败保留 revision、晚加入会话全量读取、可见性恢复强制全量读取 |
 | `tests/overview.test.mjs` | 5 | overview route：分组排序、仅非空组、标题关联、`sessionTitle` 缺失/抛错回退 null、空态 |
-| `tests/action.test.mjs` | 12 | 行操作/菜单项 slot 注册（id、order 300、排在官方 archive/pin 之后）、行按钮接共享选择器并 stopPropagation、菜单项用 owner menu hook + `role=menuitem`、共享选择器契约（8×22px 单行、主题令牌、POST 既有 route）、bundle 表与 8 语言字典键、默认 order + 页面全局读取回退、profile 配置暴露 |
-| **合计** | **95** | suites 23 / pass 95 / fail 0 |
+| `tests/action.test.mjs` | 13 | 行操作/菜单项 slot 注册（id、order 300、排在官方 archive/pin 之后）、行按钮只负责打开宿主悬停卡并 stopPropagation、菜单项用 owner menu hook + `role=menuitem`、共享选择器契约（8×22px 单行、主题令牌、POST 既有 route）、bundle 表与 8 语言字典键、默认 order + 页面全局读取回退、profile 配置暴露 |
+| `tests/copy-guard.test.mjs` | 9 | 整卡防复制守卫（document capture 注册与移除、`stopPropagation` 且不 `preventDefault`、keydown 只拦 Enter/Space、`:has` 作用域限定、交互元素不拦、HoverCard 挂载）+ 行内图标只开宿主悬停卡（不含 popover/StatusPicker、`pointerover` 重放、document capture 拦 pointerdown 与 click） |
+| `tests/touch-icon.test.mjs` | 6 | 插件页图标 36×36 填充渐变且无 `currentColor`、菜单项官方字号与 14px 图标列、菜单项与状态选择器接线、CSS 只用主题令牌 |
+| **合计** | **111** | suites 27 / pass 111 / fail 0 |
 
 ## 3. 真实集成验证（dev4090，已执行）
 
@@ -267,7 +269,9 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 - `tests/smoke.test.mjs` — 端到端单 session 推理链路：fake context → `[Service.init]()` → fire `turn/end:interrupted` → 断言 `effectiveMark()` 与 registered `GET state` route 均返回同一持久化行；neutral event 不改写。
 - `tests/i18n.test.mjs` — 契约一致性：每个 status 有 metadata、`tone` 指向 `--dsw-alias-state-*`、AUTO_REASON 非空、MARK_SOURCES = ['manual','auto']、DEFAULT_MAX_NOTE_LENGTH 正整数。
 
-### 更新后的测试分布
+### 更新后的测试分布（Phase 2 时点快照）
+
+> 当前权威用例数见 §2（111 项 / 27 套件）。下表是 Phase 2 收尾时的快照，后续版本新增的 `tests/copy-guard.test.mjs`（9）与 `tests/touch-icon.test.mjs`（6）未列入。
 | 文件 | 用例数 | 覆盖点 |
 |---|---|---|
 | `tests/inference.test.mjs` | 17 | `inferStatus` 全部规则分支 + `shouldApplyInference` 三态 + `isAutoMarkExpired` 三态 |
@@ -379,3 +383,22 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 | 截图 | `.drafts/shots/v123-card-guard.png`（浅色卡+摘要/备注/格）、`v123-panel-light.png`（行内面板局部）、`v123-dark-card.png`（深色整卡），均已目检 |
 
 发布：111 项测试全绿（27 套件，新增 `tests/copy-guard.test.mjs` 9 例），tgz 81,880 B；提交 `586bbb9`（fix）+ tag `v1.2.3-rc.1`；GitHub Release **prerelease** 标记附 tgz；npm `--tag rc` 发布，`latest` 保持 1.2.2。发布政策（用户 2026-11-20 指定）：正式版本需用户实际前端验收通过后发布，此前只能发预版本。npm 对预发布版本强制要求显式 `--tag`（缺省报错退出）。
+
+### 3.21 1.2.3-rc.2 删除行内浮层，行内图标改为打开宿主悬停卡（2026-11-20）
+
+用户在 1.2.3-rc.1 上反馈「点击图标还是有下面一排，这一排删掉，点击图标出现右侧浮层」。1.2.3-rc.2（预版本）删除行内自建面板，行内 24×24 状态图标改为打开宿主悬停卡，并在 dev4090（DSH 0.2.2-rc.3）真实页面复核：
+
+| 验收项 | 结果 |
+|---|---|
+| 行内图标 | `getBoundingClientRect()` = 24×24、`textContent` 为空（纯图标，无「状态」文字），位置 (253,312) |
+| 点击后只有一个浮层 | 点击后 822ms 悬停卡打开：`{open:true, popover:0, copied:false, cells:8, x:280, y:296, w:244, h:222, bg:"rgb(255,255,255)"}` —— 行内不再出现第二排图标。822ms 是宿主自己的 800ms 停留计时（点击重放 `pointerover` 会重新起计时），与鼠标悬停同一延迟 |
+| 再点图标 | 卡片保持打开，`copied:false`，`popover:0`（不会把卡关掉、也不会开第二个面板） |
+| 卡内空白点击 | 点标题行与卡底部空白均 `copied:false`，卡片保持打开（1.2.3-rc.1 的整卡防复制守卫继续生效） |
+| 实现校验 | 远程 `lib/client.js`（85,780 B）含 `data-status-action`、`pointerover`、copyGuard，不含 `popover`；`profiles/smoke` bundles 为 `@deepseek-ai/dsh-base,@deepseek-ai/dsh-web-app,dsh-session-status-marker` |
+| 截图 | `.drafts/shots/v123rc2-row.png`（1600×900，浅色白卡 + 标题 + 路径 + 8d ago + Manual: Blocked + Note 行 + 8 格 + Clear + Idle，侧栏行末只有一个状态图标），已目检 |
+
+删掉行内面板不影响触屏可达性：宿主在 `@media (hover: none)` 下会隐藏我们的行内插槽（`Rows.module.css:340-359` 的 `.rowQuickActions > [data-slot] > :not(.pinnedAction)`，`pinnedAction` 是宿主内部哈希类），触屏入口一直是会话菜单里的「设置状态」。
+
+同轮新增 `docs/release-process.md`、`CONTRIBUTING.md`、`docs/research/10-release-and-versioning.md`、`docs/research/11-agent-team-practices.md`，并在 `AGENTS.md` 增补「搜索关键词原子化 + 避开内容农场」与「智能体团队原子化拆解」两条 Standing Order。
+
+市场页语言的结论（写入 CHANGELOG 已知限制）：用户看到的「插件市场」是第三方 `dshmarket@1.73.20`，其已装列表描述只读包 `package.json` 的字符串 `description`（`dshmarket/lib/routes.js:3533-3542` + `client/client.js:15196-15203`），不读 `locale/*.json`；官方「插件」页（`ui-plugin-manager`）才读包内 locale 元数据，我们的 8 语言文件在那里生效。
