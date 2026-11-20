@@ -2,6 +2,24 @@
 
 本文件记录 `dsh-session-status-marker` 的对外可见变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.2.2] - 2026-11-20
+
+修复用户在 1.2.1 上反馈的四个交互问题：行内入口是文字按钮而非图标、点开后是行内展开一排按钮而非浮窗、面板里看不到备注、点击仍会触发整卡复制。
+
+### 修复
+
+- **行内入口改图标按钮**：`RowAction` 的触发按钮从 22×18 的「状态」文字按钮改为官方 iconButton 规格（24×24、`margin:-4px`、无边框、`--dsw-radius-xs`），内容是随当前状态变化的状态图标（未标记时显示清单图标），不再有文字（`Rows.module.css:453-470` 的官方按钮规格）。
+- **行内面板改浮窗**：点开后的面板从行内下方展开的一排格子改为卡片式浮窗（214px 宽、`--dsw-alias-bg-layer-2` 表面、`--dsw-radius-lg` 圆角、大阴影），与悬停卡同构。
+- **浮窗补备注与清除**：`StatusPicker` 新增 `showSummary`，渲染与悬停卡一致的摘要行（`hover.loading`/`hover.empty`/`hover.auto`/`hover.manual`）、备注行（`hover.note`，截断 64 字符）与「清除」按钮；触屏设备（悬停卡不可达，`HoverCard.tsx:326-327` 忽略 touch 指针）由此也能看到备注并清除标记。新增 `clearSessionStatus` 导出。
+- **菜单项补图标与官方字号**：`MenuStatusItem` 的「设置状态」入口补 14px 前置图标（随当前状态变化），按钮规格对齐官方菜单 `.item`（`min-height:34px`、`padding:6px 8px`、`gap:6px`、13px/20px 字号），图标颜色用 `--dsw-alias-menu-icon`。
+- **插件页图标改填充渐变**：`icon.svg` 从 16px `currentColor` 空心勾改为 36×36 填充渐变（蓝紫渐变圆角方块 + 白色勾），浅色背景下不再显示为黑色勾；对齐官方 `auto-review`/`badge-skill-bundle` 的图标范式。
+
+### 验证
+
+- 102 项测试全绿（25 套件，新增 `tests/touch-icon.test.mjs` 6 例）。
+- dev4090（DSH 0.2.2-rc.3）真实页面复核：触发按钮 24×24/16px svg/无文字；浮窗 214×91、8 格单行、白底圆角阴影；摘要行「Manual: Done/Blocked」、备注行「Note: 需要等待上游接口确认后再继续」、清除按钮齐全；浅色与深色主题表面/文字/状态色均随主题切换；点面板文本区与状态格均不触发整卡复制；触屏模拟（hover:none）下面板可达；点击状态格写入成功且面板收起。
+- 「已复制」回归的桌面端个案：v1.2.1 的 `HoverCard.tsx` guard 代码与 1.2.2 相同（`git show v1.2.1:src/client/HoverCard.tsx` 核对），复发根因是桌面端激活层未更新（旧 client.js 残留），不是 1.2.1 代码缺陷；重装后已消失。
+
 ## [1.2.1] - 2026-11-19
 
 修复 DSH 预发布版（0.2.2-rc.x）无法从插件市场安装 1.2.0 的问题。
