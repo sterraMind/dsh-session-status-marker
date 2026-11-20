@@ -217,6 +217,22 @@ export class SessionStatusService extends Service {
   #headerCache = new Map<string, { readonly id: SessionId; readonly createdAt: number }>()
   #headerCacheAt = 0
 
+  /**
+   * Read an optional Host service without declaring it in `static inject`.
+   *
+   * The context proxy only exposes services listed in `inject`; reading an
+   * optional one through the reflection layer keeps the plugin loadable on
+   * Hosts that do not mount it, instead of failing activation for the whole
+   * bundle. Returns `undefined` when the service is absent or its getter throws.
+   */
+  #optionalService<T>(name: string): T | undefined {
+    try {
+      return (this.ctx.reflect.get(name) as T | undefined) ?? undefined
+    } catch {
+      return undefined
+    }
+  }
+
   constructor(ctx: Context, public readonly config: Config) {
     super(ctx, 'sessionStatus')
   }
@@ -519,7 +535,7 @@ export class SessionStatusService extends Service {
       return hit === undefined || now - hit.at > 10_000
     })
     if (stale.length > 0) {
-      const query = this.ctx.sessionQuery
+      const query = this.#optionalService<SessionQueryLike>('sessionQuery')
       if (query !== undefined && typeof query.readTitleSnapshots === 'function') {
         try {
           const results: unknown = await query.readTitleSnapshots(stale)
@@ -550,7 +566,7 @@ export class SessionStatusService extends Service {
   async #persistedHeaders(): Promise<Map<string, { readonly id: SessionId; readonly createdAt: number }>> {
     const now = Date.now()
     if (now - this.#headerCacheAt < 10_000) return this.#headerCache
-    const persistence = this.ctx.sessionPersistence
+    const persistence = this.#optionalService<SessionPersistenceLike>('sessionPersistence')
     if (persistence === undefined || typeof persistence.list !== 'function') return this.#headerCache
     try {
       const snapshots: unknown = await persistence.list()
@@ -575,7 +591,7 @@ export class SessionStatusService extends Service {
     headers: ReadonlyMap<string, { readonly id: SessionId }>,
   ): Map<string, string> {
     const out = new Map<string, string>()
-    const cache = this.ctx.sessionProjectionCache
+    const cache = this.#optionalService<SessionProjectionCacheLike>('sessionProjectionCache')
     if (cache === undefined || typeof cache.cachedSnapshot !== 'function') return out
     for (const id of ids) {
       const header = headers.get(id)
@@ -611,9 +627,9 @@ export class SessionStatusService extends Service {
     try {
       for (const [, header] of await this.#persistedHeaders()) add(header.id, header.createdAt)
     } catch { /* persistence unavailable */ }
-    const query = this.ctx.sessionQuery as
-      | (SessionQueryLike & { listSessions?: (signal?: AbortSignal) => Promise<unknown> })
-      | undefined
+    const query = this.#optionalService<
+      SessionQueryLike & { listSessions?: (signal?: AbortSignal) => Promise<unknown> }
+    >('sessionQuery')
     if (query !== undefined && typeof query.listSessions === 'function') {
       try {
         const raw: unknown = await query.listSessions()

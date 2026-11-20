@@ -1,6 +1,6 @@
 # Acceptance & Regression
 
-> **文档版本**：v1.3.0-rc.2 · 2026-11-20（对应插件 1.3.0-rc.2）
+> **文档版本**：v1.3.0-rc.3 · 2026-11-20（对应插件 1.3.0-rc.3）
 
 > 记录验收标准、已通过证据、待执行集成 smoke 与回归清单。
 > 对应实现进度见 `docs/implementation-plan.md` §2，风险优先级见 `docs/feasibility-and-risks.md`。
@@ -19,7 +19,7 @@
 | 备注编辑 | `tests/note-input.test.mjs` | 9 项全绿（含悬停卡备注编辑器与换状态保留备注） |
 | i18n / 图标 / 样式契约 | `tests/i18n.test.mjs`、`tests/theme.test.mjs` | i18n 12 项 + theme 11 项全绿 |
 | `pnpm run test` | `tests 130 / suites 30 / pass 130 / fail 0`（目录形式 `node --test tests/` 在 Node 26 下另计入 4 个 `.test.ts` 薄壳，同一批断言） |
-| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.3.0-rc.2.tgz`（98,388 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md`；`docs/` 与截图不入包 |
+| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.3.0-rc.3.tgz`（98,666 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md`；`docs/` 与截图不入包 |
 | 真实装载 | `dsh plugin --profile smoke add <tgz>`（dev4090） | profile 初始化成功并安装插件，详见 §3 |
 | **前端视觉与交互** | 真实 GUI 上操作（dev4090 + CDP） | sidebar 行尾标记、hover card、状态改写/清除、跨进程持久化全部实测通过，见 §3.4 与 §4 |
 
@@ -417,3 +417,17 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 | 打包 | `pnpm pack` → `dsh-session-status-marker-1.2.3.tgz` 83,281 B |
 | 用户验收 | 用户原话「这个版本验收通过 可以派上线了」（2026-11-20），验收对象即 `1.2.3-rc.2` 的真实桌面端行为：单一浮层、点行内图标打开右侧悬停卡、卡内空白点击不再出现「已复制」 |
 | 发布 | GitHub Release v1.2.3（正式版，非 prerelease）附 tgz；npm `latest` 指向 `1.2.3`，`rc` 标签保留 `1.2.3-rc.2` |
+
+### 3.23 1.3.0-rc.3 看板标题与未标记会话修复（2026-11-20）
+
+rc.2 在 dev4090 真实页面上暴露两个缺陷：看板所有条目标题显示「未命名会话」、未标记会话区块计数为 0。根因是 cordis 的 context 代理只暴露 `static inject` 里声明过的服务，直接读 `this.ctx.sessionQuery` 这类未声明属性得到 `undefined` 且不抛错。修复改为经 `ctx.reflect.get(name)` 取值并收敛到 `#optionalService`。
+
+| 验收项 | 结果 |
+|---|---|
+| 类型检查与构建 | `pnpm run typecheck` exit 0、`pnpm run build` exit 0（`built lib/client.js`） |
+| 单元测试 | `tests 130 / suites 30 / pass 130 / fail 0` |
+| 打包与部署 | `pnpm pack` → `1.3.0-rc.3.tgz` 98,666 B；dev4090 全新安装（remove → allow-version → add），远程 `lib/client.js` 103,893 B，含 `reflect.get` 与 `optionalService`，bundles 三件套正确 |
+| `overview` 路由 | 页面内 `fetch('/api/session-status-marker.overview')` → 200，1684 B；`totalMarked=4`、`unmarked.count=7`、`refreshIntervalMs=2000` |
+| 看板标题 | 已标记 4 条中 3 条显示真实标题（`Todo Write Tool Test`、`回复 OK 测试`、`Mark session status for review`），1 条 `smoke-session-1` 无标题投影显示「未命名会话」 |
+| 未标记区块 | 7 条候选，其中 5 条真实标题（`标记会话为完成`、`写入两条待办并标记会话状态`、`回复 OK`、`Reply with the single word` ×2），2 条无标题投影 |
+| 截图 | `.drafts/shots/v130d-overview.png`（1576×861，设置页「会话状态总览」：待办 2 / 审查中 2 / 未标记会话 7），已目检 |

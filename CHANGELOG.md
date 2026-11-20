@@ -2,6 +2,22 @@
 
 本文件记录 `dsh-session-status-marker` 的对外可见变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.3.0-rc.3] - 2026-11-20
+
+预版本（按发布政策，正式版本需用户实际前端验收通过后再发布）。这一版修掉 rc.2 在真实页面上暴露的两个缺陷：看板条目标题全部显示「未命名会话」、未标记会话区块计数为 0。
+
+### 修复
+
+- **可选服务读取方式错误**：rc.2 直接读 `this.ctx.sessionQuery` / `this.ctx.sessionPersistence` / `this.ctx.sessionProjectionCache`，而 cordis 的 context 代理只暴露 `static inject` 里声明过的服务，未声明的属性读到的是 `undefined` 且不抛错，于是冷会话标题与未标记候选三路全空。改为经 `ctx.reflect.get(name)` 取（官方 JSDoc 写明「Read a service from the store without the inject requirement」），并统一收敛到私有方法 `#optionalService`，取值失败返回 `undefined`。
+- 修复后看板已标记条目的标题能命中内存会话标题、session-query 投影、session-projection-cache 投影三条来源；未标记区块恢复候选。
+
+### 变更
+
+- 三条来源都不命中的条目保持 `null` 标题（这些会话本身没有标题投影，属数据事实），界面按「未命名会话」呈现。
+
+### 测试
+
+`130` 项测试、`30` 个套件全部通过（`overview` 的假上下文改为同时挂 `reflect.get` 与 `get`）。
 ## [1.3.0-rc.2] - 2026-11-20
 
 预版本（按发布政策，正式版本需用户实际前端验收通过后再发布）。这一版修掉 rc.1 在真实页面上暴露的三处问题，并把「未标记会话」的数据来源扩到多路。

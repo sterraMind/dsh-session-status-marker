@@ -59,9 +59,20 @@ function makeCtx({ titles = new Map(), throwTitles = new Set(), coldTitles, allS
       sessionQuery.listSessions = async () => rawListSessions
     }
   }
+  const sessionPersistence = persisted === undefined ? undefined : { list: async () => persisted.map((p) => ({ header: { id: p.id, createdAt: p.createdAt } })) }
+  const sessionProjectionCache = projectionTitles === undefined ? undefined : {
+    cachedSnapshot: (meta) => ({ values: { title: projectionTitles.get(meta.id) } }),
+  }
+  const optionalService = (name) => {
+    if (name === 'sessionQuery') return sessionQuery
+    if (name === 'sessionPersistence') return sessionPersistence
+    if (name === 'sessionProjectionCache') return sessionProjectionCache
+    if (name === 'connection') return connection
+    return undefined
+  }
   const ctx = {
-    reflect: { provide: () => {} },
-    get: (name) => (name === 'connection' ? connection : name === 'sessionQuery' ? sessionQuery : undefined),
+    reflect: { provide: () => {}, get: optionalService },
+    get: optionalService,
     inject: (deps, callback) => {
       if (deps.includes('connection') && connection === undefined) return
       callback({ ...ctx, connection, effect: (fn) => fn() })
@@ -72,10 +83,8 @@ function makeCtx({ titles = new Map(), throwTitles = new Set(), coldTitles, allS
     sessionQuery,
     sessions: { list: () => sessions, get: (id) => sessions.find((s) => s.id === id) },
     sessionTitle,
-    sessionPersistence: persisted === undefined ? undefined : { list: async () => persisted.map((p) => ({ header: { id: p.id, createdAt: p.createdAt } })) },
-    sessionProjectionCache: projectionTitles === undefined ? undefined : {
-      cachedSnapshot: (meta) => ({ values: { title: projectionTitles.get(meta.id) } }),
-    },
+    sessionPersistence,
+    sessionProjectionCache,
     effect: (fn) => fn(),
     on: () => {},
     logger: { warn: () => {} },

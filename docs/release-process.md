@@ -292,6 +292,7 @@ npm 走暂存发布流程，命令输出 `+ name@version` 只代表请求被接�
 
 1.2.3 已于 2026-11-20 转为正式版：用户在桌面端验收 `1.2.3-rc.2` 后确认通过（验收记录见 `docs/acceptance-and-regression.md` §3.22），`package.json` 版本、git 标签 `v1.2.3`、GitHub Release 452333466（非 prerelease，附 83,281 B 的 tgz）、npm `latest` 四者一致；`rc` 标签继续指向 `1.2.3-rc.2` 供追溯。
 
+1.3.0 预版本序列（2026-11-20）：`1.3.0-rc.1`（122 项测试 / tgz 93,874 B）→ `1.3.0-rc.2`（130 项 / tgz 98,388 B，修看板空 400、悬停卡备注编辑、换状态保留备注）→ `1.3.0-rc.3`（130 项 / tgz 98,666 B，修看板标题与未标记区块：未 inject 的服务改经 `ctx.reflect.get` 读取）。三者都只发预版本，GitHub Release 勾 prerelease、npm 用 `--tag rc`，`latest` 保持 `1.2.3`。用户在实际前端验收通过后再把当前 rc 转正式版 `1.3.0`。
 ### 10.3 已知的待办事项
 
 - `.github` 目录尚不存在，Issue 模板与 Pull Request 模板属于待创建项。
