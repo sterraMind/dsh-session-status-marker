@@ -1,6 +1,6 @@
 # Acceptance & Regression
 
-> **文档版本**：v1.2.3-rc.2 · 2026-11-20（对应插件 1.2.3-rc.2）
+> **文档版本**：v1.2.3 · 2026-11-20（对应插件 1.2.3）
 
 > 记录验收标准、已通过证据、待执行集成 smoke 与回归清单。
 > 对应实现进度见 `docs/implementation-plan.md` §2，风险优先级见 `docs/feasibility-and-risks.md`。
@@ -18,7 +18,7 @@
 | 行操作 / 菜单入口 / 共享状态选择器 | `tests/action.test.mjs` | 12 项全绿 |
 | i18n / 图标 / 样式契约 | `tests/i18n.test.mjs`、`tests/theme.test.mjs` | i18n 11 项 + theme 11 项全绿 |
 | `pnpm run test` | `tests 111 / suites 27 / pass 111 / fail 0`（目录形式 `node --test tests/` 在 Node 26 下另计入 4 个 `.test.ts` 薄壳，同一批断言） |
-| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.2.3-rc.2.tgz`（82,987 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md`；`docs/` 与截图不入包 |
+| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.2.3.tgz`（83,281 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md`；`docs/` 与截图不入包 |
 | 真实装载 | `dsh plugin --profile smoke add <tgz>`（dev4090） | profile 初始化成功并安装插件，详见 §3 |
 | **前端视觉与交互** | 真实 GUI 上操作（dev4090 + CDP） | sidebar 行尾标记、hover card、状态改写/清除、跨进程持久化全部实测通过，见 §3.4 与 §4 |
 
@@ -402,3 +402,16 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 同轮新增 `docs/release-process.md`、`CONTRIBUTING.md`、`docs/research/10-release-and-versioning.md`、`docs/research/11-agent-team-practices.md`，并在 `AGENTS.md` 增补「搜索关键词原子化 + 避开内容农场」与「智能体团队原子化拆解」两条 Standing Order。
 
 市场页语言的结论（写入 CHANGELOG 已知限制）：用户看到的「插件市场」是第三方 `dshmarket@1.73.20`，其已装列表描述只读包 `package.json` 的字符串 `description`（`dshmarket/lib/routes.js:3533-3542` + `client/client.js:15196-15203`），不读 `locale/*.json`；官方「插件」页（`ui-plugin-manager`）才读包内 locale 元数据，我们的 8 语言文件在那里生效。
+
+### 3.22 1.2.3 正式版转正（2026-11-20）
+
+用户在 2026-11-20 于桌面端（DSH 0.2.2-rc.3）验收 `1.2.3-rc.2` 后确认「这个版本验收通过」，按发布政策（正式版本必须在用户实际前端验收通过之后发布）把 `1.2.3-rc.2` 转为正式版 `1.2.3`，代码与 `1.2.3-rc.2` 完全一致，只有版本号、`CHANGELOG` 段落与安装说明变化。
+
+| 验收项 | 结果 |
+|---|---|
+| 版本号 | `package.json` version = `1.2.3`（`1.2.3-rc.2` 的内容原样转正） |
+| 类型检查与构建 | `pnpm run typecheck` exit 0、`pnpm run build` exit 0（`built lib/client.js`） |
+| 单元测试 | `tests 111 / suites 27 / pass 111 / fail 0` |
+| 打包 | `pnpm pack` → `dsh-session-status-marker-1.2.3.tgz` 83,281 B |
+| 用户验收 | 用户原话「这个版本验收通过 可以派上线了」（2026-11-20），验收对象即 `1.2.3-rc.2` 的真实桌面端行为：单一浮层、点行内图标打开右侧悬停卡、卡内空白点击不再出现「已复制」 |
+| 发布 | GitHub Release v1.2.3（正式版，非 prerelease）附 tgz；npm `latest` 指向 `1.2.3`，`rc` 标签保留 `1.2.3-rc.2` |
