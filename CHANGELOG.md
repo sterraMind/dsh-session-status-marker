@@ -2,6 +2,27 @@
 
 本文件记录 `dsh-session-status-marker` 的对外可见变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.2.3] - 2026-11-20
+
+正式版本，内容等于 `1.2.3-rc.2`。用户在 2026-11-20 于真实桌面端完成前端验收并确认「这个版本验收通过」，按发布政策（正式版本必须在用户实际验收通过之后发布）从预版本转为正式版。
+
+### 变更（相对 1.2.2）
+
+- **删除行内自建浮层，行内图标只负责打开宿主悬停卡**：会话行右侧 24×24 状态图标不再拥有自己的面板，点击它让宿主悬停卡出现，一条会话行上只有一个浮层。原因与实现见 `1.2.3-rc.2` 段落。
+- **悬停卡空白点击不再复制会话标题**：`src/client/copyGuard.ts` 在 `document` 上以 capture 阶段拦截「含插件槽位的悬停卡」上、槽位外、非交互元素的 `click` 与 Enter/Space，官方整卡复制处理不再执行；按钮、输入框、链接与文本选择不受影响。见 `1.2.3-rc.1` 段落。
+- **插件元数据补齐 8 种语言**：`locale/{zh,ja,es,fr,de,ru,pt}.json` 提供 `meta.title` / `meta.description`，官方「插件」页在对应语言界面显示本地化名称与描述。
+- **新增发布与协作规范**：`docs/release-process.md`、`CONTRIBUTING.md`、`docs/research/10-release-and-versioning.md`、`docs/research/11-agent-team-practices.md`；`AGENTS.md` 增搜索规范与智能体团队原子化拆解规范。
+
+### 验证
+
+- 111 项测试全绿（27 套件），`pnpm run typecheck` 与 `pnpm run build` 通过。
+- 用户桌面端（DSH 0.2.2-rc.3）实际验收通过：单一浮层、点行内图标打开右侧悬停卡、卡片空白处点击不再出现「已复制」。
+- dev4090 真实页面复核记录见 `docs/acceptance-and-regression.md` §3.20、§3.21。
+
+### 已知限制
+
+- 第三方插件市场 `dshmarket` 的已装列表描述只读包 `package.json` 的字符串 `description`，不读 `locale/*.json`，仓库内无法改变那一页的显示语言。官方「插件」页读包内 locale 元数据，8 种语言在那里生效。
+
 ## [1.2.3-rc.2] - 2026-11-20
 
 针对用户 2026-11-20 反馈的「点击行内图标后还是会出现下面一排，这一排要删掉，点击图标应该出现右侧浮窗」发布预版本（按发布政策，正式版本需用户实际验收后发布）。

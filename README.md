@@ -31,19 +31,19 @@
 
 ## 安装
 
-**从 npm 安装**（当前稳定版 1.2.2）：
+**从 npm 安装**（当前稳定版 1.2.3）：
 
 ```bash
 dsh plugin --profile desktop add dsh-session-status-marker
 ```
 
-**从 GitHub Release 安装**：到 <https://github.com/sterraMind/dsh-session-status-marker/releases> 下载 `dsh-session-status-marker-1.2.2.tgz`，然后：
+**从 GitHub Release 安装**：到 <https://github.com/sterraMind/dsh-session-status-marker/releases> 下载 `dsh-session-status-marker-1.2.3.tgz`，然后：
 
 ```bash
-dsh plugin --profile desktop add ./dsh-session-status-marker-1.2.2.tgz
+dsh plugin --profile desktop add ./dsh-session-status-marker-1.2.3.tgz
 ```
 
-> 下一版的预版本 `1.2.3-rc.2` 已在 Release 页以预发布形式提供（删除了行内重复浮层，行内图标改为直接打开右侧状态卡）。预版本按发布政策等用户实际验收后才转正式版；想提前试用可下载对应的 tgz，或用 `npm install dsh-session-status-marker@rc` 装到 profile 里。
+> 桌面端（DSH 0.2.2-rc.3）从旧版本升级时请先 `dsh plugin --profile desktop remove dsh-session-status-marker` 再安装，走全新安装路径才能把插件写入 profile 的启用列表；装完在插件页点「立即启用」。
 
 装完核对一下是否生效：
 
