@@ -1,6 +1,6 @@
 # Acceptance & Regression
 
-> **文档版本**：v1.2.3 · 2026-11-20（对应插件 1.2.3）
+> **文档版本**：v1.3.0-rc.2 · 2026-11-20（对应插件 1.3.0-rc.2）
 
 > 记录验收标准、已通过证据、待执行集成 smoke 与回归清单。
 > 对应实现进度见 `docs/implementation-plan.md` §2，风险优先级见 `docs/feasibility-and-risks.md`。
@@ -15,10 +15,11 @@
 | 纯推理测试 | `node --test --test-isolation=none tests/inference.test.mjs` | 17 项全绿 |
 | Schema 契约测试 | `tests/types.test.mjs` | 9 项全绿 |
 | Service 集成测试 | `tests/service.test.mjs` | 20 项全绿 |
-| 行操作 / 菜单入口 / 共享状态选择器 | `tests/action.test.mjs` | 12 项全绿 |
-| i18n / 图标 / 样式契约 | `tests/i18n.test.mjs`、`tests/theme.test.mjs` | i18n 11 项 + theme 11 项全绿 |
-| `pnpm run test` | `tests 111 / suites 27 / pass 111 / fail 0`（目录形式 `node --test tests/` 在 Node 26 下另计入 4 个 `.test.ts` 薄壳，同一批断言） |
-| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.2.3.tgz`（83,281 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md`；`docs/` 与截图不入包 |
+| 行操作 / 菜单入口 / 共享状态选择器 | `tests/action.test.mjs` | 13 项全绿 |
+| 备注编辑 | `tests/note-input.test.mjs` | 9 项全绿（含悬停卡备注编辑器与换状态保留备注） |
+| i18n / 图标 / 样式契约 | `tests/i18n.test.mjs`、`tests/theme.test.mjs` | i18n 12 项 + theme 11 项全绿 |
+| `pnpm run test` | `tests 130 / suites 30 / pass 130 / fail 0`（目录形式 `node --test tests/` 在 Node 26 下另计入 4 个 `.test.ts` 薄壳，同一批断言） |
+| pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.3.0-rc.2.tgz`（98,388 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md`；`docs/` 与截图不入包 |
 | 真实装载 | `dsh plugin --profile smoke add <tgz>`（dev4090） | profile 初始化成功并安装插件，详见 §3 |
 | **前端视觉与交互** | 真实 GUI 上操作（dev4090 + CDP） | sidebar 行尾标记、hover card、状态改写/清除、跨进程持久化全部实测通过，见 §3.4 与 §4 |
 
@@ -28,18 +29,19 @@
 
 | 文件 | 用例数 | 覆盖点 |
 |---|---|---|
-| `tests/inference.test.mjs` | 17 | `inferStatus` 全部规则分支 + `shouldApplyInference` 三态 + `isAutoMarkExpired` 三态 |
+| `tests/inference.test.mjs` | 19 | `inferStatus` 全部规则分支 + `shouldApplyInference` 三态 + `isAutoMarkExpired` 三态 + `job/settled`/`goal/change` 真实负载形状（旧扁平形状不再命中） |
 | `tests/types.test.mjs` | 9 | `MarkRecordSchema.strict`、超长 note 拒绝、默认值填充、`STATUS_META` 全覆盖、route 派生一致性 |
-| `tests/service.test.mjs` | 20 | `getMark`/`clearMark`/`listAll`/`putMark`；state route 400 与命中；mutate set→clear 往返；unsupported-action；两个 tool 注册与 execute（含覆盖规则描述）；note 超长抛错；`turn/end interrupted` auto inference + manual mark not overwritten；`?since=<revision>` 条件刷新（revision 命中跳过行、跨实例稳定）；`rowActionOrder`/`menuItemOrder` 页面全局注入与默认回退 |
+| `tests/service.test.mjs` | 20 | `getMark`/`clearMark`/`listAll`/`putMark`；state route 400 与命中；mutate set→clear 往返；unsupported-action；两个 tool 注册与 execute（含覆盖规则描述、`source:'agent'`）；note 超长抛错；`turn/end interrupted` auto inference + manual mark not overwritten；`?since=<revision>` 条件刷新（命中时返回 `unchanged` 且不带 revision）；`rowActionOrder`/`menuItemOrder` 页面全局注入与默认回退 |
 | `tests/smoke.test.mjs` | 1 | 端到端 inference round-trip + state route read-back + neutral-event no-op |
-| `tests/i18n.test.mjs` | 11 | `STATUS_META`/tone/schema 默认值一致性 + 图标盒尺寸 + Shell 8 语言字典键集合与占位符 |
+| `tests/i18n.test.mjs` | 12 | `STATUS_META`/tone/schema 默认值一致性 + `MARK_SOURCES`/`EXPLICIT_SOURCES` 顺序 + 图标盒尺寸 + Shell 8 语言字典键集合与占位符 |
 | `tests/theme.test.mjs` | 11 | 零字面颜色、inline glyph 盒、active 格不重设 color、badge 尺寸、`:has([data-status-slot])` 整卡覆盖宿主（同时覆盖 `--dsw-alias-hovercard-bg` 与 `--dsw-hovercard-bg`）、面板与状态色用主题别名、hover/active 用 interactive 令牌、桥接命中区、8 格盒尺寸、总览页主题别名 |
 | `tests/marks.test.mjs` | 9 | 共享读取器：快照分发、本地写透、消失会话分发 `null`、采纳 Host 读取间隔、读取失败保留上次、`?since` + host 判 unchanged 时跳过 publish、读取失败保留 revision、晚加入会话全量读取、可见性恢复强制全量读取 |
-| `tests/overview.test.mjs` | 5 | overview route：分组排序、仅非空组、标题关联、`sessionTitle` 缺失/抛错回退 null、空态 |
+| `tests/overview.test.mjs` | 11 | overview route：分组排序、仅非空组、标题关联、`sessionTitle` 缺失/抛错回退 null、空态、冷会话标题由 `sessionQuery.readTitleSnapshots` 补全、未标记会话按创建时间降序且截断 20 条、无查询引擎时 unmarked 为空 |
 | `tests/action.test.mjs` | 13 | 行操作/菜单项 slot 注册（id、order 300、排在官方 archive/pin 之后）、行按钮只负责打开宿主悬停卡并 stopPropagation、菜单项用 owner menu hook + `role=menuitem`、共享选择器契约（8×22px 单行、主题令牌、POST 既有 route）、bundle 表与 8 语言字典键、默认 order + 页面全局读取回退、profile 配置暴露 |
 | `tests/copy-guard.test.mjs` | 9 | 整卡防复制守卫（document capture 注册与移除、`stopPropagation` 且不 `preventDefault`、keydown 只拦 Enter/Space、`:has` 作用域限定、交互元素不拦、HoverCard 挂载）+ 行内图标只开宿主悬停卡（不含 popover/StatusPicker、`pointerover` 重放、document capture 拦 pointerdown 与 click） |
 | `tests/touch-icon.test.mjs` | 6 | 插件页图标 36×36 填充渐变且无 `currentColor`、菜单项官方字号与 14px 图标列、菜单项与状态选择器接线、CSS 只用主题令牌 |
-| **合计** | **111** | suites 27 / pass 111 / fail 0 |
+| `tests/note-input.test.mjs` | 9 | 备注编辑：`setSessionNote` 走既有 mutate route、`normalizeNote` 去空白与空串归 null、编辑态进入/取消/保存、`maxLength` 取 `DEFAULT_MAX_NOTE_LENGTH`、8 语言 `hover.noteEdit/noteSave/noteCancel` 键齐全 |
+| **合计** | **130** | suites 30 / pass 130 / fail 0 |
 
 ## 3. 真实集成验证（dev4090，已执行）
 

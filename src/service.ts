@@ -97,6 +97,18 @@ declare module '@deepseek-ai/cordis' {
      * read with `ctx.get` so a composition without it keeps working.
      */
     sessionQuery?: SessionQueryLike
+    /**
+     * Optional persistence service (from `@deepseek-ai/dsh-session-persistence`).
+     * Its `list` returns a header for every session on disk, live or cold, which
+     * lets the board enumerate and name sessions the Host has not loaded.
+     */
+    sessionPersistence?: SessionPersistenceLike
+    /**
+     * Optional projection cache (from `@deepseek-ai/dsh-session-projection-cache`).
+     * `cachedSnapshot` answers folded projection values, including `title`, with
+     * zero I/O, so cold sessions get a name even without the query engine.
+     */
+    sessionProjectionCache?: SessionProjectionCacheLike
   }
   interface Events {
     /** Collect structured index-injection rows for the rendered Web GUI page. */
@@ -128,6 +140,49 @@ interface SessionRecordLike {
 }
 
 /**
+ * Narrow an unknown cross-corpus list entry to a usable record.
+ *
+ * The Host's `listSessions` envelope has changed shape between DSH releases
+ * (0.2.2-rc.3 returns a different record wrapper than the documented
+ * `SessionRecord[]`), so the overview reads defensively: anything without a
+ * string `header.id` is dropped instead of throwing out of the route handler.
+ */
+function isSessionRecord(value: unknown): value is SessionRecordLike {
+  if (typeof value !== 'object' || value === null) return false
+  const header: unknown = (value as { header?: unknown }).header
+  if (typeof header !== 'object' || header === null) return false
+  return typeof (header as { id?: unknown }).id === 'string'
+}
+
+/** Structural slice of one persisted session snapshot returned by `list`. */
+interface PersistedSnapshotLike {
+  readonly header: { readonly id: SessionId; readonly createdAt?: number }
+}
+
+/** Structural slice of the Host's session-persistence service that this plugin uses. */
+interface SessionPersistenceLike {
+  list(options?: unknown): Promise<readonly PersistedSnapshotLike[]>
+}
+
+/** Structural slice of the Host's session-projection cache that this plugin uses. */
+interface SessionProjectionCacheLike {
+  cachedSnapshot(
+    meta: { readonly id: SessionId },
+    keys?: readonly string[],
+  ): { readonly values: Readonly<Record<string, unknown>> }
+}
+
+/** Read a folded projection value that may be stored raw or in a `{ val }` envelope. */
+function projectionText(value: unknown): string | null {
+  if (typeof value === 'string') return value.length === 0 ? null : value
+  if (typeof value === 'object' && value !== null) {
+    const inner: unknown = (value as { val?: unknown }).val
+    if (typeof inner === 'string') return inner.length === 0 ? null : inner
+  }
+  return null
+}
+
+/**
  * One durable mark per session, keyed by session id. Reads are synchronous
  * against the domain's in-memory tables; all writes go through the domain's
  * durability-first write chain.
@@ -153,6 +208,14 @@ export class SessionStatusService extends Service {
    * re-reading their transcripts on every overview refresh.
    */
   #titleCache = new Map<string, { readonly title: string; readonly at: number }>()
+
+  /**
+   * Headers for every session the persistence service knows about, cached for
+   * ten seconds. Reading them once per window keeps the board from listing the
+   * whole on-disk corpus on every two-second refresh.
+   */
+  #headerCache = new Map<string, { readonly id: SessionId; readonly createdAt: number }>()
+  #headerCacheAt = 0
 
   constructor(ctx: Context, public readonly config: Config) {
     super(ctx, 'sessionStatus')
@@ -383,7 +446,17 @@ export class SessionStatusService extends Service {
     for (const [, row] of this.listAll()) rows.push(row)
     const marked = new Set(rows.map((row) => row.sessionId))
     const coldIds = rows.filter((row) => !sessions.has(row.sessionId)).map((row) => row.sessionId)
-    const coldTitles = await this.#readColdTitles(coldIds)
+    // Title enrichment is best-effort: a Host that mounts a different
+    // session-query shape must never take the whole board down with it.
+    let coldTitles = new Map<string, string>()
+    let headerMap = new Map<string, { readonly id: SessionId; readonly createdAt: number }>()
+    try {
+      headerMap = await this.#persistedHeaders()
+      coldTitles = await this.#readColdTitles(coldIds)
+      for (const [id, title] of this.#cachedTitles(coldIds, headerMap)) {
+        if (!coldTitles.has(id)) coldTitles.set(id, title)
+      }
+    } catch { coldTitles = new Map() }
 
     const byStatus = new Map<StatusEnum, OverviewEntry[]>()
     let totalMarked = 0
@@ -418,7 +491,8 @@ export class SessionStatusService extends Service {
         groups.push({ status, count: entries.length, entries })
       }
     }
-    const unmarked = await this.#collectUnmarked(marked)
+    let unmarked: UnmarkedSessions = { count: 0, entries: [] }
+    try { unmarked = await this.#collectUnmarked(marked) } catch { unmarked = { count: 0, entries: [] } }
     return Response.json({
       groups,
       totalMarked,
@@ -446,11 +520,14 @@ export class SessionStatusService extends Service {
     })
     if (stale.length > 0) {
       const query = this.ctx.sessionQuery
-      if (query !== undefined) {
+      if (query !== undefined && typeof query.readTitleSnapshots === 'function') {
         try {
-          for (const result of await query.readTitleSnapshots(stale)) {
-            if (result.status === 'fulfilled' && result.value?.title !== undefined) {
-              this.#titleCache.set(result.sessionId, { title: result.value.title.title, at: now })
+          const results: unknown = await query.readTitleSnapshots(stale)
+          if (Array.isArray(results)) {
+            for (const result of results as readonly TitleObservationResult[]) {
+              if (result?.status === 'fulfilled' && typeof result.value?.title?.title === 'string') {
+                this.#titleCache.set(result.sessionId, { title: result.value.title.title, at: now })
+              }
             }
           }
         } catch { /* query unavailable — titles fall back to null */ }
@@ -464,33 +541,106 @@ export class SessionStatusService extends Service {
   }
 
   /**
+   * Headers for every session on disk, cached for ten seconds.
+   *
+   * Uses the optional persistence service so the board can enumerate and name
+   * sessions the Host has not loaded into memory. A Host without that service
+   * simply returns the previous (possibly empty) snapshot.
+   */
+  async #persistedHeaders(): Promise<Map<string, { readonly id: SessionId; readonly createdAt: number }>> {
+    const now = Date.now()
+    if (now - this.#headerCacheAt < 10_000) return this.#headerCache
+    const persistence = this.ctx.sessionPersistence
+    if (persistence === undefined || typeof persistence.list !== 'function') return this.#headerCache
+    try {
+      const snapshots: unknown = await persistence.list()
+      if (Array.isArray(snapshots)) {
+        const next = new Map<string, { readonly id: SessionId; readonly createdAt: number }>()
+        for (const snapshot of snapshots as readonly PersistedSnapshotLike[]) {
+          const header = snapshot?.header
+          if (typeof header?.id === 'string') next.set(header.id, { id: header.id, createdAt: header.createdAt ?? 0 })
+        }
+        if (next.size > 0) {
+          this.#headerCache = next
+          this.#headerCacheAt = now
+        }
+      }
+    } catch { /* persistence unavailable — keep the last snapshot */ }
+    return this.#headerCache
+  }
+
+  /** Folded titles from the projection cache for ids whose header is known. */
+  #cachedTitles(
+    ids: readonly string[],
+    headers: ReadonlyMap<string, { readonly id: SessionId }>,
+  ): Map<string, string> {
+    const out = new Map<string, string>()
+    const cache = this.ctx.sessionProjectionCache
+    if (cache === undefined || typeof cache.cachedSnapshot !== 'function') return out
+    for (const id of ids) {
+      const header = headers.get(id)
+      if (header === undefined) continue
+      try {
+        const snapshot = cache.cachedSnapshot({ id: header.id }, ['title'])
+        const text = projectionText(snapshot?.values?.title)
+        if (text !== null) out.set(id, text)
+      } catch { /* no cached projection for this header */ }
+    }
+    return out
+  }
+
+  /**
    * List a bounded slice of sessions that carry no mark, newest first, so the
-   * board can offer them for marking. Only sessions the Host exposes through the
-   * optional session-query engine are considered; when that engine is absent
-   * the list is empty and the board simply shows the marked groups.
+   * board can offer them for marking.
+   *
+   * Candidates come from three sources, merged by id: live sessions the Host has
+   * loaded, headers from the optional persistence service (every session on
+   * disk), and the optional query engine's cross-corpus list. Any one of them is
+   * enough to populate the block, so a composition that omits the query engine
+   * still shows the sessions the user can actually see.
    */
   async #collectUnmarked(marked: ReadonlySet<string>): Promise<UnmarkedSessions> {
+    const candidates = new Map<SessionId, number>()
+    const add = (id: SessionId, createdAt: number | undefined): void => {
+      if (marked.has(id) || candidates.has(id)) return
+      candidates.set(id, createdAt ?? 0)
+    }
+    try {
+      for (const session of this.ctx.sessions.list()) add(session.id, session.header?.createdAt)
+    } catch { /* sessions unavailable — fall through to the on-disk headers */ }
+    try {
+      for (const [, header] of await this.#persistedHeaders()) add(header.id, header.createdAt)
+    } catch { /* persistence unavailable */ }
     const query = this.ctx.sessionQuery as
-      | (SessionQueryLike & { listSessions?: (signal?: AbortSignal) => Promise<readonly SessionRecordLike[]> })
+      | (SessionQueryLike & { listSessions?: (signal?: AbortSignal) => Promise<unknown> })
       | undefined
-    if (query?.listSessions === undefined) return { count: 0, entries: [] }
-    let records: readonly SessionRecordLike[]
-    try { records = await query.listSessions() } catch { return { count: 0, entries: [] } }
-    const candidates = records.filter((record) => !marked.has(record.header.id))
-    candidates.sort((a, b) => (b.header.createdAt ?? 0) - (a.header.createdAt ?? 0))
-    const slice = candidates.slice(0, DEFAULT_UNMARKED_LIMIT)
-    const titles = await this.#readColdTitles(slice.map((record) => record.header.id))
-    const entries: UnmarkedEntry[] = slice.map((record) => {
-      let title: string | null = titles.get(record.header.id) ?? null
-      if (title === null) {
-        const live = this.ctx.sessions.get(record.header.id)
+    if (query !== undefined && typeof query.listSessions === 'function') {
+      try {
+        const raw: unknown = await query.listSessions()
+        if (Array.isArray(raw)) {
+          for (const record of (raw as readonly unknown[]).filter(isSessionRecord)) add(record.header.id, record.header.createdAt)
+        }
+      } catch { /* query unavailable */ }
+    }
+    const ordered = [...candidates.entries()].sort((a, b) => b[1] - a[1])
+    const slice = ordered.slice(0, DEFAULT_UNMARKED_LIMIT)
+    const ids = slice.map(([id]) => id)
+    const titles = await this.#readColdTitles(ids)
+    const headerMap = await this.#persistedHeaders()
+    for (const [id, title] of this.#cachedTitles(ids, headerMap)) {
+      if (!titles.has(id)) titles.set(id, title)
+    }
+    const entries: UnmarkedEntry[] = slice.map(([id, createdAt]) => {
+      let title: string | null = titles.get(id) ?? null
+      if (title === null && typeof this.ctx.sessions.get === 'function') {
+        const live = this.ctx.sessions.get(id)
         if (live !== undefined) {
           try { title = this.ctx.sessionTitle.get(live)?.title ?? null } catch { title = null }
         }
       }
-      return { sessionId: record.header.id, title, updatedAtMs: record.header.createdAt ?? 0 }
+      return { sessionId: id, title, updatedAtMs: createdAt }
     })
-    return { count: candidates.length, entries }
+    return { count: candidates.size, entries }
   }
 
   async #handleMutate(request: Request): Promise<Response> {

@@ -19,6 +19,7 @@ const CONTRACTS = await readFile(join(ROOT, 'src', 'contracts.ts'), 'utf8')
 const LOCALES = await readFile(join(ROOT, 'src', 'client', 'locales.ts'), 'utf8')
 const HOVER_CSS = await readFile(join(ROOT, 'src', 'client', 'hover.module.css'), 'utf8')
 const ACTION_CSS = await readFile(join(ROOT, 'src', 'client', 'action.module.css'), 'utf8')
+const HOVER = await readFile(join(ROOT, 'src', 'client', 'HoverCard.tsx'), 'utf8')
 
 /** Collect the quoted keys of one exported dictionary from locales.ts. */
 function dictionaryKeys(language) {
@@ -70,5 +71,37 @@ describe('note editor', () => {
     expect(PICKER).toContain('export function normalizeNote')
     expect(PICKER).toContain('if (note === null) return null')
     expect(PICKER).toMatch(/trimmed === '' \? null : trimmed/)
+  })
+})
+
+describe('hover card note editor', () => {
+  it('renders an edit entry, a bounded input and save/cancel buttons', () => {
+    expect(HOVER).toContain('css.editBtn')
+    expect(HOVER).toContain('css.noteEditor')
+    expect(HOVER).toContain('css.noteInput')
+    expect(HOVER).toContain('css.saveBtn')
+    expect(HOVER).toContain('css.cancelBtn')
+    expect(HOVER).toContain('maxLength={DEFAULT_MAX_NOTE_LENGTH}')
+    expect(HOVER).toContain("t('hover.noteEdit')")
+    expect(HOVER).toContain("t('hover.noteSave')")
+    expect(HOVER).toContain("t('hover.noteCancel')")
+  })
+
+  it('keeps the existing note when the user switches status', () => {
+    expect(HOVER).toContain('handleSet(s, mark?.note ?? null)')
+    expect(HOVER).not.toContain('handleSet(s, null)')
+  })
+
+  it('saves the draft against the current status and clears empty drafts', () => {
+    expect(HOVER).toContain("handleSet(mark?.status ?? 'todo', normalizeNote(draft))")
+    expect(HOVER).toContain('function normalizeNote')
+  })
+})
+
+describe('picker note preservation', () => {
+  it('carries the existing note when a status is picked from the panel', () => {
+    expect(PICKER).toContain('setSessionStatus(sessionId, status, previous?.note ?? null)')
+    expect(PICKER).toContain('export async function setSessionStatus(sessionId: string, status: StatusEnum, note: string | null = null)')
+    expect(PICKER).not.toContain("note: null, subjectId: null }")
   })
 })

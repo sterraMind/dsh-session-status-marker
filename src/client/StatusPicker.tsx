@@ -42,8 +42,8 @@ export type StatusPickerProps = PropsLocale<typeof NS> & {
  * @param status - One value from the shared `STATUS_VALUES` list.
  * @returns A promise that resolves after the local cache has been updated.
  */
-export async function setSessionStatus(sessionId: string, status: StatusEnum): Promise<void> {
-  const body: SetMarkBody = { action: 'set', sessionId, status, source: 'manual', note: null, subjectId: null }
+export async function setSessionStatus(sessionId: string, status: StatusEnum, note: string | null = null): Promise<void> {
+  const body: SetMarkBody = { action: 'set', sessionId, status, source: 'manual', note, subjectId: null }
   const response = await fetch(MARKER_MUTATE_ROUTE, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -141,7 +141,7 @@ export function StatusPicker({ sessionId, t, onPicked, itemRole, showSummary = f
       autoReason: null,
       note: previous?.note ?? null,
     })
-    setSessionStatus(sessionId, status).then(
+    setSessionStatus(sessionId, status, previous?.note ?? null).then(
       () => { setBusy(false); onPicked?.() },
       () => { publishLocalMark(sessionId, previous); setBusy(false); setError(t('action.error')) },
     )
