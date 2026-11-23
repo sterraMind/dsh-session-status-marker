@@ -431,3 +431,18 @@ rc.2 在 dev4090 真实页面上暴露两个缺陷：看板所有条目标题显
 | 看板标题 | 已标记 4 条中 3 条显示真实标题（`Todo Write Tool Test`、`回复 OK 测试`、`Mark session status for review`），1 条 `smoke-session-1` 无标题投影显示「未命名会话」 |
 | 未标记区块 | 7 条候选，其中 5 条真实标题（`标记会话为完成`、`写入两条待办并标记会话状态`、`回复 OK`、`Reply with the single word` ×2），2 条无标题投影 |
 | 截图 | `.drafts/shots/v130d-overview.png`（1576×861，设置页「会话状态总览」：待办 2 / 审查中 2 / 未标记会话 7），已目检 |
+
+### 3.24 1.3.0-rc.3 复验（2026-11-23）
+
+用户要求按会话文件里的验收记录和更新方式复核前端。dev4090 smoke profile 已装 `1.3.0-rc.3`（remove → allow-version → add 全新安装路径），本机经 `ssh -L 9333:127.0.0.1:9333` 转发 Edge CDP，页面为 `http://127.0.0.1:3099/`。
+
+| 验收项 | 结果 |
+|---|---|
+| `overview` 路由 | 页面内 `fetch('/api/session-status-marker.overview')` → 200，1684 B；`totalMarked=4`、`unmarked.count=7`、`refreshIntervalMs=2000`，分组 todo 2 / review 2，标题关联真实会话 |
+| 侧栏行 | 5 行标题可读；标记行「回复 OK 测试」带状态图标，无标题会话回退为工作区名，无报错 |
+| 悬停卡 8 格 | 打开后 `cellCount=8` 单行，`activeCell=审查中`；有「编辑备注」「清除」按钮，备注显示「验收 130rc3 备注」，来源「手动标记」 |
+| 整卡主题 | 同一 CDP 会话内切 `prefers-color-scheme`：light 卡底 `rgb(255,255,255)`、dark 卡底 `rgb(44,44,46)`，两者不同即通过（说明：分两次 cdp.mjs 调用切主题会因仿真状态不跨连接而误判为都是白底，须单连接内切换后再读） |
+| 行内图标 | 点击 `[data-status-action]` 后宿主卡打开、8 格、`popoverCount=0`、`copied=false`；无自建浮层、无误触复制 |
+| 截图 | `.drafts/shots/v130rc3-acceptance-card.png`（1576×861），已目检 |
+
+结论：1.3.0-rc.3 六项前端复核全部通过，与 §3.23 记录一致。
