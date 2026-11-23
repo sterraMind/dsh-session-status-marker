@@ -4,15 +4,17 @@
 
 ![侧栏会话标题后面的状态图标](https://raw.githubusercontent.com/sterraMind/dsh-session-status-marker/main/docs/images/sidebar-badge.png)
 
-鼠标移到会话行上会展开状态卡片，里面是八个状态格子：
+鼠标移到会话行上会展开状态卡片，里面是八个状态格子，已标记的会话旁边还有备注和编辑入口：
 
-![悬停展开的状态选择卡片](https://raw.githubusercontent.com/sterraMind/dsh-session-status-marker/main/docs/images/hover-light.png)
+![悬停展开的状态选择卡片，含备注和编辑入口](https://raw.githubusercontent.com/sterraMind/dsh-session-status-marker/main/docs/images/hover-note.png)
 
 ## 怎么用
 
-**手动标记**：把鼠标移到侧栏的会话行上，状态卡片会展开。卡片里有八个状态格子，点其中一个就能给这个会话设置状态。需要的话，还可以在备注框里写一句话说明。
+**手动标记**：把鼠标移到侧栏的会话行上，状态卡片会展开。卡片里有八个状态格子，点其中一个就能给这个会话设置状态。需要的话，还可以在备注框里写一句话说明；写好后按 Enter 保存，按 Escape 取消。
 
-**跨会话总览**：打开设置面板，左侧出现「会话状态」一节。它按状态分组列出所有打过标记的会话，每组带数量，组内按更新时间排序，页面里自动刷新。
+**跨会话总览**：打开设置面板（快捷键 `Ctrl+Alt+,`），左侧出现「会话状态」一节。它按状态分组列出所有打过标记的会话，每组带数量，组内按更新时间排序，页面每两秒自动刷新。打过标记但还没有标记的会话也会列在「未标记会话」区块里，方便你找到之前没处理的对话。
+
+![会话状态总览面板：按状态分组、带数量和更新时间](https://raw.githubusercontent.com/sterraMind/dsh-session-status-marker/main/docs/images/overview.png)
 
 **让 AI 自己标**：插件给模型提供 `set_session_status` 和 `clear_session_status` 两个工具。任务被中断、子代理还没跑完，或者需要你回答的时候，模型可以自己标上。手动标记的优先级高于自动推断，自动推断不会覆盖你标过的状态。
 
@@ -100,7 +102,7 @@ dsh --profile desktop --dump-config   # 输出里应出现 session-status-marker
 ```bash
 pnpm run typecheck     # 类型检查
 pnpm run build         # 编译 Host 与浏览器端产物
-pnpm run test          # 111 项测试
+pnpm run test          # 139 项测试
 pnpm pack              # 打包成 .tgz 压缩包
 ```
 
