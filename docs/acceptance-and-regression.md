@@ -1,6 +1,6 @@
 # Acceptance & Regression
 
-> **文档版本**：v1.3.0-rc.3 · 2026-11-20（对应插件 1.3.0-rc.3）
+> **文档版本**：v1.3.0-rc.4 · 2026-11-23（对应插件 1.3.0-rc.4）
 
 > 记录验收标准、已通过证据、待执行集成 smoke 与回归清单。
 > 对应实现进度见 `docs/implementation-plan.md` §2，风险优先级见 `docs/feasibility-and-risks.md`。
@@ -453,3 +453,25 @@ rc.2 在 dev4090 真实页面上暴露两个缺陷：看板所有条目标题显
 悬停卡复核中曾出现一处分歧：子代理据浅色图 `v130rc3-acceptance-card.png` 判定「缺编辑备注/清除按钮」。核查发现该图拍的是未标记会话「标记会话为完成」，卡上写「此会话暂无标记」，本就没有备注行和按钮，属正常设计；主会话此前给子代理的判据把两张图的会话属性写混了。随后补拍已标记会话浅色图 `v130rc3-acceptance-card-marked.png`，子代理据此重核，A–E 五条全部通过，报告结论改为全部通过。这不是产品缺陷，是截图证据与判据描述不匹配的记录问题，已用新截图纠正。
 
 结论：1.3.0-rc.3 的前端复核通过，主会话与 3 个独立子代理结论一致；截图证据和独立复核形式都已补齐。
+
+### 3.25 1.3.0-rc.4 四项缺陷修复复验（2026-11-23）
+
+用户反馈四项缺陷（m00857），本轮修复后在 dev4090 smoke profile 真实页面逐项复验。部署走标准路径：`pnpm pack` → 上传 tgz（106,852 B，SHA-256 `4dde98b4c58968d4846dd0ccde9995ddacb5049a4709420eb092b9e418d3f763`）→ remove → allow-version `1.3.0-rc.4` → add。远程 `lib/client.js` 110,488 字符，含 `data-row-key`（cardLock）、`AbortController`、`activeGuards` 三处新标记。
+
+| 缺陷 | 根因 | 修复 | 真实页面复验结果 |
+|---|---|---|---|
+| 跨会话「已复制」复发 | 复制守卫是每个 slot 各自的 document 捕获监听，任一 slot 卸载（切会话关闭上一张分组卡）就摘掉共享监听 | 模块级引用计数的单一共享监听对 + `useLayoutEffect` + 向上遍历宿主卡 | 真实鼠标悬停行2、点标题区，再切行3、点标题区，全程 `copied=0`、`leaked=false` |
+| 编辑备注时焦点漂移 | 分组卡一旦 warm，相邻行 `pointerover` 立即换卡，200ms 宽限 + 8px 左桥不足 | 新增共享 hook `useCardEditLock`：编辑期拦截其他行 `pointerover`，每 120ms 在归属行重放续期 | 输入框聚焦后把指针漂到相邻行，卡片仍开、焦点仍在 INPUT、草稿完整保留 |
+| 一输入文字浮窗消失 | `autoFocus` 触发滚动 → `place()` 发现 `[inert]/[hidden]` 祖先而关闭卡片 | 改 `ref.focus({ preventScroll: true })`，移除 `autoFocus` 属性 | 点「编辑备注」即聚焦（activeTag=INPUT），输入「loop测试-漂移」后草稿未被清、卡片未关 |
+| 看板卡在「加载中」 | `fetchOverview` 用相对路径（设置子路由下 404）且无超时、无在途保护；Host 三路可选服务串行 await 无 deadline | 绝对路径 + 8 秒 AbortController + 在途标志 | 设置→会话状态：`loading=false` 且 `failed=false`，待办2/审查中2/未标记7，标题关联真实会话；页面内 API 200/1684 B |
+
+| 校验项 | 结果 |
+|---|---|
+| 类型检查 | `pnpm run typecheck` exit 0 |
+| 构建 | `pnpm run build` exit 0，`lib/client.js` 111,646 B 含 cardLock |
+| 单元测试 | `tests 139 / suites 32 / pass 139 / fail 0`（新增 `tests/fix-regression.test.mjs` 9 项） |
+| 截图 | `.drafts/shots/rc4-card.png`（悬停卡）、`.drafts/shots/rc4-board.png`（看板），均已保存 |
+
+复用整改：备注编辑锁收敛到 `src/client/cardLock.ts` 单一 hook，复制守卫的引用计数与向上遍历收敛到 `src/client/copyGuard.ts`，二者均编入浏览器 bundle。被推迟的两项（会话备注显示/隐藏配置项、`get_session_status` 工具）本轮未做，留待用户另行确认。
+
+结论：1.3.0-rc.4 四项缺陷修复在真实页面全部复验通过。按发布政策，正式版 `1.3.0` 仍需用户本人实际前端验收后才能转正；当前 rc.4 尚未发布到 npm。

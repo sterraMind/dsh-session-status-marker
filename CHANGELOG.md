@@ -2,6 +2,24 @@
 
 本文件记录 `dsh-session-status-marker` 的对外可见变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.3.0-rc.4] - 2026-11-23
+
+预版本（按发布政策，正式版本需用户实际前端验收通过后再发布）。这一版修掉用户反馈的四个缺陷，并把备注编辑的卡片锁抽成可复用 hook。
+
+### 修复
+
+- **「已复制」跨会话复发**：复制守卫原先是每个 slot 各自注册/注销一对 document 捕获监听，任一 slot 卸载（切换会话时宿主关闭上一张分组卡）会把共享监听一起摘掉，新卡因此漏防。改为模块级引用计数的单一共享监听对，首个挂载安装、最后一个卸载才移除；并用 `useLayoutEffect` 消除绘制间隙。判定宿主卡时从事件目标向上遍历，要求祖先既匹配卡片类名又包含 `[data-status-slot]`，避免 `closest()` 命中无 slot 的内层元素。
+- **编辑备注时焦点漂移、浮窗消失**：新增可复用 hook `useCardEditLock`，编辑期间拦截指向其他会话行的 `pointerover`（宿主分组卡据此换卡），并每 120ms 在归属行重放一次 `pointerover` 续上宿主关闭计时。备注输入框改用 `ref.focus({ preventScroll: true })` 取代 `autoFocus`，避免浏览器滚动使宿主 wrapper 落到 `[inert]/[hidden]` 祖先下触发 `place()` 关闭卡片。无归属行（菜单项等）时 hook 空操作。
+- **看板卡在「加载中」**：`fetchOverview` 改用绝对路径 `/api/session-status-marker.overview`（设置页子路由下相对路径会错配 404），加 8 秒 `AbortController` 超时；`StatusOverview.load` 加在途标志，避免上一次请求未返回时每 2 秒堆积新请求。超时后进入错误态并保留重试，不再无限转圈。
+
+### 复用
+
+- 备注编辑锁 `useCardEditLock` 独立成 `src/client/cardLock.ts`，供所有可编辑备注的悬停面共用；`copyGuard` 的向上遍历与引用计数同样收敛到一处。二者均加入浏览器 bundle。
+
+### 测试
+
+新增 `tests/fix-regression.test.mjs` 9 项契约测试；全量 `139` 项测试、`32` 个套件全部通过，`typecheck`、`build` 退出码均为 0。
+
 ## [1.3.0-rc.3] - 2026-11-20
 
 预版本（按发布政策，正式版本需用户实际前端验收通过后再发布）。这一版修掉 rc.2 在真实页面上暴露的两个缺陷：看板条目标题全部显示「未命名会话」、未标记会话区块计数为 0。

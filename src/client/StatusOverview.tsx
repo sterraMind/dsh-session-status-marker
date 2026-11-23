@@ -120,8 +120,14 @@ export function StatusOverview(props: StatusOverviewProps) {
     let disposed = false
     let timer: ReturnType<typeof setTimeout> | null = null
     let intervalMs = 2000
+    let inFlight = false
 
     async function load(): Promise<void> {
+      // Never stack a second request over an unfinished one. A hung Host used
+      // to accumulate a fetch every 2 s while the first never settled; the
+      // deadline in fetchOverview fails that request, then the next tick retries.
+      if (inFlight) return
+      inFlight = true
       try {
         const data = await fetchOverview()
         if (disposed) return
@@ -135,6 +141,7 @@ export function StatusOverview(props: StatusOverviewProps) {
       } catch {
         if (!disposed) setError(true)
       } finally {
+        inFlight = false
         if (!disposed) setLoading(false)
       }
     }

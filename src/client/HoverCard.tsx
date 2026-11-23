@@ -19,7 +19,7 @@
  *   `onPointerEnter` (`:326-336`), cancelling the pending close.
  */
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import type { SyntheticEvent } from 'react'
 import css from './hover.module.css'
 import type { PropsRuntime, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -31,6 +31,7 @@ import { ICONS } from './icons.js'
 import { useMark } from './useMark.js'
 import { publishLocalMark } from './marks.js'
 import { useCardCopyGuard } from './copyGuard.js'
+import { useCardEditLock } from './cardLock.js'
 
 export type HoverProps = PropsRuntime<'sidebar.session.row.hover'> & PropsLocale<typeof NS>
 
@@ -57,6 +58,19 @@ export function SessionStatusHover({ sessionId, t }: HoverProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // A note editor must survive pointer drift and focus-driven group changes.
+  // Lock the host card for as long as the editor is open.
+  useCardEditLock(editing, sessionId, rootRef)
+
+  // Focus without scrolling: autoFocus lets the browser scroll the portal into
+  // view, which moves the host wrapper under an [inert]/[hidden] ancestor and
+  // makes `place()` dismiss the card (`ui-primitives/HoverCard.tsx:171-244`).
+  useEffect(() => {
+    if (editing) inputRef.current?.focus({ preventScroll: true })
+  }, [editing])
 
   async function handleSet(status: StatusEnum, note: string | null) {
     setBusy(true)
@@ -104,8 +118,8 @@ export function SessionStatusHover({ sessionId, t }: HoverProps) {
   /** Anchors the host-card theme takeover in hover.module.css (`:has` selector). */
   const slotAnchor = { 'data-status-slot': '' } as const
 
-  if (loading) return <div className={css.root} data-mark="loading" {...slotAnchor} {...guard}>{t('hover.loading')}</div>
-  if (error) return <div className={css.root} data-mark="error" {...slotAnchor} {...guard}>{error}</div>
+  if (loading) return <div ref={rootRef} className={css.root} data-mark="loading" {...slotAnchor} {...guard}>{t('hover.loading')}</div>
+  if (error) return <div ref={rootRef} className={css.root} data-mark="error" {...slotAnchor} {...guard}>{error}</div>
 
   const meta = mark ? STATUS_META[mark.status] : null
   // The eight cells stay visible for marked and unmarked sessions alike. Making
@@ -115,7 +129,7 @@ export function SessionStatusHover({ sessionId, t }: HoverProps) {
   // Clicking a cell keeps whatever note the mark already carries, so switching
   // status never silently drops the user's note.
   return (
-    <div className={css.root} data-mark={mark ? 'present' : 'absent'} {...slotAnchor} {...guard}>
+    <div ref={rootRef} className={css.root} data-mark={mark ? 'present' : 'absent'} {...slotAnchor} {...guard}>
       <div className={css.label}>
         {mark === null
           ? t('hover.empty')
@@ -148,10 +162,10 @@ export function SessionStatusHover({ sessionId, t }: HoverProps) {
       {editing && (
         <div className={css.noteEditor}>
           <input
+            ref={inputRef}
             className={css.noteInput}
             value={draft}
             maxLength={DEFAULT_MAX_NOTE_LENGTH}
-            autoFocus
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
               stop(event)

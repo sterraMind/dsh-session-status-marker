@@ -19,11 +19,18 @@ const hoverCard = await readFile(join(root, 'src', 'client', 'HoverCard.tsx'), '
 const rowAction = await readFile(join(root, 'src', 'client', 'RowAction.tsx'), 'utf8')
 
 describe('hover card copy guard', () => {
-  it('registers capture-phase listeners on document', () => {
+  it('registers one shared capture-phase listener pair on document', () => {
     expect(source).toContain("document.addEventListener('click', guard, true)")
     expect(source).toContain("document.addEventListener('keydown', guard, true)")
     expect(source).toContain("document.removeEventListener('click', guard, true)")
     expect(source).toContain("document.removeEventListener('keydown', guard, true)")
+  })
+
+  it('ref-counts the shared pair so one slot teardown cannot disarm another slot', () => {
+    expect(source).toContain('let activeGuards = 0')
+    expect(source).toContain('if (activeGuards === 1) install()')
+    expect(source).toContain('if (activeGuards === 0) uninstall()')
+    expect(source).toContain('useLayoutEffect(')
   })
 
   it('stops propagation without cancelling the browser default', () => {
@@ -36,9 +43,10 @@ describe('hover card copy guard', () => {
     expect(source).toContain("key !== 'Enter' && key !== ' '")
   })
 
-  it('scopes the guard to a card that hosts our slot', () => {
+  it('scopes the guard to a card that hosts our slot, walking up from the target', () => {
     expect(source).toContain("const SLOT_ANCHOR = 'data-status-slot'")
-    expect(source).toContain('card === null || card.querySelector')
+    expect(source).toContain("node.matches(CARD_MATCH) && node.querySelector(`[${SLOT_ANCHOR}]`) !== null")
+    expect(source).toContain('node = node.parentElement')
     expect(source).toContain('target.closest(`[${SLOT_ANCHOR}]`) !== null) return false')
   })
 

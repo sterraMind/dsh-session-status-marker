@@ -21,9 +21,9 @@ import { StatusOverview } from './StatusOverview.js'
 import type { StatusOverviewInjected } from './StatusOverview.js'
 import { NS, DICTIONARIES } from './locales.js'
 import type { MarkerKey } from './locales.js'
-import { MARKER_OVERVIEW_ROUTE, CLIENT_CONFIG_GLOBAL } from '../contracts.js'
+import { MARKER_OVERVIEW_PATH, CLIENT_CONFIG_GLOBAL } from '../contracts.js'
 import type { OverviewResponse } from '../contracts.js'
-import { DEFAULT_ROW_ACTION_ORDER, DEFAULT_MENU_ITEM_ORDER } from '../contracts.js'
+import { DEFAULT_ROW_ACTION_ORDER, DEFAULT_MENU_ITEM_ORDER, OVERVIEW_FETCH_TIMEOUT_MS } from '../contracts.js'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -111,9 +111,18 @@ export function apply(ctx: ClientContext): void {
   // bound `t` (fresh on every locale switch, so the nav label stays current).
   const t = ctx.locale.bind(NS) as (key: string, params?: Record<string, string>) => string
   const fetchOverview = async (): Promise<OverviewResponse> => {
-    const resp = await fetch(MARKER_OVERVIEW_ROUTE)
-    if (!resp.ok) throw new Error('overview fetch failed')
-    return (await resp.json()) as OverviewResponse
+    // Absolute path: a relative "api/..." resolves against the current route,
+    // which changes under the settings panel and produced spurious 404s.
+    // Abort after a deadline so a hung Host never leaves the board on "loading".
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), OVERVIEW_FETCH_TIMEOUT_MS)
+    try {
+      const resp = await fetch(MARKER_OVERVIEW_PATH, { signal: controller.signal })
+      if (!resp.ok) throw new Error('overview fetch failed')
+      return (await resp.json()) as OverviewResponse
+    } finally {
+      clearTimeout(timeout)
+    }
   }
   const overviewInjected = (): StatusOverviewInjected => ({ t, fetchOverview })
   ctx.slots.inject('settings.section', () =>

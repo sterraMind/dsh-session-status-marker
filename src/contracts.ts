@@ -56,6 +56,14 @@ export const DEFAULT_MAX_NOTE_LENGTH = 200
 export const DEFAULT_REFRESH_INTERVAL_MS = 2000
 
 /**
+ * Deadline for one overview fetch. The Host reads three optional services in
+ * sequence; a hung service must not leave the settings board on "loading"
+ * forever. Past the deadline the client aborts, surfaces the error state and
+ * keeps the previous data on screen.
+ */
+export const OVERVIEW_FETCH_TIMEOUT_MS = 8000
+
+/**
  * Default order of the row-action status button, after the host's archive (100)
  * and pin (200). Configurable so other plugins can be placed around it.
  */
