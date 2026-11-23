@@ -159,7 +159,7 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 | 八格单行 | 点开选择器后逐个读 `button[aria-pressed]` 的 `getBoundingClientRect()` | `count: 8`、`distinctRows: 1`、`singleRow: true`，8 格 x=304/328/352/376/400/424/448/472 全部 y=458，无换行 |
 | 图标内边距 | 读格子计算样式 | 22×22px、`padding: 2px`、`box-sizing: border-box`，16px SVG 有 3px 视觉留白 |
 | 跨间隙命中区 | 读插件内容根节点的 `::before` | `content: ""`、`position: absolute`、`left: -24px`、`width: 24px`、`top: -12px`、`bottom: -12px`；指针经此区域冒泡到官方 `onPointerEnter`，抵消 `pointer-grace.ts:8` 的 200ms 关闭宽限 |
-| 主题响应的交互面 | 同一页面分别用浅色与深色 `prefers-color-scheme`，点开选择器后用探针元素解析 `--dsw-alias-tooltip-key-bg` | 浅色 `--dsw-alias-tooltip-bg = #2c2c2e`（neutral-bluish-850），解析为 `color(srgb 0.32149 0.32149 0.327922)`；深色 `#43454a`（neutral-bluish-750），解析为 `color(srgb 0.395451 0.401882 0.417961)`。格子与按钮的悬停/选中底色随主题变化，而文字与状态图标保持静态色板（两个主题下浮层底色同为 `rgb(44,44,46)`、active 格「反馈」同为 `rgb(78,209,126)`） |
+| 主题响应的交互面 | 同一页面分别用浅色与深色 `prefers-color-scheme`，点开选择器后用检查元素解析 `--dsw-alias-tooltip-key-bg` | 浅色 `--dsw-alias-tooltip-bg = #2c2c2e`（neutral-bluish-850），解析为 `color(srgb 0.32149 0.32149 0.327922)`；深色 `#43454a`（neutral-bluish-750），解析为 `color(srgb 0.395451 0.401882 0.417961)`。格子与按钮的悬停/选中底色随主题变化，而文字与状态图标保持静态色板（两个主题下浮层底色同为 `rgb(44,44,46)`、active 格「反馈」同为 `rgb(78,209,126)`） |
 | 八语言字典 | 点击「账号菜单 → 设置 → 语言胶囊 → English」后按 0/80/250/600/1500ms 采样 `document.documentElement.lang`，再 `Page.navigate` 重载复查 | `T+0` 为 `en`、胶囊显示 `English`，证明 `locale/change` 事件与插件字典通路正常；随后 80ms 起回到 `zh-CN`，重载后仍是 `zh-CN`。定位为 Host 配置 `LOCALE_PREFERENCE_FIELD` 写在 dev4090 上不落盘（`locale/src/client/index.ts:261` 的 `void this.host?.set(...)` 被 adopt 读回旧值覆盖），**属环境限制而非插件缺陷**；单元测试用 `DICTIONARIES` 覆盖 Shell 全部 8 种语言且与 zh 键集合一致 |
 
 截图：`.drafts/shots/v102-light-picker.png`（浅色 8 格，1576×861）与 `.drafts/shots/v102-dark-picker.png`（深色 8 格，1576×861）；`.drafts/shots/v102-light-hover.png` 与 `.drafts/shots/v102-dark-hover.png` 为选择器打开前的悬停卡整页。
@@ -446,7 +446,7 @@ rc.2 在 dev4090 真实页面上暴露两个缺陷：看板所有条目标题显
 | 行内图标 | 点击 `[data-status-action]` 后宿主卡打开、8 格、`popoverCount=0`、`copied=false`；无自建浮层、无误触复制 |
 | 截图 | `.drafts/shots/` 下：`v130rc3-acceptance-card.png`（未标记会话浅色卡）、`v130rc3-acceptance-card-marked.png`（已标记会话浅色卡，补拍）、`v130c-dark.png`（深色卡）、`v130rc3-acceptance-overview.png`（看板）、`v130rc3-acceptance-note-edit.png`（备注编辑态），均已目检 |
 
-**截图证据缺口与补齐**：§3.23 声称的修复后看板截图 `v130d-overview.png` 在磁盘上并不存在；磁盘上原有的 `v130-overview.png` 显示「加载失败，请重试」、`v130c-overview.png` 的已标记条目全是「未命名会话」，两者都是 rc.3 修复前的状态，不能作为通过证据。本轮从当前 rc.3 页面实时截取 `v130rc3-acceptance-overview.png`：待办 2（Todo Write Tool Test）、审查中 2（回复 OK 测试、Mark session status for review）、未标记会话 7（5 条真实标题），与页面内 API 探针一致。备注编辑态也由本轮补拍，此前磁盘上只有右键菜单截图，没有输入框展开状态。
+**截图证据缺口与补齐**：§3.23 声称的修复后看板截图 `v130d-overview.png` 在磁盘上并不存在；磁盘上原有的 `v130-overview.png` 显示「加载失败，请重试」、`v130c-overview.png` 的已标记条目全是「未命名会话」，两者都是 rc.3 修复前的状态，不能作为通过证据。本轮从当前 rc.3 页面实时截取 `v130rc3-acceptance-overview.png`：待办 2（Todo Write Tool Test）、审查中 2（回复 OK 测试、Mark session status for review）、未标记会话 7（5 条真实标题），与页面内 API 验证脚本一致。备注编辑态也由本轮补拍，此前磁盘上只有右键菜单截图，没有输入框展开状态。
 
 **独立复核（智能体团队）**：本轮先派 4 个子代理，全部中途失败且未产出报告，改由主会话逐张 `read_image` 完成初轮复核（报告见 `.drafts/reviews/{hover-card,overview,note-dark}-review.md`）。用户随后要求重派，环境恢复后另派 3 个子代理分别复核悬停卡、看板、备注编辑态，三个都成功产出独立报告：`independent-card.md`、`independent-overview.md`、`independent-note.md`，均只读截图像素、未参考主会话结论。看板 5 条判据、备注 4 条判据全部通过。
 
@@ -499,7 +499,7 @@ rc.2 在 dev4090 真实页面上暴露两个缺陷：看板所有条目标题显
 | 看板渲染（设置 → 会话状态） | 待办 2（Todo Write Tool Test / 未命名会话 integration smoke）、审查中 2（回复 OK 测试 含备注「验收 130rc3 备注」/ Mark session status for review）、未标记会话 7（5 条真实标题）；无「加载中」 |
 | 悬停卡 | 8 格单行，active=审查中，备注行显示「验收 130rc3 备注」，含「编辑备注」与「清除」 |
 | 备注编辑与焦点漂移 | 点「编辑备注」→ INPUT 聚焦、值「验收 130rc3 备注」；改写为「验收 130rc3 备注-drift-test」后把指针漂到相邻行，卡片仍开、INPUT 仍聚焦、草稿完整保留（cardLock 生效）；点「取消」回到读态，备注未被改写 |
-| 主题跟随 | 单连接探针：dark `cardBg=rgb(44,44,46)` / light `cardBg=rgb(255,255,255)`，两者均 8 格单行；截图 `.drafts/shots/rc5-dark.png`、`.drafts/shots/rc5-light.png` |
+| 主题跟随 | 单连接检查脚本：dark `cardBg=rgb(44,44,46)` / light `cardBg=rgb(255,255,255)`，两者均 8 格单行；截图 `.drafts/shots/rc5-dark.png`、`.drafts/shots/rc5-light.png` |
 | 复制守卫回归 | 整个验收流程未出现「已复制」 |
 
 截图：`.drafts/shots/rc5-home.png`（主页行尾徽标）、`.drafts/shots/rc5-card.png`（悬停卡读态）、`.drafts/shots/rc5-note-edit.png`（悬停卡备注编辑态）、`.drafts/shots/rc5-board.png`（设置页看板）、`.drafts/shots/rc5-dark.png` 与 `.drafts/shots/rc5-light.png`（两主题）。
