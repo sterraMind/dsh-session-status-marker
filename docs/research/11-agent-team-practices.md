@@ -414,7 +414,7 @@
   禁止修改：package.json、src/index.ts、src/client/locales.ts、AGENTS.md、docs/project-memory.md
 
 【背景事实】
-  工作区：<user-home>\Projects\dsh-session-marker
+  工作区：<repo-root>
   相关文件：src/client/HoverCard.tsx 组件体首行（挂载点）；
             .research/dsh-repo/packages/client/ui-primitives/src/HoverCard.tsx:290-304（官方整卡复制行为，onClick 与 Enter/Space 都触发）；
             同文件 :343-344（官方 onClickCapture / onPointerDownCapture 由卡片持有）

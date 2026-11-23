@@ -4,7 +4,7 @@
 
 1. **网络优先**：遇到问题先搜索已有解决方案，再动手。搜索时把问题拆成原子化关键词再检索（`research` 工具除外），并避开内容农场与云厂商营销站：CSDN、腾讯云、阿里云、华为云、抖音、百家号一类站点不作为依据，优先官方文档、规范原文、上游仓库源码与 issue。禁词列表：硬/绕弯子/发射/配方/天花板/xx钥匙/阶梯/一句话总结/还狠/更绝的是/就是xx/把xx撑住/把xx走好/直接拉满/这波/xx账/认/接下/收下/xx的锅/纯纯的xx/名场面/问就是/属于是。
 2. **事实源唯一**：官方 API / 行为 / 契约一律以 `.research/dsh-repo/` 本地镜像中的文件:行号为准。外部网页资料只用于竞品/市场/社区最佳实践，不得用于断言 DSH 官方行为。
-3. **路径规范**：所有 DSH 相关路径从 `$env:DSH_HOME`、`$env:TEMP`、工作区根解析；仓库内不写死 `<user-home>\...`。临时脚本与生成产物放 `$env:TEMP/.drafts/<会话id>/`，可复用代码落盘到本仓库。
+3. **路径规范**：所有 DSH 相关路径从 `$env:DSH_HOME`、`$env:TEMP`、工作区根解析；仓库内不写死本机用户目录的绝对路径（例如 `<user-home>/...`）。临时脚本与生成产物放 `$env:TEMP/.drafts/<会话id>/`，可复用代码落盘到本仓库。
 4. **包管理**：优先 pnpm；Node fetch 走代理时确保 `NODE_USE_ENV_PROXY=1`。npm 日志目录若权限不足，重定向到工作区或 temp。
 5. **审批政策**：删除文件前必先请示用户说明目的、影响与风险；批量删除优先用 `send2trash`。
 6. **rtk wrap**：常用命令用 `rtk <cmd>` wrap 节省 token，如 `rtk read <file>`、`rtk grep <pattern>`。
@@ -85,7 +85,7 @@ tests/*.test.mjs   canonical 断言（node:test + shim），*.test.ts 为薄壳
 
 ## 已知环境约束（本机实测）
 
-- `$DSH_HOME = <user-home>\AppData\Local\scoop\persist\deepsek-harness-pre`（注意拼写 `deepsek`）。
+- `$DSH_HOME` 指向本机 DeepSeek Harness 的安装/持久化目录（示例：`<user-home>/AppData/Local/scoop/persist/deepsek-harness-pre`，注意拼写 `deepsek`）。
 - 打包版源码在 `app.asar` 单文件内，需按 asar header pickle 抽取；不要把它当目录访问。
 - git clone / curl.exe 走代理失败（`SEC_E_NO_CREDENTIALS`）；Node fetch + `NODE_USE_ENV_PROXY=1` 成功；api.github.com SSRF 拦截（198.18.0.185）。
 - Scoop 全局 pnpm store 的 `index.db`（3.36 GB）不可读；`pnpm-workspace.yaml` 把 store 指向工作区并关闭预检。

@@ -60,7 +60,7 @@
 
 ## 5. 环境事实
 
-- 工作区 `<user-home>\Projects\dsh-session-marker`；`$DSH_HOME = <user-home>\AppData\Local\scoop\persist\deepsek-harness-pre`（拼写 `deepsek`）。
+- 工作区为仓库根目录；`$DSH_HOME` 指向本机 DeepSeek Harness 的安装/持久化目录（示例：`<user-home>/AppData/Local/scoop/persist/deepsek-harness-pre`，注意拼写 `deepsek`）。
 - 打包版源码在 `app.asar` 单文件内（213,202,918 B），需自写 Node 脚本按 header pickle 抽取；不要把 asar 路径当目录。官方仓库 zip 已裁剪成 `.research/dsh-repo/`（docs 全量 + 15 个 packages 域）。
 - `git clone` / `curl.exe` 走代理报 `schannel: AcquireCredentialsHandle failed: SEC_E_NO_CREDENTIALS (0x8009030e)`；Node 内置 fetch + `NODE_USE_ENV_PROXY=1` 成功；`api.github.com` 被 SSRF 拦到 198.18.0.185；`web_fetch` 对 raw.githubusercontent / dsh.so 也 SSRF blocked，需 `mcp__magpie__exa__web_fetch_exa`。
 - 现有 Web GUI = `http://127.0.0.1:55101`；scratch `pnpm dsh web --patch` 是 3080，二者不同，不要替换现有服务。

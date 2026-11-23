@@ -9,8 +9,8 @@
 
 | 项 | 值 | 来源 |
 |---|---|---|
-| 工作区 | `<user-home>\Projects\dsh-session-marker` | pwd |
-| `$DSH_HOME` | `<user-home>\AppData\Local\scoop\persist\deepsek-harness-pre` | PowerShell `$env:DSH_HOME` |
+| 工作区 | `<repo-root>` | pwd |
+| `$DSH_HOME` | `<user-home>/AppData/Local/scoop/persist/deepsek-harness-pre` | PowerShell `$env:DSH_HOME` |
 | 打包版 | `...\scoop\apps\deepseek-harness-pre\0.2.2-rc.1\resources\`（`app.asar` 213,202,918 B + `app.asar.unpacked`） | 实测 |
 | Node / pnpm / git | v26.13.0 / 11.22.0 / 2.56.0.windows.4 | 实测 |
 | 代理 | `http_proxy` / `HTTPS_PROXY` = `http://127.0.0.1:7897`，`NODE_USE_ENV_PROXY=1` | 实测 |
@@ -25,7 +25,7 @@
 - `api.github.com` 被 SSRF 拦截（解析到 `198.18.0.185`）；`web_fetch` 访问
   `raw.githubusercontent.com` / `www.dsh.so` 同样 `SSRF blocked`。
   `mcp__magpie__exa__web_fetch_exa` 可抓外部页面。
-- `npm view` 首次失败于日志目录写入权限（`<user-home>\AppData\Local\npm\_logs`）——
+- `npm view` 首次失败于日志目录写入权限（`<user-home>/AppData/Local/npm/_logs`）——
   **规避办法**：把 `npm_config_cache` / `npm_config_logs_dir` 指到工作区或 `$TEMP/.drafts/<会话id>/`，
   并优先使用 `pnpm`（用户明确要求 pnpm/uv 减少冗余）。
 - 打包版源码在 `app.asar` 单文件内，**不是目录**；用自写 Node 脚本按 asar header pickle 解析抽取，
@@ -197,7 +197,7 @@ the loader resolves module paths」——模块解析仍按 profile 目录。
 - 校验：Config `z` 来自 `@deepseek-ai/schemastery`；`storageDomain` 记录 schema 用 `zod 4.4.3`（与 `dsh-storage-domain` 内嵌版本对齐，保证 `ZodType<V>` 同源）。`src/types.ts` 有编译期双向 `extends` 校验 zod 推导 === 共享契约。
 - Client bundle 构建：**V2 实测改用 TypeScript compiler API 进程内 `transpileModule`**（`scripts/build-client.mjs`），外层包 `window.__ModuleLoader__.load({id, factory})`；同样为绕开 esbuild spawn。裸 `require()` specifier 只能取 `packages/client/web/src/platform.ts:8-15` 的 `PLATFORM_MODULES` 白名单。
 - 路径：所有 DSH 相关路径从 `$DSH_HOME` / `$TEMP/.drafts/<会话id>/` 解析，
-  不写 `<user-home>\...` 到源码或配置模板。
+  不写本机用户目录的绝对路径（例如 `<user-home>/...`）到源码或配置模板。
 - 产物：`lib/`、`locale/`、`icon.svg`、`cordis.patch.yml` 进 `files`；`pnpm pack` 产出 tarball。
 
 ## 7. 风险登记（工程侧）
