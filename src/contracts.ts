@@ -64,6 +64,15 @@ export const DEFAULT_REFRESH_INTERVAL_MS = 2000
 export const OVERVIEW_FETCH_TIMEOUT_MS = 8000
 
 /**
+ * Host-side per-call deadline for one optional service read inside the overview
+ * route. Kept strictly shorter than `OVERVIEW_FETCH_TIMEOUT_MS` so the Host
+ * degrades the slow read and still returns a response before the client gives
+ * up — otherwise every poll dies at the client and the board stays on its
+ * spinner instead of rendering partial data.
+ */
+export const OVERVIEW_SERVICE_TIMEOUT_MS = 4000
+
+/**
  * Default order of the row-action status button, after the host's archive (100)
  * and pin (200). Configurable so other plugins can be placed around it.
  */
@@ -85,6 +94,28 @@ export const DEFAULT_UNMARKED_LIMIT = 20
  * this follows the official `webserver/index-inject` pattern.
  */
 export const CLIENT_CONFIG_GLOBAL = '__DSH_SESSION_MARKER_CONFIG__'
+
+/**
+ * Default upper bound of the per-session title cache on the Host. Beyond this
+ * many distinct sessions the map would keep growing with every new session id
+ * for the whole process lifetime; the oldest entries are dropped on insert.
+ */
+export const TITLE_CACHE_MAX_ENTRIES = 4096
+
+/**
+ * TTL of the overview's in-memory snapshots (persisted headers, the
+ * cross-corpus session list) in ms. The board tolerates ten seconds of
+ * staleness, which is what turns the per-poll full corpus scan into at most
+ * one scan per window.
+ */
+export const OVERVIEW_CACHE_TTL_MS = 10_000
+
+/**
+ * Random offset added to `OVERVIEW_CACHE_TTL_MS` when a snapshot is written.
+ * Jitter keeps the windows of several pollers and cache entries from expiring
+ * on the same tick, so their refresh scans do not pile into one burst.
+ */
+export const OVERVIEW_CACHE_TTL_JITTER_MS = 2000
 
 /**
  * Derive a stable revision from one durable row.
@@ -135,6 +166,30 @@ export function marksRevision(marks: readonly MarkRecord[]): string {
     // A separator keeps ["ab","c"] from hashing like ["a","bc"].
     h1 = Math.imul(h1 ^ 0x1f, 0x01000193) >>> 0
     h2 = Math.imul(h2 ^ 0x1f, 0x85ebca6b) >>> 0
+  }
+  return `${h1.toString(16).padStart(8, '0')}${h2.toString(16).padStart(8, '0')}`
+}
+
+/**
+ * Derive the revision of one overview payload.
+ *
+ * The caller serializes the payload ({groups, totalMarked, unmarked}) into one
+ * canonical JSON string — stable key order, group order fixed by
+ * `STATUS_VALUES`, entries already sorted — so the same data yields the same
+ * digest on every call and after a Host restart. The two independent FNV-1a
+ * passes keep this module free of `node:crypto`, like {@link marksRevision}.
+ *
+ * @param payload - Canonical JSON text of the overview payload.
+ * @returns Sixteen hex characters identifying the payload.
+ */
+export function overviewRevision(payload: string): string {
+  if (payload.length === 0) return ''
+  let h1 = 0x811c9dc5
+  let h2 = 0x01000193
+  for (let i = 0; i < payload.length; i++) {
+    const code = payload.charCodeAt(i)
+    h1 = Math.imul(h1 ^ code, 0x01000193) >>> 0
+    h2 = Math.imul(h2 ^ (code + i), 0x85ebca6b) >>> 0
   }
   return `${h1.toString(16).padStart(8, '0')}${h2.toString(16).padStart(8, '0')}`
 }
@@ -241,6 +296,15 @@ export interface OverviewResponse {
   readonly unmarked: UnmarkedSessions
   /** How often the Browser should re-read this route, from the Host config. */
   readonly refreshIntervalMs: number
+  /**
+   * Stable digest of `{groups, totalMarked, unmarked}`, derived only from the
+   * payload itself. Both fields are absent from `unchanged` responses (the
+   * client already holds them) and optional overall, so older clients that
+   * never send `?since=` keep working unchanged.
+   */
+  readonly revision?: string
+  /** True when the payload matches the client's `?since=` revision; then `groups`, `totalMarked` and `unmarked` are absent and the client must not repaint. */
+  readonly unchanged?: boolean
 }
 
 /** Success response for mutation routes. */

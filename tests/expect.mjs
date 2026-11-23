@@ -46,6 +46,19 @@ export function expect(actual) {
       assert.ok(actual > n, `expected ${actual} > ${n}`)
       return api
     },
+    toBeLessThan(n) {
+      assert.ok(typeof actual === 'number', 'expected number')
+      assert.ok(actual < n, `expected ${actual} < ${n}`)
+      return api
+    },
+    toBeUndefined() {
+      assert.strictEqual(actual, undefined)
+      return api
+    },
+    toBeTruthy() {
+      assert.ok(actual, 'expected a truthy value')
+      return api
+    },
     toThrow(pattern) {
       assert.throws(actual, pattern instanceof RegExp ? { message: pattern } : undefined)
       return api

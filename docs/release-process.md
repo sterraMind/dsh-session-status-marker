@@ -1,6 +1,6 @@
 # 发布流程与版本协定 · dsh-session-status-marker
 
-> **文档版本**：v1.3.0-rc.4 · 最后更新：2026-11-23（对应插件 1.3.0-rc.4）
+> **文档版本**：v1.3.0-rc.5 · 最后更新：2026-11-23（对应插件 1.3.0-rc.5）
 
 > 本文件规定本项目的版本号判定规则、npm 分发标签策略、GitHub Release 策略、标签命名规则、变更记录维护规则、分支与发布流程、发布门槛、回退与弃用处置。
 > 本文件与 `CONTRIBUTING.md`（协作规范）、`CHANGELOG.md`（变更记录）、`docs/acceptance-and-regression.md`（验收证据）配套使用。
@@ -278,7 +278,7 @@ npm 走暂存发布流程，命令输出 `+ name@version` 只代表请求被接�
 | 分发标签 | 指向版本 | 状态 | 说明 |
 |---|---|---|---|
 | `latest` | 1.2.3 | 正式版 | 用户已在 2026-11-20 实际验收，普通安装得到这个版本 |
-| `rc` | 1.3.0-rc.4 | 预发布 | 2026-11-23 上线，修四项前端缺陷，等待用户实际前端验收后转正为 1.3.0 |
+| `rc` | 1.3.0-rc.5 | 预发布 | 2026-11-23 上线，修复大会话量宿主下看板卡「加载中」并做轮询健壮化，等待用户实际前端验收后转正为 1.3.0 |
 | `next` | 未使用 | 保留 | 供实验性改动使用 |
 
 ### 10.2 下一次发布计划
@@ -297,6 +297,8 @@ npm 走暂存发布流程，命令输出 `+ name@version` 只代表请求被接�
 `1.3.0-rc.3` 的 npm 发布于 2026-11-23 10:58:45（+08:00）完成：`dist-tags` 为 `rc=1.3.0-rc.3`、`latest=1.2.3`。从 registry 取回的 tgz 与 HEAD `fec529b` 的 `pnpm pack` 产物逐文件比对，`68` 个文件全部一致（唯一差异是 `pnpm pack` 会重写 `package.json`：去掉 `prepare` 脚本、把 `license` 上移；registry 里的 `package.json` 与仓库 HEAD 字节相同），shasum `b7377f3497847747007025dc79c63314f54ca26d`、解包 `357,986` B。
 
 `1.3.0-rc.4`（2026-11-23）在 rc.3 基础上修四项用户反馈的前端缺陷：「已复制」跨会话复发、编辑备注焦点漂移/浮窗消失、看板卡「加载中」，并把编辑锁抽成共享 hook `cardLock.ts`。139 项测试 / 32 套件全绿，tgz 106,852 B（SHA-256 `4dde98b4c58968d4846dd0ccde9995ddacb5049a4709420eb092b9e418d3f763`）。发布：提交 `38e08d5`、附注标签 `v1.3.0-rc.4`、GitHub Release 455131352（prerelease，附 tgz）、`npm publish --tag rc` 后 `dist-tags` 为 `rc=1.3.0-rc.4`、`latest=1.2.3`(未动)。产物核对：从 registry 取回的 tgz 与 HEAD `38e08d5` 的 `pnpm pack` 产物逐文件比对，`71` 个文件全部一致，`git diff --no-index` 无差异，shasum `0bd59d6ecf0c25303341a5e66fd1d3779e8de633`、解包 `379.3 kB`。发布期间遇到 tarball 在 CDN 短暂 404（元数据已更新、边缘节点尚未同步），加缓存破坏参数后下载成功，属 staged publishing 中间态，非发布失败。`1.3.0` 正式版仍待用户实际前端验收通过后发布。
+
+`1.3.0-rc.5`（2026-11-23）针对用户桌面（会话量 800+ 的宿主）看板一直卡在「加载中」的问题做性能与轮询健壮化：宿主侧 `#handleOverview` 三路可选服务读取并行化、全量会话清单单飞合并 + 10 秒带抖动 TTL 缓存、未标记区块消费共享快照、4 秒 per-service 截止兜底、标题缓存 4096 条上限；`overview` 响应带 16 字符 `revision` 并支持 `?since=` 条件刷新（未变化回 `unchanged: true`）；客户端侧轮询加 Full Jitter 失败退避、随机初始偏移与 ±25% 抖动、未变化短路。做法依据 `docs/research/15-polling-and-cache-practices.md`（单飞合并 / SWR / 有界并发 / 轮询退避 / 解压不落盘的调研与引用）。153 项测试 / 35 套件全绿，tgz 118,080 B（SHA-256 `D217C714E6565AA97D9DCBBD2AD89A1916A95B76641C1EC76DAD38496E6D87CE`）。dev4090 真实页面验收全过（见 `docs/acceptance-and-regression.md` §3.26）：overview 6 次采样 200（延迟 11–57 ms）、条件刷新 `unchanged:true`、看板待办2/审查2/未标记7 无「加载中」、悬停卡备注编辑期指针漂移卡片仍开且草稿保留。发布：提交、附注标签 `v1.3.0-rc.5`、GitHub Release 勾 prerelease 附 tgz、`npm publish --tag rc` 后核对 `dist-tags` 为 `rc=1.3.0-rc.5`、`latest=1.2.3`（未动）。`1.3.0` 正式版仍待用户实际前端验收通过后发布。
 ### 10.3 已知的待办事项
 
 - .github 目录尚不存在，Issue 模板与 Pull Request 模板属于待创建项。LICENSE（MIT）与 package.json 的 license 字段已于 2026-11-20 补齐，目录站提交所需的前置条件只剩 homepage 与模板。

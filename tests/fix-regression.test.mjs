@@ -26,6 +26,7 @@ const HOVER = await read('src', 'client', 'HoverCard.tsx')
 const INDEX = await read('src', 'client', 'index.ts')
 const OVERVIEW = await read('src', 'client', 'StatusOverview.tsx')
 const CONTRACTS = await read('src', 'contracts.ts')
+const SERVICE = await read('src', 'service.ts')
 const BUILD = await read('scripts', 'build-client.mjs')
 
 describe('note-edit card lock (focus drift + float loss)', () => {
@@ -80,5 +81,20 @@ describe('overview board timeout (stuck on loading)', () => {
     expect(OVERVIEW).toContain('if (inFlight) return')
     expect(OVERVIEW).toContain('inFlight = true')
     expect(OVERVIEW).toContain('inFlight = false')
+  })
+
+  it('bounds each optional Host service read so a hung service cannot stall the response', () => {
+    // The Host reads three optional services inside the overview route. A bare
+    // `await` on any of them can hang the HTTP response, and the client's own
+    // deadline then kills every poll the same way — so the board stays on its
+    // spinner instead of rendering partial data. The Host must race each read
+    // against a deadline strictly shorter than the client's.
+    expect(CONTRACTS).toContain('export const OVERVIEW_SERVICE_TIMEOUT_MS = 4000')
+    expect(SERVICE).toContain('async #withDeadline<')
+    expect(SERVICE).toContain('OVERVIEW_SERVICE_TIMEOUT_MS')
+    expect(SERVICE).toContain('Promise.race')
+    // Each of the three optional service calls goes through the deadline.
+    expect(SERVICE).toContain('await this.#withDeadline(')
+    expect(SERVICE.match(/#withDeadline\(/g)?.length ?? 0).toBeGreaterThan(2)
   })
 })

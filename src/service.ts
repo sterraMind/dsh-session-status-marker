@@ -30,6 +30,7 @@ import {
   MARKER_LIST_PATH,
   MARKER_MUTATE_PATH,
   MARKER_OVERVIEW_PATH,
+  OVERVIEW_SERVICE_TIMEOUT_MS,
   marksRevision,
   SetMarkBodySchema,
   ClearMarkBodySchema,
@@ -38,6 +39,10 @@ import {
   type StatusGroup,
   type OverviewEntry,
   type ExplicitSource,
+  OVERVIEW_CACHE_TTL_MS,
+  OVERVIEW_CACHE_TTL_JITTER_MS,
+  TITLE_CACHE_MAX_ENTRIES,
+  overviewRevision,
 } from './types.js'
 import { DEFAULT_UNMARKED_LIMIT } from './contracts.js'
 import type { UnmarkedEntry, UnmarkedSessions } from './contracts.js'
@@ -218,6 +223,68 @@ export class SessionStatusService extends Service {
   #headerCacheAt = 0
 
   /**
+   * The one in-flight shared cross-corpus list scan. While a scan is running,
+   * every caller that arrives shares its promise instead of starting another
+   * full scan, so at most one `listSessions` scan runs at any moment — this is
+   * what breaks the "slow scan → deadline fallback → next poll → new scan"
+   * feedback loop. The entry is cleared in `finally`, not only on success: a
+   * failed or timed-out scan must not keep pinning its dead promise on every
+   * later request.
+   */
+  #sessionListInflight: Promise<Map<SessionId, number>> | undefined
+
+  /**
+   * Compact projection of the last successful cross-corpus scan — only the
+   * fields `#collectUnmarked` consumes (`id`, `createdAt`), never the full
+   * records — plus the instant its TTL window expires. The window is
+   * `OVERVIEW_CACHE_TTL_MS` plus the per-snapshot random offset recorded in
+   * `#sessionListTtlJitter`, so snapshots written together do not expire on
+   * the same tick. A refresh that fails or times out keeps the previous
+   * snapshot (or the empty one on first call), so a sick query engine degrades
+   * the board to stale data instead of breaking it.
+   */
+  #sessionListCache = new Map<SessionId, number>()
+  #sessionListCacheAt = 0
+  #sessionListTtlJitter = 0
+
+  /**
+   * One signal for the whole service lifetime, passed to the shared
+   * `listSessions` scan. It is created in `[Service.init]` and aborted by an
+   * effect on teardown — never by a caller's per-request deadline, because the
+   * scan is shared and one caller's timeout must not cancel a scan other
+   * callers are still waiting on. It hands the kernel a real cancellation
+   * handle for a stuck scan when the Host implements `listSessions` abort.
+   */
+  #scanAbort?: AbortController
+
+  /**
+   * Await a promise but never let it block the board forever.
+   *
+   * The optional Host services (`sessionPersistence`, `sessionQuery`) are
+   * external to this bundle: on a Host whose implementation is slow, stuck, or
+   * awaiting an engine this bundle never sees, a bare `await` can hang the
+   * overview request until the client gives up — and then every retry hangs the
+   * same way, so the board reads "loading" permanently. Racing the read against
+   * a deadline degrades to the last snapshot (an empty one on first call) and
+   * lets the request finish, which the client renders as a working board with
+   * fewer titles instead of a spinner that never resolves.
+   */
+  async #withDeadline<T>(promise: Promise<T>, fallback: T): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const deadline = new Promise<T>((resolve) => {
+      timer = setTimeout(() => resolve(fallback), OVERVIEW_SERVICE_TIMEOUT_MS)
+    })
+    try {
+      return await Promise.race([promise, deadline])
+    } catch {
+      // A rejected optional service is the same as a slow one here: degrade.
+      return fallback
+    } finally {
+      if (timer !== undefined) clearTimeout(timer)
+    }
+  }
+
+  /**
    * Read an optional Host service without declaring it in `static inject`.
    *
    * The context proxy only exposes services listed in `inject`; reading an
@@ -242,6 +309,15 @@ export class SessionStatusService extends Service {
     const domain = await this.ctx.storageDomain.open(MarkerDomainSpec)
     this.#domain = domain
     this.ctx.effect(() => () => { void domain.close() }, 'sessionStatus.domainClose')
+
+    // One signal for the lifetime of the service, passed to the shared
+    // listSessions scan and aborted by this effect on teardown. A caller's
+    // per-request deadline must never abort it: the scan is shared, and
+    // cancelling it for one slow caller would drop data every other caller is
+    // still waiting on.
+    const scanAbort = new AbortController()
+    this.#scanAbort = scanAbort
+    this.ctx.effect(() => () => { scanAbort.abort() }, 'sessionStatus.scanAbort')
 
     const setTool = this.#buildSetTool()
     const clearTool = this.#buildClearTool()
@@ -273,7 +349,7 @@ export class SessionStatusService extends Service {
       path: MARKER_OVERVIEW_PATH,
       methods: ['GET'] as const,
       requestBody: 'buffered' as const,
-      fetch: () => this.#handleOverview(),
+      fetch: (request: Request) => this.#handleOverview(request),
     }
     // The HTTP bridge is injected lazily instead of declared as a dependency:
     // see the note on `inject` above — headless and TUI compositions mount no
@@ -451,8 +527,22 @@ export class SessionStatusService extends Service {
    * non-empty groups are returned, in `STATUS_VALUES` order; group members are
    * sorted by `updatedAtMs` descending. Titles come from the session-title
    * projection; a missing session or a throwing title read yields `null`.
+   *
+   * The three optional Host reads (persisted headers, cold titles, cross-corpus
+   * session list) are independent of each other, so all three start at the top
+   * of the handler and each consumer awaits the promise it needs. Worst-case
+   * latency is then one 4-second per-service deadline instead of the sum of
+   * three, and concurrency stays bounded at three in-flight reads.
+   *
+   * Conditional refresh follows `#handleList`: the caller sends the revision it
+   * last saw as `?since=`, and when it still equals the digest of the current
+   * payload the response carries `{ refreshIntervalMs, unchanged: true }` with
+   * no payload, so the browser skips repainting.
    */
-  async #handleOverview(): Promise<Response> {
+  async #handleOverview(request: Request): Promise<Response> {
+    const since = new URL(request.url).searchParams.get('since')
+    const refreshIntervalMs = this.config.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS
+
     const sessions = new Map<string, Session>()
     try {
       for (const session of this.ctx.sessions.list()) sessions.set(session.id, session)
@@ -462,17 +552,28 @@ export class SessionStatusService extends Service {
     for (const [, row] of this.listAll()) rows.push(row)
     const marked = new Set(rows.map((row) => row.sessionId))
     const coldIds = rows.filter((row) => !sessions.has(row.sessionId)).map((row) => row.sessionId)
+
+    // Start all three independent optional reads at once. Each read carries its
+    // own 4-second deadline and its own degradation path, so no slow service
+    // can add its latency to the other two.
+    const headersP = this.#persistedHeaders()
+    const coldTitlesP = this.#readColdTitles(coldIds)
+    const sessionListP = this.#withDeadline(this.#sessionListSnapshotNow(), this.#sessionListCache)
+
     // Title enrichment is best-effort: a Host that mounts a different
     // session-query shape must never take the whole board down with it.
-    let coldTitles = new Map<string, string>()
-    let headerMap = new Map<string, { readonly id: SessionId; readonly createdAt: number }>()
+    let coldTitles: Map<string, string>
+    let headerMap: Map<string, { readonly id: SessionId; readonly createdAt: number }>
     try {
-      headerMap = await this.#persistedHeaders()
-      coldTitles = await this.#readColdTitles(coldIds)
+      headerMap = await headersP
+      coldTitles = await coldTitlesP
       for (const [id, title] of this.#cachedTitles(coldIds, headerMap)) {
         if (!coldTitles.has(id)) coldTitles.set(id, title)
       }
-    } catch { coldTitles = new Map() }
+    } catch {
+      coldTitles = new Map()
+      headerMap = this.#headerCache
+    }
 
     const byStatus = new Map<StatusEnum, OverviewEntry[]>()
     let totalMarked = 0
@@ -508,13 +609,19 @@ export class SessionStatusService extends Service {
       }
     }
     let unmarked: UnmarkedSessions = { count: 0, entries: [] }
-    try { unmarked = await this.#collectUnmarked(marked) } catch { unmarked = { count: 0, entries: [] } }
-    return Response.json({
-      groups,
-      totalMarked,
-      unmarked,
-      refreshIntervalMs: this.config.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS,
-    })
+    try {
+      unmarked = await this.#collectUnmarked(marked, sessionListP)
+    } catch { unmarked = { count: 0, entries: [] } }
+
+    // Digest only the payload: `refreshIntervalMs` is config, not data, and an
+    // unchanged config must not force a repaint.
+    const revision = overviewRevision(JSON.stringify({ groups, totalMarked, unmarked }))
+    if (since !== null && since === revision) {
+      // The caller already holds this payload, so echoing it would only repeat
+      // bytes. The unchanged response keeps the two fields the client needs.
+      return Response.json({ refreshIntervalMs, unchanged: true })
+    }
+    return Response.json({ groups, totalMarked, unmarked, refreshIntervalMs, revision, unchanged: false })
   }
 
   /**
@@ -538,11 +645,14 @@ export class SessionStatusService extends Service {
       const query = this.#optionalService<SessionQueryLike>('sessionQuery')
       if (query !== undefined && typeof query.readTitleSnapshots === 'function') {
         try {
-          const results: unknown = await query.readTitleSnapshots(stale)
+          const results: unknown = await this.#withDeadline(
+            query.readTitleSnapshots(stale),
+            null,
+          )
           if (Array.isArray(results)) {
             for (const result of results as readonly TitleObservationResult[]) {
               if (result?.status === 'fulfilled' && typeof result.value?.title?.title === 'string') {
-                this.#titleCache.set(result.sessionId, { title: result.value.title.title, at: now })
+                this.#rememberTitle(result.sessionId, result.value.title.title, now)
               }
             }
           }
@@ -554,6 +664,25 @@ export class SessionStatusService extends Service {
       if (hit !== undefined) resolved.set(id, hit.title)
     }
     return resolved
+  }
+
+  /**
+   * Remember one cold title, evicting expired entries first so the cache stays
+   * bounded for a Host with thousands of sessions: entries older than the
+   * ten-second reuse window go first, then the oldest remaining entry fills
+   * the last slot.
+   */
+  #rememberTitle(id: string, title: string, at: number): void {
+    if (this.#titleCache.size >= TITLE_CACHE_MAX_ENTRIES) {
+      for (const [key, hit] of this.#titleCache) {
+        if (at - hit.at > 10_000) this.#titleCache.delete(key)
+      }
+      if (this.#titleCache.size >= TITLE_CACHE_MAX_ENTRIES) {
+        const first = this.#titleCache.keys().next().value
+        if (first !== undefined) this.#titleCache.delete(first)
+      }
+    }
+    this.#titleCache.set(id, { title, at })
   }
 
   /**
@@ -569,7 +698,7 @@ export class SessionStatusService extends Service {
     const persistence = this.#optionalService<SessionPersistenceLike>('sessionPersistence')
     if (persistence === undefined || typeof persistence.list !== 'function') return this.#headerCache
     try {
-      const snapshots: unknown = await persistence.list()
+      const snapshots: unknown = await this.#withDeadline(persistence.list(), null)
       if (Array.isArray(snapshots)) {
         const next = new Map<string, { readonly id: SessionId; readonly createdAt: number }>()
         for (const snapshot of snapshots as readonly PersistedSnapshotLike[]) {
@@ -583,6 +712,64 @@ export class SessionStatusService extends Service {
       }
     } catch { /* persistence unavailable — keep the last snapshot */ }
     return this.#headerCache
+  }
+
+  /**
+   * The shared cross-corpus list snapshot, refreshing it when its TTL window
+   * has expired.
+   *
+   * Refresh is single-flight: while a scan is in flight, every caller that
+   * arrives shares its promise, so at most one `listSessions` scan runs at
+   * any moment. A refresh that fails or times out keeps the previous snapshot
+   * and still advances the TTL clock, so a sick query engine degrades the
+   * board to stale data and is retried once per window instead of on every
+   * two-second poll.
+   */
+  async #sessionListSnapshotNow(): Promise<Map<SessionId, number>> {
+    const now = Date.now()
+    if (now < this.#sessionListCacheAt + OVERVIEW_CACHE_TTL_MS + this.#sessionListTtlJitter) {
+      return this.#sessionListCache
+    }
+    if (this.#sessionListInflight !== undefined) return this.#sessionListInflight
+    const scan = this.#scanSessionList(now)
+    this.#sessionListInflight = scan
+    try {
+      return await scan
+    } finally {
+      if (this.#sessionListInflight === scan) this.#sessionListInflight = undefined
+    }
+  }
+
+  /**
+   * Run the one shared `listSessions` scan and project it down to the two
+   * fields `#collectUnmarked` consumes.
+   *
+   * The scan uses the service-lifetime signal, never a caller's per-request
+   * deadline: the scan is shared, and one slow caller must not cancel a scan
+   * other callers are still waiting on. A failure keeps the previous snapshot
+   * (an empty one on first call) so the board degrades to stale data instead
+   * of breaking.
+   */
+  async #scanSessionList(now: number): Promise<Map<SessionId, number>> {
+    let raw: unknown = null
+    const query = this.#optionalService<
+      SessionQueryLike & { listSessions?: (signal?: AbortSignal) => Promise<unknown> }
+    >('sessionQuery')
+    if (query !== undefined && typeof query.listSessions === 'function') {
+      raw = await this.#withDeadline(query.listSessions(this.#scanAbort?.signal), null)
+    }
+    let snapshot = this.#sessionListCache
+    if (Array.isArray(raw)) {
+      const next = new Map<SessionId, number>()
+      for (const record of (raw as readonly unknown[]).filter(isSessionRecord)) {
+        next.set(record.header.id, record.header.createdAt ?? 0)
+      }
+      if (next.size > 0) snapshot = next
+    }
+    this.#sessionListCache = snapshot
+    this.#sessionListCacheAt = now
+    this.#sessionListTtlJitter = Math.random() * OVERVIEW_CACHE_TTL_JITTER_MS
+    return snapshot
   }
 
   /** Folded titles from the projection cache for ids whose header is known. */
@@ -611,11 +798,18 @@ export class SessionStatusService extends Service {
    *
    * Candidates come from three sources, merged by id: live sessions the Host has
    * loaded, headers from the optional persistence service (every session on
-   * disk), and the optional query engine's cross-corpus list. Any one of them is
-   * enough to populate the block, so a composition that omits the query engine
-   * still shows the sessions the user can actually see.
+   * disk), and the shared cross-corpus list snapshot. Any one of them is enough
+   * to populate the block, so a composition that omits the query engine still
+   * shows the sessions the user can actually see.
+   *
+   * The snapshot promise is the one `#handleOverview` started at the top of the
+   * request (cached for a TTL window and single-flight), so the expensive
+   * `listSessions` scan is never re-run here.
    */
-  async #collectUnmarked(marked: ReadonlySet<string>): Promise<UnmarkedSessions> {
+  async #collectUnmarked(
+    marked: ReadonlySet<string>,
+    sessionListP: Promise<Map<SessionId, number>>,
+  ): Promise<UnmarkedSessions> {
     const candidates = new Map<SessionId, number>()
     const add = (id: SessionId, createdAt: number | undefined): void => {
       if (marked.has(id) || candidates.has(id)) return
@@ -627,17 +821,9 @@ export class SessionStatusService extends Service {
     try {
       for (const [, header] of await this.#persistedHeaders()) add(header.id, header.createdAt)
     } catch { /* persistence unavailable */ }
-    const query = this.#optionalService<
-      SessionQueryLike & { listSessions?: (signal?: AbortSignal) => Promise<unknown> }
-    >('sessionQuery')
-    if (query !== undefined && typeof query.listSessions === 'function') {
-      try {
-        const raw: unknown = await query.listSessions()
-        if (Array.isArray(raw)) {
-          for (const record of (raw as readonly unknown[]).filter(isSessionRecord)) add(record.header.id, record.header.createdAt)
-        }
-      } catch { /* query unavailable */ }
-    }
+    try {
+      for (const [id, createdAt] of await sessionListP) add(id, createdAt)
+    } catch { /* snapshot unavailable — the shared scan already degraded */ }
     const ordered = [...candidates.entries()].sort((a, b) => b[1] - a[1])
     const slice = ordered.slice(0, DEFAULT_UNMARKED_LIMIT)
     const ids = slice.map(([id]) => id)

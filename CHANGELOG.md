@@ -2,6 +2,22 @@
 
 本文件记录 `dsh-session-status-marker` 的对外可见变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.3.0-rc.5] - 2026-11-23
+
+预版本（按发布政策，正式版本需用户实际前端验收通过后再发布）。这一版针对大会话量宿主下看板一直卡在「加载中」的问题做性能与健壮性处理：宿主侧把三次互不依赖的可选服务读取并行化、给全量会话清单加单飞合并与 10 秒带抖动的缓存，未标记区块复用同一份快照；客户端侧把轮询加上失败退避、抖动与未变化短路。
+
+### 变更
+
+- **宿主侧 `overview` 路由提速**：`#handleOverview` 原先串行等待「已持久化会话头 → 冷会话标题 → 会话清单」三段，最坏耗时相加；现改为请求开始时并行启动，最坏路径收敛到单段耗时。全量 `listSessions()` 走单飞合并：并发请求共享同一次扫描，扫描在途时新请求不再触发第二次扫描；扫描结果缓存 10 秒（过期点带 0–2 秒随机抖动，避免重启后所有轮询同刻重扫），缓存失败保留上一份快照并按 TTL 节流重试。未标记区块不再自行重扫，直接消费共享快照。
+- **`overview` 支持条件刷新**：响应带 16 字符 `revision`（对载荷做两轮 FNV-1a 摘要，不引入 `node:crypto`）；客户端携带 `?since=<revision>` 请求，内容未变时宿主只回 `unchanged: true` 与刷新间隔，客户端跳过重绘。
+- **客户端轮询健壮化**：`StatusOverview` 保留在途标志与可见性暂停；连续失败时按 Full Jitter 指数退避（`random(0, min(60s, interval × 2^失败次数))`），成功后恢复常规间隔；首次轮询带随机初始偏移，每拍间隔带 ±25% 抖动；`fetchOverview` 保留 8 秒 `AbortController` 超时与绝对路径。
+- **宿主侧兜底**：`listSessions` / `readTitleSnapshots` / `sessionPersistence.list()` 三处外部读取均包 4 秒 `Promise.race` 截止时间（`OVERVIEW_SERVICE_TIMEOUT_MS`），任一可选服务挂住时路由降级返回 200 而不是永久挂起；`listSessions` 收到服务生命期的共享 `AbortSignal`，该信号不被单请求截止时间取消。
+- **标题缓存上限**：冷会话标题缓存加 4096 条上限，先清过期条目再按插入序淘汰，避免长期运行下的缓慢增长。
+
+### 测试
+
+新增 `tests/overview-perf.test.mjs`（单飞合并调用次数、TTL 内不重扫、失败保陈旧、卡死服务 4 秒降级、`since` 未变化往返、未标记区块消费共享快照）与 `tests/overview-client.test.mjs`（退避上限、抖动边界、未变化短路）；`tests/expect.mjs` 测试垫片补齐 `toBeLessThan` / `toBeUndefined` / `toBeTruthy`。全量 `153` 项测试、`35` 个套件全部通过，`typecheck`、`build` 退出码 0。
+
 ## [1.3.0-rc.4] - 2026-11-23
 
 预版本（按发布政策，正式版本需用户实际前端验收通过后再发布）。这一版修掉用户反馈的四个缺陷，并把备注编辑的卡片锁抽成可复用 hook。

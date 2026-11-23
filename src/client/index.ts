@@ -110,14 +110,20 @@ export function apply(ctx: ClientContext): void {
   // session by status. Data arrives through `fetchOverview`; copy through the
   // bound `t` (fresh on every locale switch, so the nav label stays current).
   const t = ctx.locale.bind(NS) as (key: string, params?: Record<string, string>) => string
-  const fetchOverview = async (): Promise<OverviewResponse> => {
+  const fetchOverview = async (since?: string): Promise<OverviewResponse> => {
     // Absolute path: a relative "api/..." resolves against the current route,
     // which changes under the settings panel and produced spurious 404s.
+    // `since` asks the Host for a conditional refresh: when the board payload
+    // matches this revision the Host answers `unchanged` with a small body, so
+    // steady-state polls transfer few bytes and trigger no re-render. An empty
+    // `since` (the first poll, or a Host without revisions) requests a full
+    // payload.
+    const url = since === undefined || since === '' ? MARKER_OVERVIEW_PATH : `${MARKER_OVERVIEW_PATH}?since=${encodeURIComponent(since)}`
     // Abort after a deadline so a hung Host never leaves the board on "loading".
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), OVERVIEW_FETCH_TIMEOUT_MS)
     try {
-      const resp = await fetch(MARKER_OVERVIEW_PATH, { signal: controller.signal })
+      const resp = await fetch(url, { signal: controller.signal })
       if (!resp.ok) throw new Error('overview fetch failed')
       return (await resp.json()) as OverviewResponse
     } finally {

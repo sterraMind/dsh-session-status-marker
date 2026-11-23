@@ -1,6 +1,6 @@
 # Acceptance & Regression
 
-> **文档版本**：v1.3.0-rc.4 · 2026-11-23（对应插件 1.3.0-rc.4）
+> **文档版本**：v1.3.0-rc.5 · 2026-11-23（对应插件 1.3.0-rc.5）
 
 > 记录验收标准、已通过证据、待执行集成 smoke 与回归清单。
 > 对应实现进度见 `docs/implementation-plan.md` §2，风险优先级见 `docs/feasibility-and-risks.md`。
@@ -479,3 +479,31 @@ rc.2 在 dev4090 真实页面上暴露两个缺陷：看板所有条目标题显
 ### 3.25.1 预版本发布核对（2026-11-23）
 
 按发布政策发布 `1.3.0-rc.4` 预版本，不转正。提交 `38e08d5` 已推送，附注标签 `v1.3.0-rc.4`，GitHub Release 455131352 勾选 prerelease 并附 tgz（106,852 B），npm `publish --tag rc` 后官方源 `dist-tags` 为 `rc=1.3.0-rc.4`、`latest=1.2.3`（未动）。从 registry 取回 tgz 与本地 `pnpm pack` 产物逐文件比对，71 个文件全部一致，`git diff --no-index` 无差异，shasum `0bd59d6ecf0c25303341a5e66fd1d3779e8de633`、解包 379.3 kB。发布期间 tarball 在 CDN 短暂 404（元数据已就绪，边缘节点尚未同步），加缓存破坏参数后下载成功，属 staged publishing 中间态。`1.3.0` 正式版仍需用户本人实际前端验收通过后才发布。
+
+### 3.26 1.3.0-rc.5 看板性能与轮询健壮化复验（2026-11-23）
+
+用户在大会话量宿主（本机桌面，会话数 800+）反馈看板长时间卡在「加载中」。定位为两点叠加：桌面进程 11/22 启动时加载的是 rc.4 之前的旧 client bundle（磁盘 bundle 已是 rc.4，重启即解决），加上宿主 `#handleOverview` 三段可选服务串行 await、`listSessions()` 每 2 秒轮询全量重扫无缓存。rc.5 按网络搜索到的单飞合并 / stale-while-revalidate / Full Jitter 退避 / 有界并发四类做法落地（来源见 `docs/research/15-polling-and-cache-practices.md`）。
+
+| 校验项 | 结果 |
+|---|---|
+| 类型检查 | `pnpm run typecheck` exit 0 |
+| 单元测试 | `tests 153 / suites 35 / pass 153 / fail 0`（新增 `tests/overview-perf.test.mjs` 6 项、`tests/overview-client.test.mjs` 7 项） |
+| 构建 | `pnpm run build` exit 0，`lib/client.js` 119,555 B |
+| 打包 | `pnpm pack` → `dsh-session-status-marker-1.3.0-rc.5.tgz` 118,080 B，SHA-256 `D217C714E6565AA97D9DCBBD2AD89A1916A95B76641C1EC76DAD38496E6D87CE` |
+| dev4090 部署 | remove rc.4 → allow-version → add；远程 `lib/client.js` 119,555 B，`version=1.3.0-rc.5`，`has_overviewRevision=True` |
+
+| 验证项 | 结果 |
+|---|---|
+| `overview` 路由 | 6 次采样 200，延迟 57/16/12/15/11/12 ms，载荷 1732 B；首调含 `revision`（16 字符）、`unchanged:false`、`totalMarked=4`、`unmarked.count=7`、`refreshIntervalMs=2000` |
+| `?since=<revision>` 条件刷新 | 同连接第二次带 `since` 请求 200 / `unchanged:true` / 不含 `groups` |
+| 看板渲染（设置 → 会话状态） | 待办 2（Todo Write Tool Test / 未命名会话 integration smoke）、审查中 2（回复 OK 测试 含备注「验收 130rc3 备注」/ Mark session status for review）、未标记会话 7（5 条真实标题）；无「加载中」 |
+| 悬停卡 | 8 格单行，active=审查中，备注行显示「验收 130rc3 备注」，含「编辑备注」与「清除」 |
+| 备注编辑与焦点漂移 | 点「编辑备注」→ INPUT 聚焦、值「验收 130rc3 备注」；改写为「验收 130rc3 备注-drift-test」后把指针漂到相邻行，卡片仍开、INPUT 仍聚焦、草稿完整保留（cardLock 生效）；点「取消」回到读态，备注未被改写 |
+| 主题跟随 | 单连接探针：dark `cardBg=rgb(44,44,46)` / light `cardBg=rgb(255,255,255)`，两者均 8 格单行；截图 `.drafts/shots/rc5-dark.png`、`.drafts/shots/rc5-light.png` |
+| 复制守卫回归 | 整个验收流程未出现「已复制」 |
+
+截图：`.drafts/shots/rc5-home.png`（主页行尾徽标）、`.drafts/shots/rc5-card.png`（悬停卡读态）、`.drafts/shots/rc5-note-edit.png`（悬停卡备注编辑态）、`.drafts/shots/rc5-board.png`（设置页看板）、`.drafts/shots/rc5-dark.png` 与 `.drafts/shots/rc5-light.png`（两主题）。
+
+推迟项（用户已确认）：会话备注显示/隐藏配置项、`get_session_status` 工具、AI 主动性/配置开关/新标记规则/一键批量打标，见任务板 task-10/task-11/task-12。
+
+结论：1.3.0-rc.5 在 dev4090 真实页面全部复验通过，`1.3.0` 正式版待用户本人实际前端验收通过后发布。

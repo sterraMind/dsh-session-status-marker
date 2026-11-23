@@ -106,8 +106,9 @@ async function boot({ titles, throwTitles, coldTitles, allSessions, rawListSessi
   return { svc, table, overviewRoute }
 }
 
-async function callOverview(overviewRoute) {
-  const resp = await overviewRoute.fetch()
+async function callOverview(overviewRoute, since) {
+  const url = `http://localhost${overviewRoute.path}` + (since === undefined ? '' : `?since=${encodeURIComponent(since)}`)
+  const resp = await overviewRoute.fetch(new Request(url))
   return resp.json()
 }
 
