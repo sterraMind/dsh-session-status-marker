@@ -273,12 +273,12 @@ npm 走暂存发布流程，命令输出 `+ name@version` 只代表请求被接�
 
 ### 10.1 分发标签与版本
 
-下表于 2026-11-20 用 `npm dist-tag ls dsh-session-status-marker` 核对。
+下表于 2026-11-23 用 `npm dist-tag ls dsh-session-status-marker` 核对。
 
 | 分发标签 | 指向版本 | 状态 | 说明 |
 |---|---|---|---|
 | `latest` | 1.2.3 | 正式版 | 用户已在 2026-11-20 实际验收，普通安装得到这个版本 |
-| `rc` | 1.2.3-rc.2 | 预发布 | 已转正为 1.2.3，保留该标签供追溯 |
+| `rc` | 1.3.0-rc.3 | 预发布 | 2026-11-23 上线，等待用户实际前端验收后转正为 1.3.0 |
 | `next` | 未使用 | 保留 | 供实验性改动使用 |
 
 ### 10.2 下一次发布计划
@@ -293,6 +293,8 @@ npm 走暂存发布流程，命令输出 `+ name@version` 只代表请求被接�
 1.2.3 已于 2026-11-20 转为正式版：用户在桌面端验收 `1.2.3-rc.2` 后确认通过（验收记录见 `docs/acceptance-and-regression.md` §3.22），`package.json` 版本、git 标签 `v1.2.3`、GitHub Release 452333466（非 prerelease，附 83,281 B 的 tgz）、npm `latest` 四者一致；`rc` 标签继续指向 `1.2.3-rc.2` 供追溯。
 
 1.3.0 预版本序列（2026-11-20）：`1.3.0-rc.1`（122 项测试 / tgz 93,874 B）→ `1.3.0-rc.2`（130 项 / tgz 98,388 B，修看板空 400、悬停卡备注编辑、换状态保留备注）→ `1.3.0-rc.3`（130 项 / tgz 98,666 B，修看板标题与未标记区块：未 inject 的服务改经 `ctx.reflect.get` 读取）。三者都只发预版本，GitHub Release 勾 prerelease、npm 用 `--tag rc`，`latest` 保持 `1.2.3`。用户在实际前端验收通过后再把当前 rc 转正式版 `1.3.0`。
+
+`1.3.0-rc.3` 的 npm 发布于 2026-11-23 10:58:45（+08:00）完成：`dist-tags` 为 `rc=1.3.0-rc.3`、`latest=1.2.3`。从 registry 取回的 tgz 与 HEAD `fec529b` 的 `pnpm pack` 产物逐文件比对，`68` 个文件全部一致（唯一差异是 `pnpm pack` 会重写 `package.json`：去掉 `prepare` 脚本、把 `license` 上移；registry 里的 `package.json` 与仓库 HEAD 字节相同），shasum `b7377f3497847747007025dc79c63314f54ca26d`、解包 `357,986` B。`1.3.0` 正式版仍待用户实际前端验收通过后发布。
 ### 10.3 已知的待办事项
 
 - .github 目录尚不存在，Issue 模板与 Pull Request 模板属于待创建项。LICENSE（MIT）与 package.json 的 license 字段已于 2026-11-20 补齐，目录站提交所需的前置条件只剩 homepage 与模板。

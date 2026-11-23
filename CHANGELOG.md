@@ -18,6 +18,12 @@
 ### 测试
 
 `130` 项测试、`30` 个套件全部通过（`overview` 的假上下文改为同时挂 `reflect.get` 与 `get`）。
+
+### 发布
+
+- `2026-11-23` 发布到 npm（`--tag rc`）：`dist-tags` 为 `rc=1.3.0-rc.3`、`latest` 保持 `1.2.3`。registry 上的包含 `68` 个文件、解包 `357,986` B、shasum `b7377f3497847747007025dc79c63314f54ca26d`、integrity `sha512-Cq4ds/fGJZjj27AZpnwP43iuOcP1QMPyJyj8I/4X0asd7laSsdzPqIWP7v4B4szCRU053lYEWAE50RSmREn1GQ==`。
+- 产物核对：从 registry 取回 tgz 与 HEAD `fec529b` 的 `pnpm pack` 产物逐文件比对，`68` 个文件全部一致；唯一差异是 `pnpm pack` 会重写 `package.json`（去掉 `prepare` 脚本、把 `license` 上移），registry 里的 `package.json` 与仓库 HEAD 字节相同，所以发布内容等于 HEAD。
+- GitHub Release `v1.3.0-rc.3`（prerelease，id `452492332`）保持原样。`1.3.0` 正式版待用户实际前端验收通过后发布。
 ## [1.3.0-rc.2] - 2026-11-20
 
 预版本（按发布政策，正式版本需用户实际前端验收通过后再发布）。这一版修掉 rc.1 在真实页面上暴露的三处问题，并把「未标记会话」的数据来源扩到多路。
