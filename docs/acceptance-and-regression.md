@@ -441,8 +441,13 @@ rc.2 在 dev4090 真实页面上暴露两个缺陷：看板所有条目标题显
 | `overview` 路由 | 页面内 `fetch('/api/session-status-marker.overview')` → 200，1684 B；`totalMarked=4`、`unmarked.count=7`、`refreshIntervalMs=2000`，分组 todo 2 / review 2，标题关联真实会话 |
 | 侧栏行 | 5 行标题可读；标记行「回复 OK 测试」带状态图标，无标题会话回退为工作区名，无报错 |
 | 悬停卡 8 格 | 打开后 `cellCount=8` 单行，`activeCell=审查中`；有「编辑备注」「清除」按钮，备注显示「验收 130rc3 备注」，来源「手动标记」 |
+| 备注编辑态 | 点「编辑备注」后实时读到 `hasInput=true`、`tag=INPUT`、`value="验收 130rc3 备注"`、保存/取消按钮均在；截图见下 |
 | 整卡主题 | 同一 CDP 会话内切 `prefers-color-scheme`：light 卡底 `rgb(255,255,255)`、dark 卡底 `rgb(44,44,46)`，两者不同即通过（说明：分两次 cdp.mjs 调用切主题会因仿真状态不跨连接而误判为都是白底，须单连接内切换后再读） |
 | 行内图标 | 点击 `[data-status-action]` 后宿主卡打开、8 格、`popoverCount=0`、`copied=false`；无自建浮层、无误触复制 |
-| 截图 | `.drafts/shots/v130rc3-acceptance-card.png`（1576×861），已目检 |
+| 截图 | `.drafts/shots/v130rc3-acceptance-card.png`（悬停卡，1576×861）、`v130rc3-acceptance-overview.png`（看板，1576×861）、`v130rc3-acceptance-note-edit.png`（备注编辑态，1576×861），均已目检 |
 
-结论：1.3.0-rc.3 六项前端复核全部通过，与 §3.23 记录一致。
+**截图证据缺口与补齐**：§3.23 声称的修复后看板截图 `v130d-overview.png` 在磁盘上并不存在；磁盘上原有的 `v130-overview.png` 显示「加载失败，请重试」、`v130c-overview.png` 的已标记条目全是「未命名会话」，两者都是 rc.3 修复前的状态，不能作为通过证据。本轮从当前 rc.3 页面实时截取 `v130rc3-acceptance-overview.png`：待办 2（Todo Write Tool Test）、审查中 2（回复 OK 测试、Mark session status for review）、未标记会话 7（5 条真实标题），与页面内 API 探针一致。备注编辑态也由本轮补拍，此前磁盘上只有右键菜单截图，没有输入框展开状态。
+
+**独立复核**：本轮派 4 个子代理分别复核悬停卡、看板、备注与深色主题截图，全部中途失败且未产出报告，改由主会话逐张 `read_image` 完成复核，报告见 `.drafts/reviews/{hover-card,overview,note-dark}-review.md`。复核结论与上面的 CDP 数据一致；子代理失败不影响验收结论，但「智能体团队独立复核」这一形式未达成。
+
+结论：1.3.0-rc.3 七项前端复核全部通过，与 §3.23 记录一致；截图证据已补齐。
