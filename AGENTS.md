@@ -10,6 +10,7 @@
 6. **rtk wrap**：常用命令用 `rtk <cmd>` wrap 节省 token，如 `rtk read <file>`、`rtk grep <pattern>`。
 7. **每步一行 status**：在正文最前面单独写一行 `⏵ <正在做的事>`（≤20字），切换任务必须更新。
 8. **智能体团队原子化拆解**：支持子代理或智能体团队时，把目标拆成互不依赖、可单独验收的原子任务再分别派发，不要按线性顺序一个人做完全部。每个派发单必须写清五项：输入（必读文件与已知事实）、产出（文件路径与格式）、验收判据、写入范围白名单、时间预算；共享文件（`AGENTS.md`、`README.md`、`CHANGELOG.md`、`package.json`）由主会话独占，子代理只写各自范围内的文件。子代理完成后主会话必须按判据逐条复核产物并自己跑一遍测试，不得只凭子代理的结论判定通过。判定子代理是否真在工作看产物文件修改时间，10 分钟无改动先询问、30 分钟无改动中断并接手。条文与来源见 `docs/research/11-agent-team-practices.md`，落地要求见 `CONTRIBUTING.md` §6。
+9. **文档不得出现占位符与敏感内容**（2026-11-23，用户指定）：写入仓库文档（`AGENTS.md`、`README.md`、`CHANGELOG.md`、`CONTRIBUTING.md`、`docs/**`）时，禁止记录任何会话凭据占位符——包括占位符本身的语法形式、它的变量名、它的片段，以及任何对它的描述（如「某 token 是多少位、以什么前缀开头」）。也不要写入真实 token、密钥、口令、内网地址凭据等敏感内容。原因：这套运行环境会在渲染时把占位符替换成真实值，文档里写到占位符等价于把真实凭据落盘，推送时会被 GitHub secret scanning 拦截，且历史提交难以彻底清除。文档里需要说明「某次发布用了 npm 发布权限」时，只写操作步骤与可公开的结果（版本号、标签、Release 编号），凭据一律用中性措辞指代（如「使用仓库发布权限」），不描述凭据本身。每次改完文档、推送前，先 `git grep` 确认没有占位符语法与凭据前缀再提交。
 
 ## 项目概要
 
@@ -90,7 +91,7 @@ tests/*.test.mjs   canonical 断言（node:test + shim），*.test.ts 为薄壳
 - Scoop 全局 pnpm store 的 `index.db`（3.36 GB）不可读；`pnpm-workspace.yaml` 把 store 指向工作区并关闭预检。
 - Windows 沙箱禁止 named-pipe spawn：esbuild service、Vitest/Vite 配置加载、`node --test` 默认隔离全部报 `spawn EPERM`；已用 TS compiler API + `--test-isolation=none` 绕开。
 - Web GUI **55101** vs scratch **3080**，二者不同。
-- 测试机 **dev4090**：`测试主机地址`，用户 `测试主机登录用户`，密钥 `本机 SSH 密钥（走 SSH 配置，不在文档中记录）`；scoop `versions/deepseek-harness-pre 0.2.2-rc.1`，无 `dsh` shim。测试 home 用 `%TEMP%\.drafts\dsh-session-marker\dsh-home`，可随时整体废弃，不影响该机真实配置。
+- 测试机 **dev4090**：IP 与登录用户名按本机 SSH 配置（`ssh dev4090`）解析，密钥走 SSH 配置，不在文档中记录；scoop `versions/deepseek-harness-pre 0.2.2-rc.1`，无 `dsh` shim。测试 home 用 `%TEMP%\.drafts\dsh-session-marker\dsh-home`，可随时整体废弃，不影响该机真实配置。
 
 ## 任务进度看板
 
