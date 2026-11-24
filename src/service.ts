@@ -87,7 +87,7 @@ interface IndexGlobalInjection {
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    sessionStatus: SessionStatusService
+    sessionStatusMarker: SessionStatusService
     /**
      * Session-title service (from `@deepseek-ai/dsh-session-title`, not
      * installed here). `get` returns the latest folded title snapshot for a
@@ -301,14 +301,18 @@ export class SessionStatusService extends Service {
   }
 
   constructor(ctx: Context, public readonly config: Config) {
-    super(ctx, 'sessionStatus')
+    // The service name must not collide with services the Host itself ships: DSH
+    // 0.2.3 introduced an official `sessionStatus` service (unread/acknowledge
+    // reading records in `@deepseek-ai/dsh-client-ui-session-status`), and cordis
+    // refuses a second registration of the same name on one context.
+    super(ctx, 'sessionStatusMarker')
   }
 
   /** Open the domain, then install every contribution as a reversible effect. */
   protected async [Service.init](): Promise<void> {
     const domain = await this.ctx.storageDomain.open(MarkerDomainSpec)
     this.#domain = domain
-    this.ctx.effect(() => () => { void domain.close() }, 'sessionStatus.domainClose')
+    this.ctx.effect(() => () => { void domain.close() }, 'session-status-marker.domainClose')
 
     // One signal for the lifetime of the service, passed to the shared
     // listSessions scan and aborted by this effect on teardown. A caller's
@@ -317,7 +321,7 @@ export class SessionStatusService extends Service {
     // still waiting on.
     const scanAbort = new AbortController()
     this.#scanAbort = scanAbort
-    this.ctx.effect(() => () => { scanAbort.abort() }, 'sessionStatus.scanAbort')
+    this.ctx.effect(() => () => { scanAbort.abort() }, 'session-status-marker.scanAbort')
 
     const setTool = this.#buildSetTool()
     const clearTool = this.#buildClearTool()
@@ -325,7 +329,7 @@ export class SessionStatusService extends Service {
       const disposeSet = this.ctx.tools.register(setTool)
       const disposeClear = this.ctx.tools.register(clearTool)
       return () => { disposeSet(); disposeClear() }
-    }, 'sessionStatus.tools')
+    }, 'session-status-marker.tools')
 
     const stateRoute = {
       path: MARKER_STATE_PATH,
@@ -364,7 +368,7 @@ export class SessionStatusService extends Service {
         const disposeMutate = connectionCtx.connection.fetch.register(mutateRoute)
         const disposeOverview = connectionCtx.connection.fetch.register(overviewRoute)
         return () => { void disposeState(); void disposeList(); void disposeMutate(); void disposeOverview() }
-      }, 'sessionStatus.fetchRoutes')
+      }, 'session-status-marker.fetchRoutes')
     })
 
     // Expose the configured slot orders to the browser. The dynamic client
@@ -382,12 +386,12 @@ export class SessionStatusService extends Service {
           },
         })
       })
-    }, 'sessionStatus.clientConfig')
+    }, 'session-status-marker.clientConfig')
 
     if (this.config.autoInfer) {
       this.ctx.on('session/event', (session: Session, event: SessionEvent) => {
         void this.#observe(session, event).catch((error: unknown) => {
-          this.ctx.logger.warn('sessionStatus: inference failed:', error)
+          this.ctx.logger.warn('session-status-marker: inference failed:', error)
         })
       }, { global: true })
     }
@@ -462,7 +466,7 @@ export class SessionStatusService extends Service {
   #checkedNote(note: string | null): string | null {
     if (note === null) return null
     if (note.length > this.config.maxNoteLength) {
-      throw new Error(`sessionStatus: note exceeds maxNoteLength (${this.config.maxNoteLength})`)
+      throw new Error(`session-status-marker: note exceeds maxNoteLength (${this.config.maxNoteLength})`)
     }
     return note
   }
@@ -949,7 +953,7 @@ export class SessionStatusService extends Service {
   }
 
   #table() {
-    if (this.#domain === undefined) throw new Error('sessionStatus: storage domain is not open')
+    if (this.#domain === undefined) throw new Error('session-status-marker: storage domain is not open')
     return this.#domain.table(MARKER_TABLE_NAME)
   }
 }
@@ -957,7 +961,7 @@ export class SessionStatusService extends Service {
 /** Resolve the caller's session id without hardcoding an agent-tree assumption. */
 function agentSessionId(exec: { readonly agent?: { readonly id: string } | undefined }): string {
   const id = exec.agent?.id
-  if (id === undefined) throw new Error('sessionStatus: this tool requires an active agent session')
+  if (id === undefined) throw new Error('session-status-marker: this tool requires an active agent session')
   return id
 }
 

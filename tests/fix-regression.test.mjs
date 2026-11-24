@@ -98,3 +98,14 @@ describe('overview board timeout (stuck on loading)', () => {
     expect(SERVICE.match(/#withDeadline\(/g)?.length ?? 0).toBeGreaterThan(2)
   })
 })
+
+
+describe('host service name collision (DSH 0.2.3 official sessionStatus)', () => {
+  it('registers as sessionStatusMarker, not sessionStatus', () => {
+    // DSH 0.2.3 ships an official `sessionStatus` service
+    // (@deepseek-ai/dsh-client-ui-session-status); reusing that name makes
+    // cordis reject our whole plugin at activation.
+    expect(SERVICE).toContain("super(ctx, 'sessionStatusMarker')")
+    expect(SERVICE).not.toContain("super(ctx, 'sessionStatus')")
+  })
+})
