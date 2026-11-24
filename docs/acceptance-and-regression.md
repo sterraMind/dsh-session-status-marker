@@ -1,6 +1,6 @@
 # Acceptance & Regression
 
-> **文档版本**：v1.3.0-rc.5 · 2026-11-23（对应插件 1.3.0-rc.5）
+> **文档版本**：v1.3.0-rc.6 · 2026-11-24（对应插件 1.3.0-rc.6）
 
 > 记录验收标准、已通过证据、待执行集成 smoke 与回归清单。
 > 对应实现进度见 `docs/implementation-plan.md` §2，风险优先级见 `docs/feasibility-and-risks.md`。
@@ -507,3 +507,17 @@ rc.2 在 dev4090 真实页面上暴露两个缺陷：看板所有条目标题显
 推迟项（用户已确认）：会话备注显示/隐藏配置项、`get_session_status` 工具、AI 主动性/配置开关/新标记规则/一键批量打标，见任务板 task-10/task-11/task-12。
 
 结论：1.3.0-rc.5 在 dev4090 真实页面全部复验通过，`1.3.0` 正式版待用户本人实际前端验收通过后发布。
+### 3.27 1.3.0-rc.6 宿主 0.2.3-alpha 兼容修复复验（2026-11-24）
+
+用户宿主从 0.2.2-rc.5 升到 0.2.3-alpha.2 后报「配置页卡在加载中、侧栏徽标与看板整块消失、`set_session_status` 工具消失」。取证确认磁盘标记完好（`marks` 共 140 个文件，最新写入 2026-11-24 02:15:39），失活发生在激活层。
+
+| # | 校验项 | 方法 | 结果 |
+|---|---|---|---|
+| 1 | 根因定位 | 隔离 `DSH_HOME` + `dsh --profile rc6probe --from-default-profile web` 在真实 0.2.3-alpha.2 上装 rc.5 | 安装被拒（`engines.dsh` 范围不含 `0.2.3-alpha.2`）；放宽范围后仍报 `1 entry did not activate: service "sessionStatus" has been registered` |
+| 2 | 官方服务名冲突取证 | 扫 `app.asar` 检索 `sessionStatus` | 0.2.3 起宿主自带 `@deepseek-ai/dsh-client-ui-session-status`，宿主侧 `super(ctx, "sessionStatus", ...)`（教训 54） |
+| 3 | 修复后安装 | 装入 rc.6 | `plugin add` 不再报不兼容、不再报 peer 依赖问题 |
+| 4 | 修复后激活 | 启动日志检查 | 不再出现 `1 entry did not activate` 与服务名冲突，服务与路由正常挂载 |
+| 5 | 回归断言 | `tests/fix-regression.test.mjs` | 新增用例断言宿主服务名注册为 `sessionStatusMarker` 而非 `sessionStatus` |
+| 6 | 版本矩阵 | `semver.satisfies` 逐条 | `0.2.2-rc.1`、`0.2.2`、`0.2.3-alpha.2`、`0.2.3-rc.1`、`0.2.3`、`0.2.4-alpha.1` 为真；`0.2.1`、`0.3.0-alpha.1`、`0.3.0`、`1.0.0` 为假 |
+
+自动化验证：`typecheck`、`build` 退出码 0，154 项测试、36 个套件全部通过。本轮未改任何 UI 行为，`1.3.0` 正式版仍待用户本人实际前端验收通过后发布。

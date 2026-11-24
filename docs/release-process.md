@@ -1,6 +1,6 @@
 # 发布流程与版本协定 · dsh-session-status-marker
 
-> **文档版本**：v1.3.0-rc.5 · 最后更新：2026-11-23（对应插件 1.3.0-rc.5）
+> **文档版本**：v1.3.0-rc.6 · 最后更新：2026-11-24（对应插件 1.3.0-rc.6）
 
 > 本文件规定本项目的版本号判定规则、npm 分发标签策略、GitHub Release 策略、标签命名规则、变更记录维护规则、分支与发布流程、发布门槛、回退与弃用处置。
 > 本文件与 `CONTRIBUTING.md`（协作规范）、`CHANGELOG.md`（变更记录）、`docs/acceptance-and-regression.md`（验收证据）配套使用。
@@ -17,9 +17,9 @@
 | 事实 | 位置 | 观测值 |
 |---|---|---|
 | 插件版本号 | `package.json:3` | 本文件定稿时读到的值为 `1.2.3`。工作区可能已有并发改动把该字段递增，核对时以实际读取的值为准 |
-| Harness 版本下限 | `package.json:33` | `>=0.2.2-rc.1 <0.3.0` |
+| Harness 版本下限 | `package.json:33` | `>=0.2.2-rc.1 <0.3.0`（1.3.0-rc.6 起，另追加 0.2.3/0.2.4/0.2.5 各预发布修正线的比较器，见 §2.7） |
 | Node 版本下限 | `package.json:34` | `>=24.9.0` |
-| npm 分发标签 | `npm dist-tag ls dsh-session-status-marker` 于 2026-11-20 执行 | `latest: 1.2.3`，`rc: 1.2.3-rc.2` |
+| npm 分发标签 | `npm dist-tag ls dsh-session-status-marker` 于 2026-11-24 执行 | `latest: 1.2.3`，`rc: 1.3.0-rc.6` |
 | git 标签 | `git tag --sort=-creatordate` | `v1.2.3`、`v1.2.3-rc.2`、`v1.2.3-rc.1`、`v1.2.2`、`v1.2.1`、`v1.2.0`、`v1.1.6` 依次排列 |
 | 发布政策原文 | `AGENTS.md:68` | 正式版本必须在用户实际前端验收通过之后发布，验收之前只能发预版本 |
 
