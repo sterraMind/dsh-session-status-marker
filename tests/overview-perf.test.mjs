@@ -137,7 +137,9 @@ describe('overview performance behavior', () => {
     const elapsed = Date.now() - t0
     expect(status).toBe(200)
     expect(data.unmarked).toEqual({ count: 0, entries: [] })
-    // The 4-second service deadline, plus margin — the board must never hang.
+    // The request joins the background refresh for at most
+    // OVERVIEW_REFRESH_WAIT_MS (2000 ms) and then answers from the caches —
+    // the board must never hang, no matter how long the background reads take.
     expect(elapsed).toBeLessThan(5500)
   })
 

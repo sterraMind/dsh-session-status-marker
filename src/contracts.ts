@@ -65,13 +65,20 @@ export const DEFAULT_REFRESH_INTERVAL_MS = 2000
 export const OVERVIEW_FETCH_TIMEOUT_MS = 8000
 
 /**
- * Host-side per-call deadline for one optional service read inside the overview
- * route. Kept strictly shorter than `OVERVIEW_FETCH_TIMEOUT_MS` so the Host
- * degrades the slow read and still returns a response before the client gives
- * up — otherwise every poll dies at the client and the board stays on its
- * spinner instead of rendering partial data.
+ * Host-side deadline for one optional service read inside the overview
+ * background refresh, in ms.
+ *
+ * The request never waits on this budget: it joins the shared background
+ * refresh for at most `OVERVIEW_REFRESH_WAIT_MS` and then answers from the
+ * caches, so this can be far larger than the client's `OVERVIEW_FETCH_TIMEOUT_MS`.
+ * It must instead cover one slow transcript batch: on a desktop install with
+ * 856 sessions, decoding just 36 ids took 3.9 s of pure decode + parse, so a
+ * 4 s budget aborted every batch before a single title was cached and the
+ * board stayed on "untitled" forever. Fifteen seconds lets a batch settle; a
+ * batch that still overruns it degrades exactly as before (fallback snapshot,
+ * logged warning) without blocking the request path.
  */
-export const OVERVIEW_SERVICE_TIMEOUT_MS = 4000
+export const OVERVIEW_SERVICE_TIMEOUT_MS = 15000
 
 /**
  * How long one overview request may wait for the shared background refresh.
@@ -85,18 +92,20 @@ export const OVERVIEW_SERVICE_TIMEOUT_MS = 4000
  */
 export const OVERVIEW_REFRESH_WAIT_MS = 2000
 
-/**
- * Per-refresh ceiling on cold-title reads.
- *
- * Reading one cold title loads and decodes that whole session document
- * upstream, so a hundred cold rows in one refresh is a multi-second job the
- * board does not need. Each refresh reads at most this many ids that are not
- * cached yet; the next refresh picks up the rest.
- */
-export const COLD_TITLE_READ_LIMIT = 24
-
 /** How long a remembered cold title is reused before it is read again. */
 export const TITLE_CACHE_TTL_MS = 60_000
+
+/**
+ * How long a cold id that came back without a title is remembered as absent
+ * before the next refresh re-reads its transcript.
+ *
+ * Longer than {@link TITLE_CACHE_TTL_MS} on purpose: confirming that a
+ * multi-megabyte session log has no title event means decoding the whole log,
+ * and a closed session without a title event rarely gains one. Trusting the
+ * absence for five minutes keeps a title-less session from re-decoding its
+ * transcript on every two-second poll.
+ */
+export const TITLE_ABSENT_TTL_MS = 300_000
 
 /**
  * Default order of the row-action status button, after the host's archive (100)

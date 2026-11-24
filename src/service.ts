@@ -32,8 +32,8 @@ import {
   MARKER_OVERVIEW_PATH,
   OVERVIEW_SERVICE_TIMEOUT_MS,
   OVERVIEW_REFRESH_WAIT_MS,
-  COLD_TITLE_READ_LIMIT,
   TITLE_CACHE_TTL_MS,
+  TITLE_ABSENT_TTL_MS,
   marksRevision,
   SetMarkBodySchema,
   ClearMarkBodySchema,
@@ -219,10 +219,20 @@ export class SessionStatusService extends Service {
   /**
    * Title cache for sessions that are not loaded in memory. `sessionTitle.get`
    * only answers for live sessions, so cold sessions are resolved once through
-   * the optional session-query engine and reused for a short window instead of
-   * re-reading their transcripts on every overview refresh.
+   * the optional session-query engine and reused for a window instead of
+   * re-reading their transcripts on every overview refresh. A `null` title is
+   * the negative cache: the transcript was read and has no title event, and
+   * those entries stay valid for `TITLE_ABSENT_TTL_MS` (longer than the
+   * positive window, because re-decoding a large log to confirm the absence is
+   * the expensive case).
    */
-  #titleCache = new Map<string, { readonly title: string; readonly at: number }>()
+  #titleCache = new Map<string, { readonly title: string | null; readonly at: number }>()
+
+  /**
+   * Latches the "optional sessionQuery service is not mounted" warning so the
+   * two-second refresh logs it once instead of on every poll.
+   */
+  #titleQueryMissingLogged = false
 
   /**
    * Headers for every session the persistence service knows about, cached for
@@ -584,11 +594,12 @@ export class SessionStatusService extends Service {
    * sorted by `updatedAtMs` descending. Titles come from the session-title
    * projection; a missing session or a throwing title read yields `null`.
    *
-   * The three optional Host reads (persisted headers, cold titles, cross-corpus
-   * session list) are independent of each other, so all three start at the top
-   * of the handler and each consumer awaits the promise it needs. Worst-case
-   * latency is then one 4-second per-service deadline instead of the sum of
-   * three, and concurrency stays bounded at three in-flight reads.
+   * The optional Host reads (persisted headers, cross-corpus session list, cold
+   * titles) all run inside the shared background refresh instead of the
+   * request path: the response joins that refresh for at most
+   * `OVERVIEW_REFRESH_WAIT_MS` and then answers from whatever the caches
+   * already hold, so a serial walk of every session file — or a slow transcript
+   * batch — can never hold the client's abort window hostage.
    *
    * Conditional refresh follows `#handleList`: the caller sends the revision it
    * last saw as `?since=`, and when it still equals the digest of the current
@@ -636,7 +647,9 @@ export class SessionStatusService extends Service {
     const coldTitles = new Map<string, string>()
     for (const id of titleIds) {
       const hit = this.#titleCache.get(id)
-      if (hit !== undefined) coldTitles.set(id, hit.title)
+      // A null title is the negative cache: the session is known to have no
+      // title, which is the same as no entry for the purposes of this join.
+      if (hit !== undefined && hit.title !== null) coldTitles.set(id, hit.title)
     }
     for (const [id, title] of this.#cachedTitles(titleIds, headerMap)) {
       if (!coldTitles.has(id)) coldTitles.set(id, title)
@@ -697,8 +710,14 @@ export class SessionStatusService extends Service {
    * `sessionTitle.get` only answers for live sessions, so a session that was
    * closed since it was marked would show as "untitled" forever. When the Host
    * mounts the optional session-query engine this reads their titles from the
-   * projection cache and remembers them for a short window so frequent overview
-   * refreshes do not re-read transcripts.
+   * transcript and remembers them: a real title for `TITLE_CACHE_TTL_MS`, an
+   * absence for `TITLE_ABSENT_TTL_MS`, so frequent overview refreshes do not
+   * re-decode the same (often multi-megabyte) transcripts.
+   *
+   * A batch that times out or rejects leaves no entries behind — per the
+   * upstream contract a cancellation rejects the complete operation — but the
+   * failure is logged so a chronically slow or dead engine is visible in the
+   * Host log instead of surfacing only as "untitled" rows on the board.
    */
   async #readColdTitles(ids: readonly string[], timeoutMs: number = OVERVIEW_SERVICE_TIMEOUT_MS): Promise<Map<string, string>> {
     const resolved = new Map<string, string>()
@@ -706,11 +725,20 @@ export class SessionStatusService extends Service {
     const now = Date.now()
     const stale = ids.filter((id) => {
       const hit = this.#titleCache.get(id)
-      return hit === undefined || now - hit.at > TITLE_CACHE_TTL_MS
+      if (hit === undefined) return true
+      const ttl = hit.title === null ? TITLE_ABSENT_TTL_MS : TITLE_CACHE_TTL_MS
+      return now - hit.at > ttl
     })
     if (stale.length > 0) {
       const query = this.#optionalService<SessionQueryLike>('sessionQuery')
-      if (query !== undefined && typeof query.readTitleSnapshots === 'function') {
+      if (query === undefined || typeof query.readTitleSnapshots !== 'function') {
+        // Logged once: the service is a property of the Host composition, not
+        // of the poll, so repeating it on every refresh would spam the log.
+        if (!this.#titleQueryMissingLogged) {
+          this.#titleQueryMissingLogged = true
+          this.ctx.logger.warn('session-status-marker: optional sessionQuery service is not mounted; cold sessions stay untitled')
+        }
+      } else {
         // Give the reader a cancellable signal: when the deadline fires the
         // underlying transcript scan is aborted instead of lingering in the
         // background and stacking a new scan onto every subsequent poll.
@@ -723,32 +751,53 @@ export class SessionStatusService extends Service {
             timeoutMs,
           )
           if (Array.isArray(results)) {
+            const withTitle = new Set<string>()
             for (const result of results as readonly TitleObservationResult[]) {
               if (result?.status === 'fulfilled' && typeof result.value?.title?.title === 'string') {
                 this.#rememberTitle(result.sessionId, result.value.title.title, now)
+                withTitle.add(result.sessionId)
               }
             }
+            // Ids that came back rejected, or fulfilled without a title, are
+            // negative-cached so the next refresh does not re-decode their
+            // transcripts for TITLE_ABSENT_TTL_MS.
+            for (const id of stale) {
+              if (!withTitle.has(id)) this.#rememberTitle(id, null, now)
+            }
+          } else {
+            // The deadline fired (the controller aborts the read) or the batch
+            // rejected outright; nothing was cached. Log it instead of
+            // swallowing: this is the path that left every board row "untitled"
+            // while the desktop log showed no trace of it.
+            this.ctx.logger.warn(
+              controller.signal.aborted
+                ? `session-status-marker: cold title read aborted after ${timeoutMs} ms; ${stale.length} id(s) left without titles`
+                : `session-status-marker: cold title read rejected; ${stale.length} id(s) left without titles`,
+            )
           }
-        } catch { /* query unavailable — titles fall back to null */ }
+        } catch (error) {
+          this.ctx.logger.warn('session-status-marker: cold title read failed:', error)
+        }
       }
     }
     for (const id of ids) {
       const hit = this.#titleCache.get(id)
-      if (hit !== undefined) resolved.set(id, hit.title)
+      if (hit !== undefined && hit.title !== null) resolved.set(id, hit.title)
     }
     return resolved
   }
 
   /**
-   * Remember one cold title, evicting expired entries first so the cache stays
-   * bounded for a Host with thousands of sessions: entries older than the
-   * ten-second reuse window go first, then the oldest remaining entry fills
-   * the last slot.
+   * Remember one cold title (or an absence, with `title: null`), evicting
+   * expired entries first so the cache stays bounded for a Host with thousands
+   * of sessions: entries past their own reuse window (positive or absence TTL)
+   * go first, then the oldest remaining entry fills the last slot.
    */
-  #rememberTitle(id: string, title: string, at: number): void {
+  #rememberTitle(id: string, title: string | null, at: number): void {
     if (this.#titleCache.size >= TITLE_CACHE_MAX_ENTRIES) {
       for (const [key, hit] of this.#titleCache) {
-        if (at - hit.at > TITLE_CACHE_TTL_MS) this.#titleCache.delete(key)
+        const ttl = hit.title === null ? TITLE_ABSENT_TTL_MS : TITLE_CACHE_TTL_MS
+        if (at - hit.at > ttl) this.#titleCache.delete(key)
       }
       if (this.#titleCache.size >= TITLE_CACHE_MAX_ENTRIES) {
         const first = this.#titleCache.keys().next().value
@@ -897,9 +946,16 @@ export class SessionStatusService extends Service {
           .sort((a, b) => b[1] - a[1])
           .slice(0, DEFAULT_UNMARKED_LIMIT)
           .map(([id]) => id)
-        const ids = [...new Set([...coldIds, ...candidateIds])]
-        if (ids.length > 0) await this.#readColdTitles(ids)
-      } catch { /* best-effort: the board keeps the last snapshot */ }
+        // Marked rows are what the board renders, so they get the title batch
+        // first; the unmarked candidates run second and can never starve the
+        // rows the user is actually looking at. Each batch runs under the
+        // background deadline and remembers what it learned, so a batch that
+        // is aborted mid-read loses at most its own ids.
+        if (coldIds.length > 0) await this.#readColdTitles(coldIds)
+        if (candidateIds.length > 0) await this.#readColdTitles(candidateIds)
+      } catch (error) {
+        this.ctx.logger.warn('session-status-marker: overview cache refresh failed:', error)
+      }
     })()
     const tracked = task.finally(() => {
       if (this.#overviewRefresh === tracked) this.#overviewRefresh = undefined

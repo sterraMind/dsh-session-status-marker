@@ -84,12 +84,14 @@ describe('overview board timeout (stuck on loading)', () => {
   })
 
   it('bounds each optional Host service read so a hung service cannot stall the response', () => {
-    // The Host reads three optional services inside the overview route. A bare
-    // `await` on any of them can hang the HTTP response, and the client's own
-    // deadline then kills every poll the same way — so the board stays on its
-    // spinner instead of rendering partial data. The Host must race each read
-    // against a deadline strictly shorter than the client's.
-    expect(CONTRACTS).toContain('export const OVERVIEW_SERVICE_TIMEOUT_MS = 4000')
+    // The Host reads optional services in the overview background refresh. A
+    // bare `await` on any of them would keep the shared refresh alive forever
+    // and every poll that joins it would time out on the client side. The
+    // request path is capped by OVERVIEW_REFRESH_WAIT_MS, and each background
+    // read races its own deadline (15000 ms — long enough for one slow
+    // transcript batch to settle; the request never waits on it).
+    expect(CONTRACTS).toContain('export const OVERVIEW_SERVICE_TIMEOUT_MS = 15000')
+    expect(CONTRACTS).toContain('export const TITLE_ABSENT_TTL_MS = 300_000')
     expect(SERVICE).toContain('async #withDeadline<')
     expect(SERVICE).toContain('OVERVIEW_SERVICE_TIMEOUT_MS')
     expect(SERVICE).toContain('Promise.race')
