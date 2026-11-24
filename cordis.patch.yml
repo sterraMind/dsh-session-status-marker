@@ -10,3 +10,6 @@
         # another plugin already uses 300; default is 300.
         rowActionOrder: 300
         menuItemOrder: 300
+        # Fallback mark when a turn completes normally and nothing else marked
+        # the session this turn. Set to true to enable; default is false.
+        # turnEndAwaitingAnswer: true

@@ -1,3 +1,25 @@
+## [1.3.1-rc.1] - 2026-11-24
+
+### 修复
+
+- **看板在大规模会话目录下一直卡在「加载中」，随后报「加载失败，请重试」**：`#handleOverview` 原来在请求里串行读两批冷会话标题（已标记会话一批、未标记候选一批），每批各自有 4 秒截止时间，两批叠加 8 秒正好触发客户端 8 秒中止。本机 833 个会话文件、140 条标记时必然超时；dev4090 只有 11 个会话，所以此前验收没有暴露。
+- 请求路径现在不做任何外部读取：后台刷新（单飞合并）负责把标题、会话列表、标记头读进内存缓存，请求最多等待刷新 2 秒，然后直接用缓存拼装响应。冷启动的第一次请求先返回分组与计数，标题在随后几秒内补齐。
+- 后台刷新每次最多读取 24 条尚未缓存的冷标题（`COLD_TITLE_READ_LIMIT`），其余留给下一次刷新，避免一次刷新把上百份会话文档全部解码。
+- 标题缓存有效期从 10 秒放宽到 60 秒（`TITLE_CACHE_TTL_MS`），减少重复的整文档读取。
+- `readTitleSnapshots` 现在会收到 `AbortSignal`，超时后底层读取真正停止，而不是只停止等待。
+- 服务启动时立即触发一次后台刷新，打开设置页时缓存通常已经预热。
+
+### 依据
+
+- 上游讨论 [deepseek-harness#8631](https://github.com/deepseek-ai/deepseek-harness/discussions/8631)：`listSessions`、授权与 `readSession` 都串行遍历整个会话目录，每次调用约 2300 个事件循环轮次，没有并发也没有缓存；事件循环每轮慢 10 毫秒就会让一次调用拖到 23 秒。
+- 上游讨论 [deepseek-harness#5961](https://github.com/deepseek-ai/deepseek-harness/discussions/5961)：归档会话在磁盘上仍会被完整扫描，归档只影响客户端显示。
+- 本机实测（`.drafts/measure-session-scan.mjs`）：852 个会话文件的目录扫描本身只要 121 毫秒，所以瓶颈在读整份会话文档取标题，不在列目录。
+
+### 验证
+
+- `pnpm run test` 156 项测试 / 37 个套件全部通过。
+- 新增 `tests/overview-merge.test.mjs` 三项回归：标记与未标记的冷标题合并成一次读取；标题与会话列表都挂住时请求 2005 毫秒返回（原来 8 秒以上）；缓存预热后再次请求 1.9 毫秒返回。
+
 # Changelog
 
 本文件记录 `dsh-session-status-marker` 的对外可见变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。

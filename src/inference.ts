@@ -14,6 +14,16 @@ export interface InferenceObservation {
   seq: number
   time: number
   data: unknown
+  /**
+   * Deployment switch for the turn-completed fallback mark. When `true`, a
+   * `turn/end` with `reason.kind === 'completed'` maps to `awaiting-answer`
+   * as a last-resort catch-all. The Host only reaches the completed branch
+   * when no earlier inference rule fired on this event, and `#observe`
+   * additionally refuses to write the row when a mark already exists, so
+   * explicit (manual / agent) marks are never overwritten. Defaults to
+   * `false` so existing installs keep their current behaviour.
+   */
+  turnEndAwaitingAnswer?: boolean
 }
 
 /** A proposed automatic mark, produced but not yet persisted. */
@@ -71,6 +81,15 @@ export function inferStatus(observation: InferenceObservation): InferenceResult 
       if (kind === 'interrupted') return { status: 'stopped', autoReason: 'turn-interrupted', subjectId: null, note: 'Turn was interrupted before completion.' }
       if (kind === 'blocked') return { status: 'blocked', autoReason: 'turn-blocked', subjectId: null, note: null }
       if (kind === 'aborted' || kind === 'error') return { status: 'stopped', autoReason: 'turn-interrupted', subjectId: null, note: null }
+      // Fallback mark for a normal turn end. The Host gates this branch behind
+      // the `turnEndAwaitingAnswer` config flag, so existing installs keep
+      // their current behaviour. The Host also only reaches here when no
+      // earlier inference rule fired on this event — the completed branch is
+      // the last one checked.
+      if (kind === 'completed') {
+        if (!observation.turnEndAwaitingAnswer) return null
+        return { status: 'awaiting-answer', autoReason: 'turn-completed', subjectId: null, note: null }
+      }
       return null
     }
     case 'tool/call': {

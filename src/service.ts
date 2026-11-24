@@ -31,6 +31,9 @@ import {
   MARKER_MUTATE_PATH,
   MARKER_OVERVIEW_PATH,
   OVERVIEW_SERVICE_TIMEOUT_MS,
+  OVERVIEW_REFRESH_WAIT_MS,
+  COLD_TITLE_READ_LIMIT,
+  TITLE_CACHE_TTL_MS,
   marksRevision,
   SetMarkBodySchema,
   ClearMarkBodySchema,
@@ -62,6 +65,12 @@ export interface Config {
   rowActionOrder: number
   /** Order of the row-menu status item; raise or lower to coexist with other plugins. */
   menuItemOrder: number
+  /**
+   * Fallback mark when a turn completes normally and neither the model nor an
+   * earlier inference rule produced a mark for the session. Defaults to
+   * `false` so existing installs keep their current behaviour.
+   */
+  turnEndAwaitingAnswer: boolean
 }
 
 /** Schemastery schema, consumed by Cordis when this row loads. */
@@ -72,6 +81,7 @@ export const Config = z.object({
   refreshIntervalMs: z.natural().min(250).default(DEFAULT_REFRESH_INTERVAL_MS),
   rowActionOrder: z.natural().default(DEFAULT_ROW_ACTION_ORDER),
   menuItemOrder: z.natural().default(DEFAULT_MENU_ITEM_ORDER),
+  turnEndAwaitingAnswer: z.boolean().default(false),
 })
 
 /**
@@ -258,6 +268,12 @@ export class SessionStatusService extends Service {
   #scanAbort?: AbortController
 
   /**
+   * In-flight background refresh of the overview caches, shared by every
+   * concurrent request so a busy board starts at most one corpus scan.
+   */
+  #overviewRefresh?: Promise<void>
+
+  /**
    * Await a promise but never let it block the board forever.
    *
    * The optional Host services (`sessionPersistence`, `sessionQuery`) are
@@ -269,10 +285,20 @@ export class SessionStatusService extends Service {
    * lets the request finish, which the client renders as a working board with
    * fewer titles instead of a spinner that never resolves.
    */
-  async #withDeadline<T>(promise: Promise<T>, fallback: T): Promise<T> {
+  async #withDeadline<T>(
+    promise: Promise<T>,
+    fallback: T,
+    controller?: AbortController,
+    timeoutMs: number = OVERVIEW_SERVICE_TIMEOUT_MS,
+  ): Promise<T> {
     let timer: ReturnType<typeof setTimeout> | undefined
     const deadline = new Promise<T>((resolve) => {
-      timer = setTimeout(() => resolve(fallback), OVERVIEW_SERVICE_TIMEOUT_MS)
+      timer = setTimeout(() => {
+        // Cancel the underlying scan when one was supplied, so a timed-out
+        // read cannot keep running and stack onto the next poll.
+        controller?.abort()
+        resolve(fallback)
+      }, timeoutMs)
     })
     try {
       return await Promise.race([promise, deadline])
@@ -395,6 +421,14 @@ export class SessionStatusService extends Service {
         })
       }, { global: true })
     }
+
+    // Warm the overview caches once at startup, in the background. The first
+    // visit to the board then renders from memory instead of paying for a
+    // serial walk of every session file while the user waits.
+    this.ctx.effect(() => {
+      void this.#refreshOverviewCaches()
+      return () => { /* the scan aborts through #scanAbort on teardown */ }
+    }, 'session-status-marker.overviewWarmup')
   }
 
   // ---- synchronous reads ---------------------------------------------------
@@ -474,8 +508,26 @@ export class SessionStatusService extends Service {
   // ---- read-only inference -------------------------------------------------
 
   async #observe(session: Session, event: SessionEvent): Promise<void> {
-    const proposed = inferStatus({ type: event.type, seq: event.seq, time: event.time, data: event.data })
+    const proposed = inferStatus({
+      type: event.type,
+      seq: event.seq,
+      time: event.time,
+      data: event.data,
+      turnEndAwaitingAnswer: this.config.turnEndAwaitingAnswer,
+    })
     if (proposed === null) return
+    // The `turn/completed` fallback mark only fires when the session has no
+    // mark at all — an explicit mark from the user or the model this turn, or
+    // any auto mark from an earlier rule, must not be overwritten. This is
+    // stronger than `shouldApplyInference`: that one already refuses to
+    // overwrite `manual` / `agent`, but it would let a `turn/completed`
+    // fallback replace an auto mark from TodoWrite or `job/settled` earlier in
+    // the same turn. Gating on `current === null` here keeps the fallback as a
+    // true last-resort catch-all.
+    if (proposed.autoReason === 'turn-completed') {
+      const existing = await this.effectiveMark(session.id)
+      if (existing !== null) return
+    }
     const current = await this.effectiveMark(session.id)
     if (!shouldApplyInference(current, proposed)) return
     const row: MarkRecord = {
@@ -557,26 +609,37 @@ export class SessionStatusService extends Service {
     const marked = new Set(rows.map((row) => row.sessionId))
     const coldIds = rows.filter((row) => !sessions.has(row.sessionId)).map((row) => row.sessionId)
 
-    // Start all three independent optional reads at once. Each read carries its
-    // own 4-second deadline and its own degradation path, so no slow service
-    // can add its latency to the other two.
-    const headersP = this.#persistedHeaders()
-    const coldTitlesP = this.#readColdTitles(coldIds)
-    const sessionListP = this.#withDeadline(this.#sessionListSnapshotNow(), this.#sessionListCache)
+    // Serve from memory; the corpus scan runs behind the response. The
+    // persisted list is a fully serial walk of every session directory on disk
+    // (one libuv round-trip per file, no concurrency, no cache), so awaiting it
+    // on a large store costs far more than the client's abort window and the
+    // board dies on the spinner. A warm cache makes this join free; a cold or
+    // slow one is capped at the refresh wait, after which the board renders
+    // whatever is already known and fills in on the next poll.
+    await this.#withDeadline(
+      this.#refreshOverviewCaches(),
+      undefined,
+      undefined,
+      OVERVIEW_REFRESH_WAIT_MS,
+    )
 
-    // Title enrichment is best-effort: a Host that mounts a different
-    // session-query shape must never take the whole board down with it.
-    let coldTitles: Map<string, string>
-    let headerMap: Map<string, { readonly id: SessionId; readonly createdAt: number }>
-    try {
-      headerMap = await headersP
-      coldTitles = await coldTitlesP
-      for (const [id, title] of this.#cachedTitles(coldIds, headerMap)) {
-        if (!coldTitles.has(id)) coldTitles.set(id, title)
-      }
-    } catch {
-      coldTitles = new Map()
-      headerMap = this.#headerCache
+    const headerMap = this.#headerCache
+    const sessionList = this.#sessionListCache
+    const candidates = this.#unmarkedCandidates(marked, headerMap, sessionList)
+    const candidateIds = [...candidates.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, DEFAULT_UNMARKED_LIMIT)
+      .map(([id]) => id)
+    const titleIds = [...new Set([...coldIds, ...candidateIds])]
+    // Titles already remembered by a background refresh, plus the zero-I/O
+    // projection cache. No transcript is read on the request path.
+    const coldTitles = new Map<string, string>()
+    for (const id of titleIds) {
+      const hit = this.#titleCache.get(id)
+      if (hit !== undefined) coldTitles.set(id, hit.title)
+    }
+    for (const [id, title] of this.#cachedTitles(titleIds, headerMap)) {
+      if (!coldTitles.has(id)) coldTitles.set(id, title)
     }
 
     const byStatus = new Map<StatusEnum, OverviewEntry[]>()
@@ -614,7 +677,7 @@ export class SessionStatusService extends Service {
     }
     let unmarked: UnmarkedSessions = { count: 0, entries: [] }
     try {
-      unmarked = await this.#collectUnmarked(marked, sessionListP)
+      unmarked = await this.#collectUnmarked(marked, sessionList, coldTitles, headerMap)
     } catch { unmarked = { count: 0, entries: [] } }
 
     // Digest only the payload: `refreshIntervalMs` is config, not data, and an
@@ -637,21 +700,27 @@ export class SessionStatusService extends Service {
    * projection cache and remembers them for a short window so frequent overview
    * refreshes do not re-read transcripts.
    */
-  async #readColdTitles(ids: readonly string[]): Promise<Map<string, string>> {
+  async #readColdTitles(ids: readonly string[], timeoutMs: number = OVERVIEW_SERVICE_TIMEOUT_MS): Promise<Map<string, string>> {
     const resolved = new Map<string, string>()
     if (ids.length === 0) return resolved
     const now = Date.now()
     const stale = ids.filter((id) => {
       const hit = this.#titleCache.get(id)
-      return hit === undefined || now - hit.at > 10_000
+      return hit === undefined || now - hit.at > TITLE_CACHE_TTL_MS
     })
     if (stale.length > 0) {
       const query = this.#optionalService<SessionQueryLike>('sessionQuery')
       if (query !== undefined && typeof query.readTitleSnapshots === 'function') {
+        // Give the reader a cancellable signal: when the deadline fires the
+        // underlying transcript scan is aborted instead of lingering in the
+        // background and stacking a new scan onto every subsequent poll.
+        const controller = new AbortController()
         try {
           const results: unknown = await this.#withDeadline(
-            query.readTitleSnapshots(stale),
+            query.readTitleSnapshots(stale, controller.signal),
             null,
+            controller,
+            timeoutMs,
           )
           if (Array.isArray(results)) {
             for (const result of results as readonly TitleObservationResult[]) {
@@ -679,7 +748,7 @@ export class SessionStatusService extends Service {
   #rememberTitle(id: string, title: string, at: number): void {
     if (this.#titleCache.size >= TITLE_CACHE_MAX_ENTRIES) {
       for (const [key, hit] of this.#titleCache) {
-        if (at - hit.at > 10_000) this.#titleCache.delete(key)
+        if (at - hit.at > TITLE_CACHE_TTL_MS) this.#titleCache.delete(key)
       }
       if (this.#titleCache.size >= TITLE_CACHE_MAX_ENTRIES) {
         const first = this.#titleCache.keys().next().value
@@ -797,6 +866,73 @@ export class SessionStatusService extends Service {
   }
 
   /**
+   * Refresh the three overview caches in the background, single-flight.
+   *
+   * The reads it performs (`sessionPersistence.list`, `listSessions`, cold
+   * titles) each walk every session file on disk serially, so they belong off
+   * the request path: the response is built from the caches, and this method
+   * only ever runs ahead of them. Concurrent callers share one task, each cache
+   * keeps its own reuse window, and a failure leaves the previous snapshot in
+   * place.
+   */
+  #refreshOverviewCaches(): Promise<void> {
+    const running = this.#overviewRefresh
+    if (running !== undefined) return running
+    const task = (async (): Promise<void> => {
+      try {
+        const settled = await Promise.all([
+          this.#withDeadline(this.#persistedHeaders(), this.#headerCache),
+          this.#withDeadline(this.#sessionListSnapshotNow(), this.#sessionListCache),
+        ])
+        const sessions = new Map<string, Session>()
+        try {
+          for (const session of this.ctx.sessions.list()) sessions.set(session.id, session)
+        } catch { /* live sessions unavailable — cold ids stay cold */ }
+        const rows: MarkRecord[] = []
+        for (const [, row] of this.listAll()) rows.push(row)
+        const marked = new Set(rows.map((row) => row.sessionId))
+        const coldIds = rows.filter((row) => !sessions.has(row.sessionId)).map((row) => row.sessionId)
+        const candidates = this.#unmarkedCandidates(marked, settled[0], settled[1])
+        const candidateIds = [...candidates.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, DEFAULT_UNMARKED_LIMIT)
+          .map(([id]) => id)
+        const ids = [...new Set([...coldIds, ...candidateIds])]
+        if (ids.length > 0) await this.#readColdTitles(ids)
+      } catch { /* best-effort: the board keeps the last snapshot */ }
+    })()
+    const tracked = task.finally(() => {
+      if (this.#overviewRefresh === tracked) this.#overviewRefresh = undefined
+    })
+    this.#overviewRefresh = tracked
+    return tracked
+  }
+
+  /**
+   * Merge the three candidate sources into one id → createdAt map, skipping
+   * anything already marked. Pure and allocation-cheap: `#handleOverview`
+   * calls it to learn which session ids need a title, and `#collectUnmarked`
+   * calls it again to build the block, so both see the same set.
+   */
+  #unmarkedCandidates(
+    marked: ReadonlySet<string>,
+    headerMap: ReadonlyMap<string, { readonly id: SessionId; readonly createdAt: number }>,
+    sessionList: ReadonlyMap<SessionId, number>,
+  ): Map<SessionId, number> {
+    const candidates = new Map<SessionId, number>()
+    const add = (id: SessionId, createdAt: number | undefined): void => {
+      if (marked.has(id) || candidates.has(id)) return
+      candidates.set(id, createdAt ?? 0)
+    }
+    try {
+      for (const session of this.ctx.sessions.list()) add(session.id, session.header?.createdAt)
+    } catch { /* sessions unavailable — fall through to the on-disk headers */ }
+    for (const [, header] of headerMap) add(header.id, header.createdAt)
+    for (const [id, createdAt] of sessionList) add(id, createdAt)
+    return candidates
+  }
+
+  /**
    * List a bounded slice of sessions that carry no mark, newest first, so the
    * board can offer them for marking.
    *
@@ -806,33 +942,30 @@ export class SessionStatusService extends Service {
    * to populate the block, so a composition that omits the query engine still
    * shows the sessions the user can actually see.
    *
-   * The snapshot promise is the one `#handleOverview` started at the top of the
-   * request (cached for a TTL window and single-flight), so the expensive
-   * `listSessions` scan is never re-run here.
+   * Every input is already resolved by `#handleOverview`'s shared wave: the
+   * snapshot is cached and single-flight, the titles were read under the same
+   * budget as the marked-cold titles, and the headers are cached. This method
+   * performs NO further I/O, so a slow Host is never asked to scan a second
+   * time after the first wave's deadline has already elapsed.
    */
   async #collectUnmarked(
     marked: ReadonlySet<string>,
-    sessionListP: Promise<Map<SessionId, number>>,
+    sessionList: ReadonlyMap<SessionId, number>,
+    coldTitles: ReadonlyMap<string, string>,
+    headerMap: ReadonlyMap<string, { readonly id: SessionId; readonly createdAt: number }>,
   ): Promise<UnmarkedSessions> {
-    const candidates = new Map<SessionId, number>()
-    const add = (id: SessionId, createdAt: number | undefined): void => {
-      if (marked.has(id) || candidates.has(id)) return
-      candidates.set(id, createdAt ?? 0)
-    }
-    try {
-      for (const session of this.ctx.sessions.list()) add(session.id, session.header?.createdAt)
-    } catch { /* sessions unavailable — fall through to the on-disk headers */ }
-    try {
-      for (const [, header] of await this.#persistedHeaders()) add(header.id, header.createdAt)
-    } catch { /* persistence unavailable */ }
-    try {
-      for (const [id, createdAt] of await sessionListP) add(id, createdAt)
-    } catch { /* snapshot unavailable — the shared scan already degraded */ }
+    const candidates = this.#unmarkedCandidates(marked, headerMap, sessionList)
     const ordered = [...candidates.entries()].sort((a, b) => b[1] - a[1])
     const slice = ordered.slice(0, DEFAULT_UNMARKED_LIMIT)
     const ids = slice.map(([id]) => id)
-    const titles = await this.#readColdTitles(ids)
-    const headerMap = await this.#persistedHeaders()
+    // Reuse the titles read in the single wave; a candidate that appeared only
+    // in this fresh sessionList (not in the cached one used to build titleIds)
+    // is filled from the zero-I/O projection cache instead of a new disk scan.
+    const titles = new Map<string, string>()
+    for (const id of ids) {
+      const title = coldTitles.get(id)
+      if (title !== undefined) titles.set(id, title)
+    }
     for (const [id, title] of this.#cachedTitles(ids, headerMap)) {
       if (!titles.has(id)) titles.set(id, title)
     }

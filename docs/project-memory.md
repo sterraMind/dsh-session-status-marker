@@ -1,6 +1,6 @@
 # 项目记忆 · dsh-session-status-marker
 
-> **文档版本**：v1.3.0-rc.6 · 2026-11-24（对应插件 1.3.0-rc.6）
+> **文档版本**：v1.3.1-rc.1 · 2026-11-24（对应插件 1.3.1-rc.1）
 
 > 本文件是「项目记忆」的落盘载体，供后续会话 / Agent 续接时读取。记录决策沿革、硬约束、已验证事实与教训；不放临时日志。与 `AGENTS.md`（standing orders）、`docs/architecture.md`（当前架构）、`docs/implementation-plan.md`（执行顺序）、`docs/acceptance-and-regression.md`（验收证据）分工明确。
 
@@ -168,3 +168,5 @@
 - 需求与流程：m00002、m00139、m00167（「继续」）。
 - 关键决策证据链落在 `docs/architecture.md` §3、`docs/implementation-plan.md` §3、`docs/research/01-host-api.md` 顶部 V2 修订说明。
 - 官方镜像路径与行号全部以 `.research/dsh-repo/` 为准。
+
+- **1.3.1-rc.1（2026-11-24）**：看板 8 秒超时的根因是请求内串行两批冷标题读取（4 秒 + 4 秒）。修复改为「请求零外部读取 + 后台单飞刷新 + 2 秒等待上限 + 每次最多 24 条冷标题 + 60 秒标题缓存 + `AbortSignal`」。教训 56：上游 `listSessions`、授权与 `readSession` 都是串行全量遍历且无缓存（discussion #8631），任何把这类调用放在 HTTP 请求等待路径上的设计，在大会话目录下必然超时；调大超时参数只是掩盖，必须改成「内存快照 + 后台刷新」。

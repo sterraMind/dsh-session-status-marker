@@ -22,6 +22,7 @@ export type StatusEnum = (typeof STATUS_VALUES)[number]
 export const AUTO_REASON_VALUES = [
   'turn-interrupted',
   'turn-blocked',
+  'turn-completed',
   'tool-write-todo',
   'tool-result-progress',
   'job-failed',
@@ -71,6 +72,31 @@ export const OVERVIEW_FETCH_TIMEOUT_MS = 8000
  * spinner instead of rendering partial data.
  */
 export const OVERVIEW_SERVICE_TIMEOUT_MS = 4000
+
+/**
+ * How long one overview request may wait for the shared background refresh.
+ *
+ * The persisted session list is a fully serial walk of every session directory
+ * on disk (upstream: one libuv round-trip per file, no concurrency, no cache),
+ * so on a large store it costs far more than any request budget. The response
+ * is therefore built from the caches and the scan runs behind it; a request
+ * joins that scan for at most this long and then answers with the last
+ * snapshot, so the client never reaches its own abort.
+ */
+export const OVERVIEW_REFRESH_WAIT_MS = 2000
+
+/**
+ * Per-refresh ceiling on cold-title reads.
+ *
+ * Reading one cold title loads and decodes that whole session document
+ * upstream, so a hundred cold rows in one refresh is a multi-second job the
+ * board does not need. Each refresh reads at most this many ids that are not
+ * cached yet; the next refresh picks up the rest.
+ */
+export const COLD_TITLE_READ_LIMIT = 24
+
+/** How long a remembered cold title is reused before it is read again. */
+export const TITLE_CACHE_TTL_MS = 60_000
 
 /**
  * Default order of the row-action status button, after the host's archive (100)
