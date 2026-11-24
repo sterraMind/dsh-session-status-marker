@@ -99,6 +99,19 @@ export const DEFAULT_MAX_NOTE_LENGTH = 200
 export const DEFAULT_REFRESH_INTERVAL_MS = 2000
 
 /**
+ * How long an automatic mark stays authoritative before it is treated as gone.
+ *
+ * Automatic rows are written by the inference and fallback layers for events
+ * that may never be followed by another event (`turn/start` writes `todo`, a
+ * normal `turn/end` writes `feedback`). Without a deadline those rows live
+ * forever: every session that ever ran a turn keeps a badge, the "unmarked"
+ * section empties, and the status stops meaning anything. A day is long enough
+ * that an active session keeps its mark across a workday and short enough that
+ * a forgotten session returns to "no opinion". `0` disables expiry.
+ */
+export const DEFAULT_AUTO_EXPIRE_MS = 86_400_000
+
+/**
  * How long a system observation stays fresh before the UI demotes it, in ms.
  *
  * Five minutes is longer than a typical turn and shorter than a coffee break:

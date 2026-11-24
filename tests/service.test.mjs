@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeEach } from './vitest-shim.mjs'
 import { Service } from '@deepseek-ai/cordis'
-import { SessionStatusService } from '../lib/service.js'
+import { SessionStatusService, Config } from '../lib/service.js'
 
 /** Minimal in-memory KvTable satisfying the storage-domain contract. */
 function makeTable() {
@@ -248,6 +248,42 @@ describe('SessionStatusService observation layer', () => {
     }))
     const body = await res.json()
     expect(body.mark).toMatchObject({ status: 'review', observedStatus: 'todo', observedAtMs: 100 })
+  })
+
+  it('hides an automatic mark past autoExpireMs from list and overview', async () => {
+    const { ctx, routes } = makeCtx()
+    const svc = new SessionStatusService(ctx, { ...CONFIG, autoExpireMs: 1000 })
+    await svc[Service.init]()
+    const autoRow = (sessionId, insertedAtMs) => ({
+      version: 1, insertedAtMs, seq: 0, sessionId, status: 'feedback', source: 'auto',
+      subjectId: null, autoReason: 'fallback-feedback', note: null,
+      observedStatus: null, observedEvent: null, observedAtMs: null,
+    })
+    await svc.putMark(autoRow('expired', Date.now() - 60_000))
+    await svc.putMark(autoRow('fresh', Date.now()))
+
+    const list = await (await routes.find((r) => r.path.endsWith('.list'))
+      .fetch(new Request('http://x/api/session-status-marker.list'))).json()
+    expect(list.marks.map((row) => row.sessionId)).toEqual(['fresh'])
+
+    // An explicit mark never expires: the same age on a manual row must survive.
+    await svc.putMark({
+      version: 1, insertedAtMs: Date.now() - 60_000, seq: 0, sessionId: 'manual', status: 'done', source: 'manual',
+      subjectId: null, autoReason: null, note: null,
+      observedStatus: null, observedEvent: null, observedAtMs: null,
+    })
+    const afterManual = await (await routes.find((r) => r.path.endsWith('.list'))
+      .fetch(new Request('http://x/api/session-status-marker.list'))).json()
+    expect(afterManual.marks.map((row) => row.sessionId).sort()).toEqual(['fresh', 'manual'])
+  })
+
+  it('defaults autoExpireMs to one day when the config omits it', async () => {
+    const { ctx, injections } = makeCtx()
+    const svc = new SessionStatusService(ctx, Config({ autoInfer: false, maxNoteLength: 20 }))
+    await svc[Service.init]()
+    const table = []
+    injections[0](table, {})
+    expect(table[0].value.effective.autoExpireMs).toBe(86_400_000)
   })
 })
 

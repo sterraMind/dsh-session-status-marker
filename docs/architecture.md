@@ -89,7 +89,7 @@ Typert 需要主仓库 `scripts/generate-typert.ts` 产出 `lib/typert.host.js` 
 
 ### 3.5 Manual > Auto
 
-`shouldApplyInference(current, proposed)`：无 current 则写 auto；current 是 manual 则永不覆盖；否则仅当 status / autoReason 变化才写。`autoInfer` 与 `autoExpireMs` 都是 required Config（无硬编码默认值），符合 `docs/user/develop/basic/config.md:76-94`。
+`shouldApplyInference(current, proposed)`：无 current 则写 auto；current 是 manual 则永不覆盖；否则仅当 status / autoReason 变化才写。`autoInfer` 与 `maxNoteLength` 是 required Config（缺失即加载失败），`autoExpireMs` 默认一天（`DEFAULT_AUTO_EXPIRE_MS = 86_400_000`）：自动行由事件推断写入，若默认永不过期，每个跑过回合的会话都会永久带标记，「未标记」区被掏空，状态本身也就没有信息量了。列表与看板两条读路径都经 `#effectiveRows()` 应用同一份过期判定，`0` 才表示永不过期。
 
 ### 3.6 不引入 Rust（Phase 1）
 

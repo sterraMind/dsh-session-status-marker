@@ -4,7 +4,11 @@
       config:
         autoInfer: true
         maxNoteLength: 200
-        autoExpireMs: 0
+        # How long an automatic mark stays authoritative, in milliseconds.
+        # Default is one day (86400000). `0` never expires it — but automatic
+        # rows come from event inference, so a session that ran one turn would
+        # keep its badge forever and the "unmarked" section would empty out.
+        autoExpireMs: 86400000
         refreshIntervalMs: 2000
         # Order of the new row-action button and row-menu item. Raise both if
         # another plugin already uses 300; default is 300.

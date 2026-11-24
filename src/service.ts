@@ -24,6 +24,7 @@ import {
   MARK_VERSION,
   DEFAULT_REFRESH_INTERVAL_MS,
   DEFAULT_OBSERVATION_TTL_MS,
+  DEFAULT_AUTO_EXPIRE_MS,
   DEFAULT_ROW_ACTION_ORDER,
   DEFAULT_MENU_ITEM_ORDER,
   CLIENT_CONFIG_GLOBAL,
@@ -60,13 +61,21 @@ import {
   shouldRecordObservation,
 } from './inference.js'
 
-/** Deployment configuration. Required fields fail at load; `refreshIntervalMs` defaults. */
+/**
+ * Deployment configuration. `autoInfer` and `maxNoteLength` are required and
+ * fail at load when missing; the rest carry the defaults documented here.
+ */
 export interface Config {
   /** Enable read-only `session/event` inference of automatic marks. */
   autoInfer: boolean
   /** Maximum characters accepted in a note (tool arg and HTTP body). */
   maxNoteLength: number
-  /** Automatic marks older than this many ms are lazily discarded; `0` disables expiry. */
+  /**
+   * Automatic marks older than this many ms are lazily discarded; `0` disables
+   * expiry. Defaults to {@link DEFAULT_AUTO_EXPIRE_MS} (one day): automatic rows
+   * are written by event inference and would otherwise keep a badge on every
+   * session that ever ran a turn.
+   */
   autoExpireMs: number
   /** Browser re-read cadence for the mark list, in ms; defaults to 2000. */
   refreshIntervalMs: number
@@ -111,7 +120,7 @@ export interface Config {
 export const Config = z.object({
   autoInfer: z.boolean().required(),
   maxNoteLength: z.natural().min(1).required(),
-  autoExpireMs: z.natural().required(),
+  autoExpireMs: z.natural().default(DEFAULT_AUTO_EXPIRE_MS),
   refreshIntervalMs: z.natural().min(250).default(DEFAULT_REFRESH_INTERVAL_MS),
   rowActionOrder: z.natural().default(DEFAULT_ROW_ACTION_ORDER),
   menuItemOrder: z.natural().default(DEFAULT_MENU_ITEM_ORDER),
@@ -626,6 +635,27 @@ export class SessionStatusService extends Service {
     return null
   }
 
+  /**
+   * Every stored row, minus automatic rows past their expiry.
+   *
+   * The list and the board must not show an automatic mark the store already
+   * considers expired: a `feedback` written by the fallback net a day ago is
+   * not a claim about the session any more, and rendering it would light up a
+   * badge — and hide the session from the "unmarked" section — for something
+   * nobody has touched. Expiry is applied here, in one place, so the two read
+   * paths cannot drift apart. Rows are not deleted on read; the next write or
+   * `.state` read of that session removes them.
+   */
+  #effectiveRows(): MarkRecord[] {
+    const now = Date.now()
+    const rows: MarkRecord[] = []
+    for (const [, row] of this.listAll()) {
+      if (isAutoMarkExpired(row, now, this.config.autoExpireMs)) continue
+      rows.push(row)
+    }
+    return rows
+  }
+
   // ---- durable writes ------------------------------------------------------
 
   /**
@@ -843,8 +873,7 @@ export class SessionStatusService extends Service {
    * browsers that cached a revision would never refresh again.
    */
   async #handleList(request: Request): Promise<Response> {
-    const marks: MarkRecord[] = []
-    for (const [, row] of this.listAll()) marks.push(row)
+    const marks = this.#effectiveRows()
     const revision = marksRevision(marks)
     const since = new URL(request.url).searchParams.get('since')
     const refreshIntervalMs = this.config.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS
@@ -884,8 +913,7 @@ export class SessionStatusService extends Service {
       for (const session of this.ctx.sessions.list()) sessions.set(session.id, session)
     } catch { /* sessions unavailable — every title falls back to null */ }
 
-    const rows: MarkRecord[] = []
-    for (const [, row] of this.listAll()) rows.push(row)
+    const rows = this.#effectiveRows()
     const marked = new Set(rows.map((row) => row.sessionId))
     const coldIds = rows.filter((row) => !sessions.has(row.sessionId)).map((row) => row.sessionId)
 
@@ -1212,8 +1240,7 @@ export class SessionStatusService extends Service {
         try {
           for (const session of this.ctx.sessions.list()) sessions.set(session.id, session)
         } catch { /* live sessions unavailable — cold ids stay cold */ }
-        const rows: MarkRecord[] = []
-        for (const [, row] of this.listAll()) rows.push(row)
+        const rows = this.#effectiveRows()
         const marked = new Set(rows.map((row) => row.sessionId))
         const coldIds = rows.filter((row) => !sessions.has(row.sessionId)).map((row) => row.sessionId)
         const candidates = this.#unmarkedCandidates(marked, settled[0], settled[1])

@@ -67,7 +67,7 @@ dsh --profile desktop --dump-config   # 输出里应出现 session-status-marker
   config:
     autoInfer: true            # 是否允许 AI 自动推断状态
     maxNoteLength: 200         # 备注最长字符数
-    autoExpireMs: 0            # 自动标记多久后过期，0 表示不过期
+    autoExpireMs: 86400000     # 自动标记多久后过期（默认一天），0 表示不过期
     refreshIntervalMs: 2000    # 浏览器多久读一次状态，最小 250
     rowActionOrder: 300        # 会话行状态按钮的顺序，别的插件占用 300 时改大
     menuItemOrder: 300         # 右键菜单里状态条目的顺序
