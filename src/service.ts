@@ -78,7 +78,8 @@ export interface Config {
    * normally-completed turn with no mark reads as `awaiting-answer` (or
    * `pending-subagent` when subagents are still running). Every fallback write
    * is gated on the session having no mark at all, so explicit marks and
-   * inference-produced marks are never touched. Defaults to `false`.
+   * inference-produced marks are never touched. Defaults to `true` so a
+   * session is marked from its first running turn instead of staying blank.
    */
   autoFallback: boolean
 }
@@ -92,7 +93,7 @@ export const Config = z.object({
   rowActionOrder: z.natural().default(DEFAULT_ROW_ACTION_ORDER),
   menuItemOrder: z.natural().default(DEFAULT_MENU_ITEM_ORDER),
   turnEndAwaitingAnswer: z.boolean().default(false),
-  autoFallback: z.boolean().default(false),
+  autoFallback: z.boolean().default(true),
 })
 
 /**

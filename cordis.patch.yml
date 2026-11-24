@@ -16,6 +16,6 @@
         # Fallback net, a layer separate from autoInfer: a running turn with no
         # mark reads as `todo`, a normally-completed turn with no mark reads as
         # `awaiting-answer` (or `pending-subagent` when subagents are still
-        # running). Never touches an explicit or inference-produced mark. Set
-        # to true to enable; default is false.
-        # autoFallback: true
+        # running). Never touches an explicit or inference-produced mark.
+        # Enabled by default (schema default true); set false to opt out.
+        autoFallback: true
