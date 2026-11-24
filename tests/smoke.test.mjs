@@ -12,7 +12,7 @@ import SessionStatusService, { Config } from '../lib/service.js'
 import { MARKER_TABLE_NAME } from '../lib/domain.js'
 
 describe('smoke: one inference round-trip', () => {
-  it('writes an auto mark from a turn/end:interrupted event, reads it back through effectiveMark and GET state route', async () => {
+  it('writes an auto mark from a turn/end:aborted event, reads it back through effectiveMark and GET state route', async () => {
     // -- fake domain ---------------------------------------------------------
     const store = new Map()
     const table = {
@@ -64,12 +64,12 @@ describe('smoke: one inference round-trip', () => {
     const svc = new SessionStatusService(ctx, { autoInfer: true, maxNoteLength: 200, autoExpireMs: 0 })
     await svc[Service.init]()
 
-    // -- fire one turn/end:interrupted event ---------------------------------
+    // -- fire one turn/end:aborted event ------------------------------------
     const hook = listeners.find((l) => l.event === 'session/event')?.handler
     expect(hook).toBeDefined()
     hook(
       { id: 'sess-abc' },
-      { type: 'turn/end', seq: 12, time: 1_700_000_000_000, data: { reason: { kind: 'interrupted' } } },
+      { type: 'turn/end', seq: 12, time: 1_700_000_000_000, data: { reason: { kind: 'aborted' } } },
     )
     await new Promise((r) => setTimeout(r, 0))
 
@@ -78,7 +78,7 @@ describe('smoke: one inference round-trip', () => {
     const row = store.get('sess-abc')
     expect(row).toMatchObject({
       version: 1, source: 'auto', status: 'stopped', autoReason: 'turn-interrupted',
-      sessionId: 'sess-abc', subjectId: null, note: 'Turn was interrupted before completion.',
+      sessionId: 'sess-abc', subjectId: null, note: null,
     })
     const effective = await svc.effectiveMark('sess-abc')
     expect(effective).toEqual(row)

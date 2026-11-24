@@ -27,9 +27,9 @@ function mark(partial) {
 }
 
 describe('inferStatus', () => {
-  it('maps turn/end interrupted → stopped/turn-interrupted with a note', () => {
+  it('ignores turn/end interrupted (synthesized only at crash recovery, never by a live loop)', () => {
     const r = inferStatus({ type: 'turn/end', seq: 3, time: NOW, data: { reason: { kind: 'interrupted' } } })
-    expect(r).toEqual({ status: 'stopped', autoReason: 'turn-interrupted', subjectId: null, note: 'Turn was interrupted before completion.' })
+    expect(r).toBeNull()
   })
 
   it('maps turn/end blocked → blocked/turn-blocked', () => {
@@ -151,9 +151,9 @@ describe('inferFallback', () => {
     expect(r).toEqual({ status: 'todo', autoReason: 'fallback-running', note: null })
   })
 
-  it('maps a normally-completed turn to awaiting-answer/fallback-awaiting when no subagents run', () => {
+  it('maps a normally-completed turn to feedback/fallback-feedback when no subagents run', () => {
     const r = inferFallback({ type: 'turn/end', data: { reason: { kind: 'completed' } }, subagentsRunning: 0 })
-    expect(r).toEqual({ status: 'awaiting-answer', autoReason: 'fallback-awaiting', note: null })
+    expect(r).toEqual({ status: 'feedback', autoReason: 'fallback-feedback', note: null })
   })
 
   it('maps a completed turn to pending-subagent when subagents are still running', () => {
@@ -181,7 +181,7 @@ describe('inferFallback', () => {
 })
 
 describe('shouldApplyFallback', () => {
-  const terminal = { status: 'awaiting-answer', autoReason: 'fallback-awaiting', note: null }
+  const terminal = { status: 'feedback', autoReason: 'fallback-feedback', note: null }
 
   it('fires when the session has no mark at all', () => {
     expect(shouldApplyFallback(null, terminal)).toBe(true)
@@ -203,7 +203,7 @@ describe('shouldApplyFallback', () => {
   })
 
   it('is idempotent against an identical fallback mark', () => {
-    const existing = mark({ source: 'auto', autoReason: 'fallback-awaiting', status: 'awaiting-answer' })
+    const existing = mark({ source: 'auto', autoReason: 'fallback-feedback', status: 'feedback' })
     expect(shouldApplyFallback(existing, terminal)).toBe(false)
   })
 })

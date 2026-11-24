@@ -75,7 +75,7 @@ export interface Config {
    * Enable the fallback net, a layer separate from `autoInfer`. Where
    * `autoInfer` maps a *specific* event to a state, the fallback fires on the
    * *absence* of a mark: a running turn with no mark reads as `todo`, and a
-   * normally-completed turn with no mark reads as `awaiting-answer` (or
+   * normally-completed turn with no mark reads as `feedback` (or
    * `pending-subagent` when subagents are still running). Every fallback write
    * is gated on the session having no mark at all, so explicit marks and
    * inference-produced marks are never touched. Defaults to `true` so a
@@ -491,7 +491,7 @@ export class SessionStatusService extends Service {
     // needs the realtime running count maintained here. These are cordis
     // runtime events (not persisted session events), so they only feed the
     // `pending-subagent` branch; a plain `turn/end` with no subagents still
-    // resolves to `awaiting-answer` even when the Host never emitted a
+    // resolves to `feedback` even when the Host never emitted a
     // subagent event.
     if (this.config.autoFallback) {
       this.ctx.effect(() => {
@@ -646,9 +646,9 @@ export class SessionStatusService extends Service {
    * when `autoFallback` is enabled and, unlike the inference layer, fires on
    * the *absence* of a mark rather than a specific event→state mapping. A
    * running turn with no mark reads as `todo`; a normally-completed turn with
-   * no mark reads as `awaiting-answer`, upgraded to `pending-subagent` when
+   * no mark reads as `feedback`, upgraded to `pending-subagent` when
    * the Host still believes subagents are running. `interrupted` / `forked`
-   * are excluded because they are synthesized at crash recovery, not emitted
+   * are excluded because they are synthesized at crash recovery, not produced
    * by a live loop. A terminal fallback may supersede its own transient
    * running mark on the same turn, so a session does not get stuck on `todo`.
    */
@@ -1207,11 +1207,11 @@ export class SessionStatusService extends Service {
       name: 'set_session_status',
       description: [
         'Set an explicit status label on the current session so the session list shows where it stands.',
-        'WHEN TO USE: the conversation reaches a state another person needs to see in the session list, such as waiting on the user, a subagent still running, work blocked, or a task genuinely finished.',
-        'WHEN NOT TO USE: Do not mark a normally finished session done automatically. A turn ending only means this reply finished; it does not mean the user goal is complete. Leave done to a deliberate user request or your own confirmed judgement.',
+        'WHEN TO USE: the conversation reaches a state another person needs to see in the session list, such as work delivered and waiting for the user to react, a subagent still running, work blocked, or a task genuinely finished. A finished reply is itself a state worth marking: when you deliver a result the user has not yet reacted to, mark it feedback so the session list shows work is waiting on them.',
+        'WHEN NOT TO USE: Do not mark a session done merely because a reply finished. A turn ending only means this reply finished; it does not mean the user goal is complete. Reserve done for a deliberate user request or your own confirmed judgement that the goal is met.',
         'DO NOT USE FOR: do not use this tool to record intermediate tool progress or an inference you are guessing at. Automatic inference never overwrites a mark you set with this tool, and a later call to this tool replaces an earlier mark of either kind.',
         'USAGE: pass one status from todo, done, stopped, blocked, review, pending-subagent, awaiting-answer, feedback. Statuses written by you through this tool are recorded with source agent, so the hover card can show that a model decided. Add a short note when the reason is not obvious, and a subjectId when the mark refers to a specific turn, goal, job, or subagent.',
-        'EXAMPLES: user asks you to pause and wait for their answer, call with status awaiting-answer and a note naming what you need. A subagent is launched and still running, call with status pending-subagent and its id as subjectId. Work is genuinely complete and confirmed, call with status done. To remove an incorrect mark, use clear_session_status instead of this tool.',
+        'EXAMPLES: you delivered a result and are waiting for the user to review it, call with status feedback and a note saying what you delivered. The user asked you to pause and wait for their answer, call with status awaiting-answer and a note naming what you need. A subagent is launched and still running, call with status pending-subagent and its id as subjectId. Work is genuinely complete and confirmed, call with status done. To remove an incorrect mark, use clear_session_status instead of this tool.',
       ].join(' '),
       parameters: {
         status: { type: 'string', required: true, enum: STATUS_VALUES, description: 'Status label to record for the current session.' },

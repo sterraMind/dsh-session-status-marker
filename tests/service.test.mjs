@@ -222,7 +222,8 @@ describe('SessionStatusService tools', () => {
     }
     expect(description).toContain('Automatic inference never overwrites a mark you set with this tool')
     expect(description).toContain('recorded with source agent')
-    expect(description).toContain('Do not mark a normally finished session done automatically')
+    expect(description).toContain('Do not mark a session done merely because a reply finished')
+    expect(description).toContain('mark it feedback so the session list shows work is waiting on them')
   })
 
   it('rejects a note longer than maxNoteLength', async () => {
@@ -234,18 +235,25 @@ describe('SessionStatusService tools', () => {
 })
 
 describe('SessionStatusService auto inference', () => {
-  it('observes a turn/end interrupted event and writes an auto mark', async () => {
+  it('observes a turn/end aborted event and writes an auto mark', async () => {
     const { svc, listeners } = await bootService(true)
     expect(listeners.length).toBe(1)
-    await listeners[0]({ id: 's9' }, { type: 'turn/end', seq: 4, time: 123, data: { reason: { kind: 'interrupted' } } })
+    await listeners[0]({ id: 's9' }, { type: 'turn/end', seq: 4, time: 123, data: { reason: { kind: 'aborted' } } })
     await new Promise((r) => setTimeout(r, 0))
     expect(svc.getMark('s9')).toMatchObject({ status: 'stopped', source: 'auto', autoReason: 'turn-interrupted' })
+  })
+
+  it('leaves a crash-recovery turn/end interrupted unmarked', async () => {
+    const { svc, listeners } = await bootService(true)
+    await listeners[0]({ id: 's9' }, { type: 'turn/end', seq: 4, time: 123, data: { reason: { kind: 'interrupted' } } })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(svc.getMark('s9')).toBeNull()
   })
 
   it('does not override a manual mark', async () => {
     const { svc, listeners } = await bootService(true)
     await svc.putMark(svc.explicitRow('s9', 'done', null, null))
-    await listeners[0]({ id: 's9' }, { type: 'turn/end', seq: 4, time: 123, data: { reason: { kind: 'interrupted' } } })
+    await listeners[0]({ id: 's9' }, { type: 'turn/end', seq: 4, time: 123, data: { reason: { kind: 'aborted' } } })
     await new Promise((r) => setTimeout(r, 0))
     expect(svc.getMark('s9')?.status).toBe('done')
   })

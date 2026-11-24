@@ -16,7 +16,7 @@ export interface InferenceObservation {
   data: unknown
   /**
    * Deployment switch for the turn-completed fallback mark. When `true`, a
-   * `turn/end` with `reason.kind === 'completed'` maps to `awaiting-answer`
+   * `turn/end` with `reason.kind === 'completed'` maps to `feedback`
    * as a last-resort catch-all. The Host only reaches the completed branch
    * when no earlier inference rule fired on this event, and `#observe`
    * additionally refuses to write the row when a mark already exists, so
@@ -99,7 +99,11 @@ export function inferStatus(observation: InferenceObservation): InferenceResult 
   switch (observation.type) {
     case 'turn/end': {
       const kind = turnEndKind(observation.data)
-      if (kind === 'interrupted') return { status: 'stopped', autoReason: 'turn-interrupted', subjectId: null, note: 'Turn was interrupted before completion.' }
+      // `interrupted` is synthesized only by crash recovery (`docs/subsystems/
+      // persistence.md`: "the one TurnEndReason no loop emits"), so it says
+      // nothing about where a live turn now stands. Inferring `stopped` from it
+      // labelled sessions that were still running; leave it to the fallback
+      // net, which excludes it for the same reason.
       if (kind === 'blocked') return { status: 'blocked', autoReason: 'turn-blocked', subjectId: null, note: null }
       if (kind === 'aborted' || kind === 'error') return { status: 'stopped', autoReason: 'turn-interrupted', subjectId: null, note: null }
       // Fallback mark for a normal turn end. The Host gates this branch behind
@@ -208,11 +212,13 @@ export function inferFallback(observation: FallbackObservation): FallbackResult 
       if (kind !== 'completed') return null
       // A main turn that closes while subagents are still running means the
       // session is not really waiting on the user — it is waiting on its own
-      // children. That outranks the awaiting-answer net.
+      // children. That outranks the completed-turn net.
       if (observation.subagentsRunning > 0) {
         return { status: 'pending-subagent', autoReason: 'fallback-subagent', note: null }
       }
-      return { status: 'awaiting-answer', autoReason: 'fallback-awaiting', note: null }
+      // A normally-completed turn is "work delivered, waiting for the user to
+      // react" — that is `feedback`, the default state for a finished turn.
+      return { status: 'feedback', autoReason: 'fallback-feedback', note: null }
     }
     default:
       return null

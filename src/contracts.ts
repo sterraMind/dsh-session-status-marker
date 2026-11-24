@@ -32,7 +32,11 @@ export const AUTO_REASON_VALUES = [
   // at all (the last-resort catch-all), and are distinct from the event-driven
   // inference codes above so the hover card can tell "the loop inferred this"
   // from "the fallback net fired".
+  // `fallback-awaiting` is retained for marks written before the default
+  // completed-turn status moved from awaiting-answer to feedback; it is no
+  // longer produced but must stay readable.
   'fallback-awaiting',
+  'fallback-feedback',
   'fallback-running',
   'fallback-subagent',
 ] as const
