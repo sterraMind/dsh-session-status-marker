@@ -49,7 +49,7 @@ import {
 } from './types.js'
 import { DEFAULT_UNMARKED_LIMIT } from './contracts.js'
 import type { UnmarkedEntry, UnmarkedSessions } from './contracts.js'
-import { inferStatus, shouldApplyInference, isAutoMarkExpired } from './inference.js'
+import { inferStatus, inferFallback, shouldApplyInference, shouldApplyFallback, isAutoMarkExpired } from './inference.js'
 
 /** Deployment configuration. Required fields fail at load; `refreshIntervalMs` defaults. */
 export interface Config {
@@ -71,6 +71,16 @@ export interface Config {
    * `false` so existing installs keep their current behaviour.
    */
   turnEndAwaitingAnswer: boolean
+  /**
+   * Enable the fallback net, a layer separate from `autoInfer`. Where
+   * `autoInfer` maps a *specific* event to a state, the fallback fires on the
+   * *absence* of a mark: a running turn with no mark reads as `todo`, and a
+   * normally-completed turn with no mark reads as `awaiting-answer` (or
+   * `pending-subagent` when subagents are still running). Every fallback write
+   * is gated on the session having no mark at all, so explicit marks and
+   * inference-produced marks are never touched. Defaults to `false`.
+   */
+  autoFallback: boolean
 }
 
 /** Schemastery schema, consumed by Cordis when this row loads. */
@@ -82,6 +92,7 @@ export const Config = z.object({
   rowActionOrder: z.natural().default(DEFAULT_ROW_ACTION_ORDER),
   menuItemOrder: z.natural().default(DEFAULT_MENU_ITEM_ORDER),
   turnEndAwaitingAnswer: z.boolean().default(false),
+  autoFallback: z.boolean().default(false),
 })
 
 /**
@@ -128,7 +139,31 @@ declare module '@deepseek-ai/cordis' {
   interface Events {
     /** Collect structured index-injection rows for the rendered Web GUI page. */
     'webserver/index-inject'(table: IndexGlobalInjection[], peer: unknown): void
+    /**
+     * Realtime-only subagent lifecycle, emitted by the harness subagent seam
+     * (`packages/subagent/subagent`). These are cordis runtime events, NOT
+     * persisted `SessionEventMap` members, so declaring a structural slice for
+     * them stays inside the out-of-tree red line: no custom `SessionEventMap`
+     * type is declared and nothing is appended to a session log. The payload
+     * shape mirrors the in-repo consumer (`hooks-claude-code/src/index.ts`).
+     * These drive only the `pending-subagent` fallback, which is realtime-only
+     * by design — after a restart the running count is `0`.
+     */
+    'subagent/start'(info: SubagentRunInfoLike): void
+    'subagent/end'(info: SubagentRunEndInfoLike): void
   }
+}
+
+/** Structural slice of a `subagent/start` payload. */
+interface SubagentRunInfoLike {
+  readonly id: SessionId
+  readonly runId: string
+  readonly parentSessionId?: SessionId
+}
+
+/** Structural slice of a `subagent/end` payload. */
+interface SubagentRunEndInfoLike extends SubagentRunInfoLike {
+  readonly stopReason?: string
 }
 
 /** Structural slice of the Host's session-query engine that this plugin uses. */
@@ -284,6 +319,18 @@ export class SessionStatusService extends Service {
   #overviewRefresh?: Promise<void>
 
   /**
+   * Realtime-only count of subagents the Host currently believes are running,
+   * keyed by the parent session id and kept from the cordis
+   * `subagent/start` / `subagent/end` events. These events are not persisted,
+   * so the map is memory-only and resets to empty on a restart: the
+   * `pending-subagent` fallback can therefore only fire for a turn that ends
+   * while the process that started the subagent is still alive. Keyed by the
+   * *parent* session because the mark lands on the parent's row, not the
+   * child's.
+   */
+  #subagentsRunning = new Map<string, number>()
+
+  /**
    * Await a promise but never let it block the board forever.
    *
    * The optional Host services (`sessionPersistence`, `sessionQuery`) are
@@ -424,12 +471,37 @@ export class SessionStatusService extends Service {
       })
     }, 'session-status-marker.clientConfig')
 
-    if (this.config.autoInfer) {
+    if (this.config.autoInfer || this.config.autoFallback) {
       this.ctx.on('session/event', (session: Session, event: SessionEvent) => {
-        void this.#observe(session, event).catch((error: unknown) => {
-          this.ctx.logger.warn('session-status-marker: inference failed:', error)
-        })
+        // Run the inference layer first when enabled; it is the more specific
+        // mapping and writes a mark that the fallback net must not touch.
+        const inference = this.config.autoInfer
+          ? this.#observe(session, event)
+          : Promise.resolve()
+        void inference
+          .then(() => this.#observeFallback(session, event))
+          .catch((error: unknown) => {
+            this.ctx.logger.warn('session-status-marker: inference/fallback failed:', error)
+          })
       }, { global: true })
+    }
+
+    // The fallback net runs on its own switch, and its subagent-aware branch
+    // needs the realtime running count maintained here. These are cordis
+    // runtime events (not persisted session events), so they only feed the
+    // `pending-subagent` branch; a plain `turn/end` with no subagents still
+    // resolves to `awaiting-answer` even when the Host never emitted a
+    // subagent event.
+    if (this.config.autoFallback) {
+      this.ctx.effect(() => {
+        const start = this.ctx.on('subagent/start', (info) => {
+          this.#bumpSubagents(info.parentSessionId, 1)
+        }, { global: true })
+        const end = this.ctx.on('subagent/end', (info) => {
+          this.#bumpSubagents(info.parentSessionId, -1)
+        }, { global: true })
+        return () => { start(); end() }
+      }, 'session-status-marker.subagentCount')
     }
 
     // Warm the overview caches once at startup, in the background. The first
@@ -515,6 +587,20 @@ export class SessionStatusService extends Service {
     return note
   }
 
+  /**
+   * Adjust the realtime subagent running count for a parent session by `delta`
+   * (`+1` on `subagent/start`, `-1` on `subagent/end`). The count never goes
+   * negative, and a parent that drops to zero is removed so a later poll does
+   * not see a stale `pending-subagent` signal.
+   */
+  #bumpSubagents(parentSessionId: SessionId | undefined, delta: 1 | -1): void {
+    if (parentSessionId === undefined) return
+    const key: string = parentSessionId as string
+    const next = (this.#subagentsRunning.get(key) ?? 0) + delta
+    if (next <= 0) this.#subagentsRunning.delete(key)
+    else this.#subagentsRunning.set(key, next)
+  }
+
   // ---- read-only inference -------------------------------------------------
 
   async #observe(session: Session, event: SessionEvent): Promise<void> {
@@ -548,6 +634,45 @@ export class SessionStatusService extends Service {
       status: proposed.status,
       source: 'auto',
       subjectId: proposed.subjectId,
+      autoReason: proposed.autoReason,
+      note: proposed.note,
+    }
+    await this.putMark(row)
+  }
+
+  /**
+   * The fallback net, a layer separate from `#observe`'s inference. Runs only
+   * when `autoFallback` is enabled and, unlike the inference layer, fires on
+   * the *absence* of a mark rather than a specific event→state mapping. A
+   * running turn with no mark reads as `todo`; a normally-completed turn with
+   * no mark reads as `awaiting-answer`, upgraded to `pending-subagent` when
+   * the Host still believes subagents are running. `interrupted` / `forked`
+   * are excluded because they are synthesized at crash recovery, not emitted
+   * by a live loop. A terminal fallback may supersede its own transient
+   * running mark on the same turn, so a session does not get stuck on `todo`.
+   */
+  async #observeFallback(session: Session, event: SessionEvent): Promise<void> {
+    if (!this.config.autoFallback) return
+    // The fallback runs after the inference layer would have had its chance at
+    // this event, so a mark produced by inference (or by an explicit write)
+    // is already present and the `current === null` gate below refuses to
+    // overwrite it.
+    const current = await this.effectiveMark(session.id)
+    const proposed = inferFallback({
+      type: event.type,
+      data: event.data,
+      subagentsRunning: this.#subagentsRunning.get(session.id as string) ?? 0,
+    })
+    if (proposed === null) return
+    if (current !== null && !shouldApplyFallback(current, proposed)) return
+    const row: MarkRecord = {
+      version: MARK_VERSION,
+      insertedAtMs: event.time,
+      seq: event.seq,
+      sessionId: session.id,
+      status: proposed.status,
+      source: 'auto',
+      subjectId: null,
       autoReason: proposed.autoReason,
       note: proposed.note,
     }

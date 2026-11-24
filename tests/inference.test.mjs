@@ -3,7 +3,9 @@
 import { describe, it, expect } from './vitest-shim.mjs'
 import {
   inferStatus,
+  inferFallback,
   shouldApplyInference,
+  shouldApplyFallback,
   isAutoMarkExpired,
 } from '../lib/inference.js'
 
@@ -140,6 +142,69 @@ describe('shouldApplyInference', () => {
   it('re-applies only when status/autoReason change', () => {
     expect(shouldApplyInference(mark({ status: 'stopped', autoReason: 'turn-interrupted' }), proposed)).toBe(false)
     expect(shouldApplyInference(mark({ status: 'blocked', autoReason: 'turn-blocked' }), proposed)).toBe(true)
+  })
+})
+
+describe('inferFallback', () => {
+  it('maps turn/start to todo/fallback-running when no subagents', () => {
+    const r = inferFallback({ type: 'turn/start', data: { turn: 1 }, subagentsRunning: 0 })
+    expect(r).toEqual({ status: 'todo', autoReason: 'fallback-running', note: null })
+  })
+
+  it('maps a normally-completed turn to awaiting-answer/fallback-awaiting when no subagents run', () => {
+    const r = inferFallback({ type: 'turn/end', data: { reason: { kind: 'completed' } }, subagentsRunning: 0 })
+    expect(r).toEqual({ status: 'awaiting-answer', autoReason: 'fallback-awaiting', note: null })
+  })
+
+  it('maps a completed turn to pending-subagent when subagents are still running', () => {
+    const r = inferFallback({ type: 'turn/end', data: { reason: { kind: 'completed' } }, subagentsRunning: 3 })
+    expect(r).toEqual({ status: 'pending-subagent', autoReason: 'fallback-subagent', note: null })
+  })
+
+  it('ignores turn/end kinds already handled by the inference layer (blocked/error)', () => {
+    for (const kind of ['blocked', 'aborted', 'error']) {
+      const r = inferFallback({ type: 'turn/end', data: { reason: { kind } }, subagentsRunning: 0 })
+      expect(r).toBeNull()
+    }
+  })
+
+  it('excludes the two crash-recovery synthetic kinds (interrupted/forked)', () => {
+    for (const kind of ['interrupted', 'forked']) {
+      const r = inferFallback({ type: 'turn/end', data: { reason: { kind } }, subagentsRunning: 0 })
+      expect(r).toBeNull()
+    }
+  })
+
+  it('returns null for unknown event types (merge-extensible default)', () => {
+    expect(inferFallback({ type: 'nope/event', data: {}, subagentsRunning: 0 })).toBeNull()
+  })
+})
+
+describe('shouldApplyFallback', () => {
+  const terminal = { status: 'awaiting-answer', autoReason: 'fallback-awaiting', note: null }
+
+  it('fires when the session has no mark at all', () => {
+    expect(shouldApplyFallback(null, terminal)).toBe(true)
+  })
+
+  it('never touches an explicit manual or agent mark', () => {
+    expect(shouldApplyFallback(mark({ source: 'manual' }), terminal)).toBe(false)
+    expect(shouldApplyFallback(mark({ source: 'agent' }), terminal)).toBe(false)
+  })
+
+  it('never touches a mark produced by the inference layer', () => {
+    const inferred = mark({ source: 'auto', autoReason: 'turn-interrupted', status: 'stopped' })
+    expect(shouldApplyFallback(inferred, terminal)).toBe(false)
+  })
+
+  it('lets a terminal fallback upgrade its own transient running mark', () => {
+    const running = mark({ source: 'auto', autoReason: 'fallback-running', status: 'todo' })
+    expect(shouldApplyFallback(running, terminal)).toBe(true)
+  })
+
+  it('is idempotent against an identical fallback mark', () => {
+    const existing = mark({ source: 'auto', autoReason: 'fallback-awaiting', status: 'awaiting-answer' })
+    expect(shouldApplyFallback(existing, terminal)).toBe(false)
   })
 })
 

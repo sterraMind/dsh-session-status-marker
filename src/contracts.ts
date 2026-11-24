@@ -28,6 +28,13 @@ export const AUTO_REASON_VALUES = [
   'job-failed',
   'goal-blocked',
   'session-stop-invoked',
+  // Fallback-layer codes. These are written only when the session has no mark
+  // at all (the last-resort catch-all), and are distinct from the event-driven
+  // inference codes above so the hover card can tell "the loop inferred this"
+  // from "the fallback net fired".
+  'fallback-awaiting',
+  'fallback-running',
+  'fallback-subagent',
 ] as const
 
 /** Union of auto-inference rule codes. */

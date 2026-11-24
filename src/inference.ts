@@ -34,6 +34,27 @@ export interface InferenceResult {
   note: string | null
 }
 
+/** A proposed fallback mark, produced but not yet persisted. */
+export interface FallbackResult {
+  status: StatusEnum
+  autoReason: AutoReasonCode
+  note: string | null
+}
+
+/** Normalized view of one session event for the fallback net (separate layer). */
+export interface FallbackObservation {
+  type: string
+  data: unknown
+  /**
+   * How many subagents the process currently believes are running. This is
+   * realtime-only state maintained in the Host service from the cordis
+   * `subagent/start` / `subagent/end` events, which do not persist: after a
+   * restart the count resets to `0` and the pending-subagent fallback can no
+   * longer fire for a past turn.
+   */
+  subagentsRunning: number
+}
+
 /** Safely read one string property off an unknown object. */
 function stringField(obj: unknown, key: string): string | undefined {
   if (typeof obj !== 'object' || obj === null || !(key in obj)) return undefined
@@ -139,4 +160,84 @@ export function shouldApplyInference(current: MarkRecord | null, proposed: Infer
 export function isAutoMarkExpired(mark: MarkRecord, now: number, autoExpireMs: number): boolean {
   if (autoExpireMs <= 0 || mark.source !== 'auto') return false
   return now - mark.insertedAtMs > autoExpireMs
+}
+
+/**
+ * The fallback net: a last-resort catch-all that fires only when a session has
+ * no mark at all.
+ *
+ * This is a separate layer from {@link inferStatus} and must stay separate. The
+ * event-driven rules above map a specific event to a state; the fallback fires
+ * on the *absence* of a mark, which no single event encodes. The two layers
+ * also differ in what they may touch: the fallback never overwrites a manual,
+ * agent, or inference-produced mark — the Host gates every fallback write on
+ * `currentMark === null`.
+ *
+ * Realtime-only limits, documented here because they bound what the fallback
+ * can promise:
+ *
+ * - `turn/start` → `todo` is a *transient* running state. It does not persist
+ *   across a restart, and a later `turn/end` terminal fallback is allowed to
+ *   replace it (the Host permits a terminal fallback to supersede a
+ *   `fallback-running` mark).
+ * - `pending-subagent` depends on the process-local subagent running count,
+ *   which the cordis `subagent/start` / `subagent/end` events maintain in
+ *   memory only. After a restart the count is `0`, so the pending-subagent
+ *   fallback can no longer fire for a turn that ended before the restart.
+ *
+ * `interrupted` and `forked` are excluded on purpose: upstream synthesizes both
+ * at crash recovery (`packages/core/session`, `docs/subsystems/persistence.md`)
+ * and no live loop emits them, so treating them as a fallback trigger would
+ * mislabel a recovered session as a real terminal state.
+ */
+export function inferFallback(observation: FallbackObservation): FallbackResult | null {
+  switch (observation.type) {
+    case 'turn/start': {
+      // A turn just opened: the session is running. This is transient and only
+      // lands when the session has no mark yet.
+      return { status: 'todo', autoReason: 'fallback-running', note: null }
+    }
+    case 'turn/end': {
+      const kind = turnEndKind(observation.data)
+      // Exclude the two synthesized reasons outright — they never come from a
+      // live turn, so they carry no fallback signal.
+      if (kind === 'interrupted' || kind === 'forked') return null
+      // Only a normally-completed turn can be a "no result yet" net. The
+      // `blocked` / `aborted` / `error` kinds are already handled by the
+      // event-driven inference layer; duplicating them here would just race.
+      if (kind !== 'completed') return null
+      // A main turn that closes while subagents are still running means the
+      // session is not really waiting on the user — it is waiting on its own
+      // children. That outranks the awaiting-answer net.
+      if (observation.subagentsRunning > 0) {
+        return { status: 'pending-subagent', autoReason: 'fallback-subagent', note: null }
+      }
+      return { status: 'awaiting-answer', autoReason: 'fallback-awaiting', note: null }
+    }
+    default:
+      return null
+  }
+}
+
+/**
+ * Whether a fallback mark may replace the current stored mark.
+ *
+ * Unlike {@link shouldApplyInference}, the fallback net can *upgrade* its own
+ * transient running mark (`fallback-running`) into a terminal one on the same
+ * turn's `turn/end`, so a session does not get stuck on `todo` after its turn
+ * closes. It owns only the `fallback-*` codes it writes; it never touches an
+ * explicit (`manual` / `agent`) mark, a mark the inference layer produced
+ * (`turn-interrupted`, `job-failed`, …), or an identical fallback row it
+ * already wrote.
+ */
+export function shouldApplyFallback(current: MarkRecord | null, proposed: FallbackResult): boolean {
+  if (current === null) return true
+  if (current.source !== 'auto') return false
+  // Only our own codes are in scope; the inference layer's codes are out.
+  if (typeof current.autoReason !== 'string' || !current.autoReason.startsWith('fallback-')) return false
+  // A transient running mark upgrades to the terminal state on turn end.
+  if (current.autoReason === 'fallback-running') return true
+  // Identical terminal row: leave it (idempotent). A different terminal
+  // fallback state is a rare transition and is not forced.
+  return current.status !== proposed.status || current.autoReason !== proposed.autoReason
 }
