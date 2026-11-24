@@ -35,7 +35,7 @@
 
 ## 安装
 
-**从 npm 安装**（当前稳定版 1.2.3）：
+**从 npm 安装**（当前稳定版 1.3.0）：
 
 ```bash
 dsh plugin --profile desktop add dsh-session-status-marker
@@ -102,7 +102,7 @@ dsh --profile desktop --dump-config   # 输出里应出现 session-status-marker
 ```bash
 pnpm run typecheck     # 类型检查
 pnpm run build         # 编译 Host 与浏览器端产物
-pnpm run test          # 139 项测试
+pnpm run test          # 154 项测试
 pnpm pack              # 打包成 .tgz 压缩包
 ```
 
