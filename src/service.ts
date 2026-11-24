@@ -23,6 +23,7 @@ import {
   STATUS_VALUES,
   MARK_VERSION,
   DEFAULT_REFRESH_INTERVAL_MS,
+  DEFAULT_OBSERVATION_TTL_MS,
   DEFAULT_ROW_ACTION_ORDER,
   DEFAULT_MENU_ITEM_ORDER,
   CLIENT_CONFIG_GLOBAL,
@@ -48,8 +49,16 @@ import {
   overviewRevision,
 } from './types.js'
 import { DEFAULT_UNMARKED_LIMIT } from './contracts.js'
-import type { UnmarkedEntry, UnmarkedSessions } from './contracts.js'
-import { inferStatus, inferFallback, shouldApplyInference, shouldApplyFallback, isAutoMarkExpired } from './inference.js'
+import type { ClientEffectiveConfig, UnmarkedEntry, UnmarkedSessions } from './contracts.js'
+import {
+  inferStatus,
+  inferFallback,
+  shouldApplyInference,
+  shouldApplyFallback,
+  isAutoMarkExpired,
+  observationOf,
+  shouldRecordObservation,
+} from './inference.js'
 
 /** Deployment configuration. Required fields fail at load; `refreshIntervalMs` defaults. */
 export interface Config {
@@ -82,6 +91,11 @@ export interface Config {
    * session is marked from its first running turn instead of staying blank.
    */
   autoFallback: boolean
+  /**
+   * How long a system observation stays fresh, in ms. Past this the UI still
+   * shows what was observed, demoted as outdated; `0` never goes stale.
+   */
+  observationTtlMs: number
 }
 
 /** Schemastery schema, consumed by Cordis when this row loads. */
@@ -94,6 +108,7 @@ export const Config = z.object({
   menuItemOrder: z.natural().default(DEFAULT_MENU_ITEM_ORDER),
   turnEndAwaitingAnswer: z.boolean().default(false),
   autoFallback: z.boolean().default(true),
+  observationTtlMs: z.natural().default(DEFAULT_OBSERVATION_TTL_MS),
 })
 
 /**
@@ -455,19 +470,29 @@ export class SessionStatusService extends Service {
       }, 'session-status-marker.fetchRoutes')
     })
 
-    // Expose the configured slot orders to the browser. The dynamic client
+    // Expose the effective configuration to the browser. The dynamic client
     // row carries no config (`BootPluginRow` has only id/inject/immediately),
     // so `apply(ctx, config)` on the client cannot see cordis.patch.yml. The
-    // official `webserver/index-inject` global is the supported channel.
+    // official `webserver/index-inject` global is the supported channel. The
+    // settings page renders these values verbatim, so they must be the ones the
+    // Host really runs with — schema defaults already applied, nothing copied.
     this.ctx.effect(() => {
       return this.ctx.on('webserver/index-inject', (table) => {
+        const effective: ClientEffectiveConfig = {
+          rowActionOrder: this.config.rowActionOrder ?? DEFAULT_ROW_ACTION_ORDER,
+          menuItemOrder: this.config.menuItemOrder ?? DEFAULT_MENU_ITEM_ORDER,
+          autoInfer: this.config.autoInfer === true,
+          autoFallback: this.config.autoFallback === true,
+          turnEndAwaitingAnswer: this.config.turnEndAwaitingAnswer === true,
+          maxNoteLength: this.config.maxNoteLength,
+          autoExpireMs: this.config.autoExpireMs,
+          refreshIntervalMs: this.config.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS,
+          observationTtlMs: this.config.observationTtlMs ?? DEFAULT_OBSERVATION_TTL_MS,
+        }
         table.push({
           kind: 'global',
           name: CLIENT_CONFIG_GLOBAL,
-          value: {
-            rowActionOrder: this.config.rowActionOrder ?? DEFAULT_ROW_ACTION_ORDER,
-            menuItemOrder: this.config.menuItemOrder ?? DEFAULT_MENU_ITEM_ORDER,
-          },
+          value: { ...effective, effective },
         })
       })
     }, 'session-status-marker.clientConfig')
@@ -481,9 +506,25 @@ export class SessionStatusService extends Service {
           : Promise.resolve()
         void inference
           .then(() => this.#observeFallback(session, event))
+          // The observation layer runs last so it sees the row the two layers
+          // above may have just created; it never creates a row itself.
+          .then(() => this.#recordObservation(session, event))
           .catch((error: unknown) => {
             this.ctx.logger.warn('session-status-marker: inference/fallback failed:', error)
           })
+      }, { global: true })
+    } else {
+      // Both automatic layers are off, so no mark is ever written from events.
+      // The observation layer still has work to do: it refreshes what the
+      // system last saw on sessions the user marked by hand, so the picker can
+      // show "marked done, last observed running" instead of a bare label. It
+      // runs as its own handler here because there is no inference/fallback
+      // chain to append to — and it must not create rows, which keeps the
+      // "automatic marking disabled" contract intact.
+      this.ctx.on('session/event', (session: Session, event: SessionEvent) => {
+        void this.#recordObservation(session, event).catch((error: unknown) => {
+          this.ctx.logger.warn('session-status-marker: observation failed:', error)
+        })
       }, { global: true })
     }
 
@@ -540,9 +581,26 @@ export class SessionStatusService extends Service {
 
   // ---- durable writes ------------------------------------------------------
 
-  /** Insert or replace one mark. `source` distinguishes explicit intent from inference. */
+  /**
+   * Insert or replace one mark. `source` distinguishes explicit intent from inference.
+   *
+   * The observation layer is carried across writes: a caller that only touches
+   * the explicit layer (a manual click, an inference row) passes `null`
+   * observations, and the stored observation is inherited instead of erased.
+   * Only a caller that actually observed something sets `observedAtMs`, and
+   * then all three observation fields are taken from that row.
+   */
   async putMark(row: MarkRecord): Promise<void> {
-    await this.#table().put(row.sessionId, row)
+    const previous = this.getMark(row.sessionId)
+    const merged: MarkRecord = previous === null || row.observedAtMs !== null
+      ? row
+      : {
+          ...row,
+          observedStatus: previous.observedStatus,
+          observedEvent: previous.observedEvent,
+          observedAtMs: previous.observedAtMs,
+        }
+    await this.#table().put(merged.sessionId, merged)
   }
 
   /** Remove one mark. Returns whether a row existed. */
@@ -576,6 +634,11 @@ export class SessionStatusService extends Service {
       subjectId,
       autoReason: null,
       note,
+      // Explicit writes leave the observation layer alone; `putMark` inherits
+      // whatever the row already recorded.
+      observedStatus: null,
+      observedEvent: null,
+      observedAtMs: null,
     }
   }
 
@@ -637,6 +700,9 @@ export class SessionStatusService extends Service {
       subjectId: proposed.subjectId,
       autoReason: proposed.autoReason,
       note: proposed.note,
+      observedStatus: null,
+      observedEvent: null,
+      observedAtMs: null,
     }
     await this.putMark(row)
   }
@@ -676,8 +742,36 @@ export class SessionStatusService extends Service {
       subjectId: null,
       autoReason: proposed.autoReason,
       note: proposed.note,
+      observedStatus: null,
+      observedEvent: null,
+      observedAtMs: null,
     }
     await this.putMark(row)
+  }
+
+  /**
+   * Record what the event log last showed, beside whatever explicit mark exists.
+   *
+   * This is the observation layer, and it is the reason a session marked `done`
+   * by hand can still say "a turn is running right now". It never writes the
+   * explicit fields and never creates a row: when no mark exists, the inference
+   * and fallback layers own row creation, and this layer attaches on their next
+   * pass. `subagent/start` and `subagent/end` are absent from
+   * {@link OBSERVED_EVENT_VALUES} on purpose — they carry no readable state,
+   * only the running counter that `#bumpSubagents` maintains.
+   */
+  async #recordObservation(session: Session, event: SessionEvent): Promise<void> {
+    const observed = observationOf(event)
+    if (observed === null) return
+    const current = await this.effectiveMark(session.id)
+    if (current === null) return
+    if (!shouldRecordObservation(current, observed)) return
+    await this.putMark({
+      ...current,
+      observedStatus: observed.status,
+      observedEvent: observed.event,
+      observedAtMs: observed.atMs,
+    })
   }
 
   // ---- exact fetch routes --------------------------------------------------
@@ -799,6 +893,12 @@ export class SessionStatusService extends Service {
         source: row.source,
         autoReason: row.autoReason,
         updatedAtMs: row.insertedAtMs,
+        // Observation layer, passed through as stored. Staleness is a client
+        // concern: the TTL is a display rule, and the Host must not re-decide it
+        // per request or a clock skew between Host and Browser changes the UI.
+        observedStatus: row.observedStatus,
+        observedEvent: row.observedEvent,
+        observedAtMs: row.observedAtMs,
       }
       totalMarked++
       const bucket = byStatus.get(row.status) ?? []

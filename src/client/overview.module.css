@@ -1,23 +1,98 @@
-/** @module CSS Modules for the status-overview settings page.
+/** @module CSS Modules for the session-status settings page.
  *
- * The settings panel's content column is a host surface that already follows
- * the DSH theme, so every color here is a `--dsw-alias-*` token: the page
- * surface uses `--dsw-alias-bg-layer-2`, primary text `--dsw-alias-label-primary`,
- * secondary text `--dsw-alias-label-secondary`, and status accents reuse
- * `STATUS_META.tone` (theme-aware state tokens). No literal colors.
+ * Two tabs share the section surface: the read-only status board (groups,
+ * counts, unmarked sessions) and the effective-configuration list. The
+ * settings panel's content column is a host surface that already follows the
+ * DSH theme, so every color here is a `--dsw-alias-*` token: the tab strip
+ * sits on `--dsw-alias-bg-module-platform` with the selected tab on
+ * `--dsw-alias-bg-layer-3`, the configuration list on `--dsw-alias-bg-layer-2`,
+ * primary text uses `--dsw-alias-label-primary`, secondary text
+ * `--dsw-alias-label-secondary`, and status accents reuse `STATUS_META.tone`
+ * (theme-aware state tokens). No literal colors.
  */
 
 .page {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px;
+  /* The settings panel's content column already pads 24px sideways. */
+  padding: 4px 0 0;
 }
 
 .title {
   font-size: 15px;
   font-weight: 600;
   color: var(--dsw-alias-label-primary);
+}
+
+/* Tab strip: equal-width segments on the platform surface, the selected one
+ * raised onto a lighter layer (the shell's `SegmentedTabs` look). */
+.tabList {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.tab {
+  height: 34px;
+  padding: 0 12px;
+  /* Transparent rather than `none`, so selecting a tab cannot shift the row. */
+  border: 0.5px solid transparent;
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  cursor: pointer;
+  transition: color 180ms ease, background-color 180ms ease;
+}
+
+/* Selected tab. Deliberately a second class, not an attribute selector on
+ * `.tab`: the bundle builder only hashes class selectors followed by `,`, `{`,
+ * `:` or `.`, so an attribute selector would ship unscoped as a global `.tab`
+ * rule that both leaks into the host UI and never matches our elements. */
+.tabSelected {
+  border-color: var(--dsw-alias-border-l3);
+  background: var(--dsw-alias-bg-layer-3);
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+}
+
+.tab:focus-visible {
+  outline: none;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+
+@media (hover: hover) {
+  .tab:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab {
+    transition: none;
+  }
+}
+
+/* Both panels stay mounted (the poll loop and the render cache live in the
+ * board); only one is visible, by class rather than by the `hidden` attribute
+ * alone for the same scoping reason as `.tabSelected` above. */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panelHidden {
+  display: none;
 }
 
 .loading,
@@ -88,4 +163,59 @@
   white-space: nowrap;
   font-size: 12px;
   color: var(--dsw-alias-label-secondary);
+}
+
+/* Configuration tab: one key/value row per option, key in the profile's
+ * spelling (monospace) so it can be copied straight into `cordis.patch.yml`. */
+.config {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.configList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 8px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.configRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 8px;
+  border-radius: var(--dsw-radius-sm);
+}
+
+.configRow:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.configKey {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.configValue {
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.configHint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
 }

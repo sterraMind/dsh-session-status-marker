@@ -18,6 +18,10 @@
  * Our panel keeps a transparent background and uses theme-alias text and status
  * colors, so it sits on the single themed card surface without a seam.
  *
+ * Typography: the host's session-title line is one step larger than the official
+ * tooltips around the sidebar, so the same rule below gives the title line the
+ * tooltip type step (13px/20px, weight 400).
+ *
  * `.root::before` is the anchor-to-card bridge: the compact hover card offers
  * only a 200 ms pointer grace across the eight-pixel gap and no bridge element,
  * so a pointer crossing from the row to this content could lose the card on the
@@ -41,7 +45,14 @@
   cursor: default;
 }
 
+/* Official tooltips set their label to 13px/20px at weight 400
+ * (`Tooltip.module.css:19-20`; the `--dsw-font-xs-13` step in
+ * `gradient-shadow-text.css:234-239`). The host title line is 14px/20px, so the
+ * card reads one step larger than the tooltips in the same sidebar. Apply the
+ * theme's type step instead of copying the pixel values, so a scale change moves
+ * both together. */
 [class*='card']:has([data-status-slot]) [class*='hoverTitle'] {
+  font: var(--dsw-font-xs-13) !important;
   color: var(--dsw-alias-label-primary) !important;
 }
 

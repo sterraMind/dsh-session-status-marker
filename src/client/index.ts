@@ -1,10 +1,12 @@
 /** @module Client entry for dsh-session-status-marker.
  *
- * Registers the locale namespace and four slot occupants:
+ * Registers the locale namespace and five slot occupants:
  *  - `sidebar.session.row.trailing` → SessionStatusBadge
  *  - `sidebar.session.row.hover`   → SessionStatusHover
  *  - `sidebar.workspaces.session.row.action` → SessionStatusRowAction (order 300)
  *  - `sidebar.workspaces.session.menu.item`  → MenuStatusItem (touch/keyboard fallback)
+ *  - `settings.section` → StatusOverview (one section, two tabs: the status
+ *    board and the effective configuration)
  *
  * Follows `.research/dsh-repo/packages/client/ui-deliverables/src/client/index.ts:38-64`.
  */
@@ -18,12 +20,13 @@ import { SessionStatusHover } from './HoverCard.js'
 import { SessionStatusRowAction } from './RowAction.js'
 import { MenuStatusItem } from './MenuStatusItem.js'
 import { StatusOverview } from './StatusOverview.js'
-import type { StatusOverviewInjected } from './StatusOverview.js'
+import type { StatusOverviewConfig, StatusOverviewInjected } from './StatusOverview.js'
 import { NS, DICTIONARIES } from './locales.js'
 import type { MarkerKey } from './locales.js'
 import { MARKER_OVERVIEW_PATH, CLIENT_CONFIG_GLOBAL } from '../contracts.js'
 import type { OverviewResponse } from '../contracts.js'
 import { DEFAULT_ROW_ACTION_ORDER, DEFAULT_MENU_ITEM_ORDER, OVERVIEW_FETCH_TIMEOUT_MS } from '../contracts.js'
+import { DEFAULT_MAX_NOTE_LENGTH, DEFAULT_OBSERVATION_TTL_MS, DEFAULT_REFRESH_INTERVAL_MS } from '../contracts.js'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -32,10 +35,64 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** Slot orders injected by the Host through `webserver/index-inject`. */
+/**
+ * Slot orders and effective configuration injected by the Host through
+ * `webserver/index-inject`.
+ *
+ * The Host sends every field twice: mirrored at the top level (the 1.2.x
+ * layout) and collected under `effective` (the current layout). Only
+ * `effective` is read here; the mirror exists so an older client keeps working.
+ */
 interface BrowserConfig {
   rowActionOrder?: number
   menuItemOrder?: number
+  effective?: Record<string, unknown>
+}
+
+/** Read a finite number from the injected global, or `fallback` when unusable. */
+function readNumber(source: Record<string, unknown>, key: string, fallback: number): number {
+  const value = source[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+/** Read a finite number with no schema default: `null` means "not reported". */
+function readOptionalNumber(source: Record<string, unknown>, key: string): number | null {
+  const value = source[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+/** Read a boolean from the injected global, or `fallback` when absent. */
+function readBoolean(source: Record<string, unknown>, key: string, fallback: boolean): boolean {
+  const value = source[key]
+  return typeof value === 'boolean' ? value : fallback
+}
+
+/** Read a boolean with no schema default: `null` means "not reported". */
+function readOptionalBoolean(source: Record<string, unknown>, key: string): boolean | null {
+  const value = source[key]
+  return typeof value === 'boolean' ? value : null
+}
+
+/**
+ * Resolve the effective configuration for the settings page.
+ *
+ * Every key is guarded on its own, so a Host that predates a field leaves just
+ * that row blank instead of blanking the page. Defaults are the same constants
+ * the Host falls back to, imported rather than repeated, so the two halves
+ * cannot drift.
+ */
+function resolveClientConfig(effective: Record<string, unknown>): StatusOverviewConfig {
+  return {
+    rowActionOrder: readNumber(effective, 'rowActionOrder', DEFAULT_ROW_ACTION_ORDER),
+    menuItemOrder: readNumber(effective, 'menuItemOrder', DEFAULT_MENU_ITEM_ORDER),
+    autoInfer: readOptionalBoolean(effective, 'autoInfer'),
+    autoFallback: readBoolean(effective, 'autoFallback', true),
+    turnEndAwaitingAnswer: readBoolean(effective, 'turnEndAwaitingAnswer', false),
+    maxNoteLength: readNumber(effective, 'maxNoteLength', DEFAULT_MAX_NOTE_LENGTH),
+    autoExpireMs: readOptionalNumber(effective, 'autoExpireMs'),
+    refreshIntervalMs: readNumber(effective, 'refreshIntervalMs', DEFAULT_REFRESH_INTERVAL_MS),
+    observationTtlMs: readNumber(effective, 'observationTtlMs', DEFAULT_OBSERVATION_TTL_MS),
+  }
 }
 
 /** Required services for the dictionaries and the four slot registrations. */
@@ -49,6 +106,10 @@ export function apply(ctx: ClientContext): void {
   const browserConfig = (globalThis as { [CLIENT_CONFIG_GLOBAL]?: BrowserConfig })[CLIENT_CONFIG_GLOBAL] ?? {}
   const rowActionOrder = typeof browserConfig.rowActionOrder === 'number' ? browserConfig.rowActionOrder : DEFAULT_ROW_ACTION_ORDER
   const menuItemOrder = typeof browserConfig.menuItemOrder === 'number' ? browserConfig.menuItemOrder : DEFAULT_MENU_ITEM_ORDER
+  // Snapshot of the configuration the page actually runs with. The settings
+  // page's configuration tab renders these read-only instead of duplicating
+  // the defaults in the UI, so a profile override shows up there.
+  const clientConfig: StatusOverviewConfig = resolveClientConfig(browserConfig.effective ?? {})
   // Ship every language the shell offers (`locale/src/client/index.ts:23` lists
   // en, ja, es, fr, de, ru, pt, zh). Registering only zh/en made the six others
   // fall back to English, which read as "the language never switches".
@@ -106,9 +167,10 @@ export function apply(ctx: ClientContext): void {
     ),
   )
 
-  // Status-overview settings page: one read-only section grouping every marked
-  // session by status. Data arrives through `fetchOverview`; copy through the
-  // bound `t` (fresh on every locale switch, so the nav label stays current).
+  // Status settings page: one section, two tabs — the read-only board grouping
+  // every marked session by status, and the effective configuration. Data
+  // arrives through `fetchOverview`; copy through the bound `t` (fresh on every
+  // locale switch, so the nav label stays current).
   const t = ctx.locale.bind(NS) as (key: string, params?: Record<string, string>) => string
   const fetchOverview = async (since?: string): Promise<OverviewResponse> => {
     // Absolute path: a relative "api/..." resolves against the current route,
@@ -130,7 +192,7 @@ export function apply(ctx: ClientContext): void {
       clearTimeout(timeout)
     }
   }
-  const overviewInjected = (): StatusOverviewInjected => ({ t, fetchOverview })
+  const overviewInjected = (): StatusOverviewInjected => ({ t, fetchOverview, config: clientConfig })
   ctx.slots.inject('settings.section', () =>
     ctx.slots.register(
       {

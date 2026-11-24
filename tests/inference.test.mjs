@@ -7,7 +7,10 @@ import {
   shouldApplyInference,
   shouldApplyFallback,
   isAutoMarkExpired,
+  observationOf,
+  shouldRecordObservation,
 } from '../lib/inference.js'
+import { isObservationStale } from '../lib/contracts.js'
 
 const NOW = 1_000_000
 
@@ -22,6 +25,9 @@ function mark(partial) {
     subjectId: null,
     autoReason: 'turn-interrupted',
     note: null,
+    observedStatus: null,
+    observedEvent: null,
+    observedAtMs: null,
     ...partial,
   }
 }
@@ -223,5 +229,96 @@ describe('isAutoMarkExpired', () => {
     const m = mark({ insertedAtMs: NOW - 5000 })
     expect(isAutoMarkExpired(m, NOW, 1000)).toBe(true)
     expect(isAutoMarkExpired(m, NOW, 10_000)).toBe(false)
+  })
+})
+
+describe('observationOf', () => {
+  it('maps turn/start to a running observation', () => {
+    expect(observationOf({ type: 'turn/start', seq: 1, time: NOW, data: {} })).toEqual({
+      status: 'todo',
+      event: 'turn/start',
+      atMs: NOW,
+    })
+  })
+
+  it('maps turn/end kinds to the state the log showed', () => {
+    const turnEnd = (kind) => observationOf({ type: 'turn/end', seq: 1, time: NOW, data: { reason: { kind } } })
+    expect(turnEnd('blocked')).toEqual({ status: 'blocked', event: 'turn/end', atMs: NOW })
+    expect(turnEnd('aborted')).toEqual({ status: 'stopped', event: 'turn/end', atMs: NOW })
+    expect(turnEnd('error')).toEqual({ status: 'stopped', event: 'turn/end', atMs: NOW })
+    expect(turnEnd('completed')).toEqual({ status: 'feedback', event: 'turn/end', atMs: NOW })
+  })
+
+  it('observes nothing for the crash-recovery synthetic kinds', () => {
+    for (const kind of ['interrupted', 'forked']) {
+      expect(observationOf({ type: 'turn/end', seq: 1, time: NOW, data: { reason: { kind } } })).toBe(null)
+    }
+  })
+
+  it('maps job/settled failed/killed and ignores other outcomes', () => {
+    const settled = (status) => observationOf({ type: 'job/settled', seq: 1, time: NOW, data: { jobId: 'j1', status } })
+    expect(settled('failed')).toEqual({ status: 'stopped', event: 'job/settled', atMs: NOW })
+    expect(settled('killed')).toEqual({ status: 'stopped', event: 'job/settled', atMs: NOW })
+    expect(settled('completed')).toBe(null)
+  })
+
+  it('maps a blocked goal/change and ignores the others', () => {
+    expect(observationOf({ type: 'goal/change', seq: 1, time: NOW, data: { operation: 'block', goal: { phase: 'blocked' } } })).toEqual({
+      status: 'blocked',
+      event: 'goal/change',
+      atMs: NOW,
+    })
+    expect(observationOf({ type: 'goal/change', seq: 1, time: NOW, data: { operation: 'edit', goal: { phase: 'blocked' } } })).toBe(null)
+  })
+
+  it('never observes subagent events (they only maintain the running counter)', () => {
+    for (const type of ['subagent/start', 'subagent/end']) {
+      expect(observationOf({ type, seq: 1, time: NOW, data: {} })).toBe(null)
+    }
+  })
+
+  it('returns null for unknown event types', () => {
+    expect(observationOf({ type: 'user/message', seq: 1, time: NOW, data: {} })).toBe(null)
+  })
+})
+
+describe('isObservationStale', () => {
+  it('treats a missing observation as never stale', () => {
+    expect(isObservationStale(null, NOW, 1000)).toBe(false)
+  })
+
+  it('respects ttlMs = 0 (disabled)', () => {
+    expect(isObservationStale(NOW - 9_999_999, NOW, 0)).toBe(false)
+  })
+
+  it('is fresh up to and including the ttl, stale past it', () => {
+    expect(isObservationStale(NOW - 1000, NOW, 1000)).toBe(false)
+    expect(isObservationStale(NOW - 1001, NOW, 1000)).toBe(true)
+  })
+})
+
+describe('shouldRecordObservation', () => {
+  const next = { status: 'todo', event: 'turn/start', atMs: NOW }
+
+  it('records when the session has no mark yet', () => {
+    expect(shouldRecordObservation(null, next)).toBe(true)
+  })
+
+  it('records onto an explicit mark without touching it (the two layers are independent)', () => {
+    // This is the case `shouldApplyInference` refuses: an observation rides
+    // beside a manual mark instead of being suppressed by it.
+    const explicit = mark({ source: 'manual', status: 'done', autoReason: null })
+    expect(shouldApplyInference(explicit, { status: 'todo', autoReason: 'tool-write-todo', subjectId: null, note: null })).toBe(false)
+    expect(shouldRecordObservation(explicit, next)).toBe(true)
+  })
+
+  it('drops a repeat of the same observation', () => {
+    const observed = mark({ observedStatus: 'todo', observedEvent: 'turn/start', observedAtMs: NOW - 10 })
+    expect(shouldRecordObservation(observed, next)).toBe(false)
+  })
+
+  it('records when only the event changed', () => {
+    const observed = mark({ observedStatus: 'todo', observedEvent: 'turn/start', observedAtMs: NOW - 10 })
+    expect(shouldRecordObservation(observed, { ...next, event: 'turn/end' })).toBe(true)
   })
 })

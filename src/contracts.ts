@@ -57,6 +57,37 @@ export type AutoReasonCode = (typeof AUTO_REASON_VALUES)[number]
 export const MARK_SOURCES = ['manual', 'agent', 'auto'] as const
 export type MarkSource = (typeof MARK_SOURCES)[number]
 
+/**
+ * Canonical session events that can leave a system-observation trace.
+ *
+ * The observation layer records *what the Host saw* independently from the
+ * explicit mark, so a session can show both "the user set done" and "a turn is
+ * running right now". Only events with a readable state belong here:
+ * `subagent/start` and `subagent/end` maintain the in-process running counter
+ * and carry no state of their own, so they are excluded on purpose.
+ */
+export const OBSERVED_EVENT_VALUES = [
+  'turn/start',
+  'turn/end',
+  'job/settled',
+  'goal/change',
+] as const
+export type ObservedEvent = (typeof OBSERVED_EVENT_VALUES)[number]
+
+/**
+ * One observation snapshot, produced by the Host and stored on the mark row.
+ *
+ * This is the second display layer. `status` / `source` / `autoReason` stay the
+ * explicit layer; these fields record what the event log last showed, whatever
+ * the explicit layer says.
+ */
+export interface ObservedSnapshot {
+  readonly status: StatusEnum
+  readonly event: ObservedEvent
+  /** When the Host observed it, ms since epoch. */
+  readonly atMs: number
+}
+
 /** Sources that express explicit intent and are never overwritten by inference. */
 export const EXPLICIT_SOURCES = ['manual', 'agent'] as const
 export type ExplicitSource = (typeof EXPLICIT_SOURCES)[number]
@@ -66,6 +97,35 @@ export const DEFAULT_MAX_NOTE_LENGTH = 200
 
 /** Browser re-read cadence used until the Host reports its configured value. */
 export const DEFAULT_REFRESH_INTERVAL_MS = 2000
+
+/**
+ * How long a system observation stays fresh before the UI demotes it, in ms.
+ *
+ * Five minutes is longer than a typical turn and shorter than a coffee break:
+ * an observation that old is still worth showing, but not worth trusting as the
+ * session's current state. `0` disables staleness entirely, matching
+ * `autoExpireMs`.
+ */
+export const DEFAULT_OBSERVATION_TTL_MS = 300_000
+
+/**
+ * Whether a system observation has gone stale and should be shown as outdated.
+ *
+ * A display rule, so it lives in the zero-dependency contracts both halves
+ * share. Staleness never deletes the observation: a session last seen running
+ * five minutes ago should still say *what* was seen and *when*, just demoted.
+ * Deleting it would make the session look unobserved, which is worse than
+ * looking outdated.
+ *
+ * @param observedAtMs when the observation was taken, ms since epoch.
+ * @param now the current time, ms since epoch.
+ * @param ttlMs how long an observation stays fresh; `<= 0` means it never goes stale.
+ */
+export function isObservationStale(observedAtMs: number | null, now: number, ttlMs: number): boolean {
+  if (observedAtMs === null) return false
+  if (ttlMs <= 0) return false
+  return now - observedAtMs > ttlMs
+}
 
 /**
  * Deadline for one overview fetch. The Host reads three optional services in
@@ -140,6 +200,36 @@ export const DEFAULT_UNMARKED_LIMIT = 20
  * this follows the official `webserver/index-inject` pattern.
  */
 export const CLIENT_CONFIG_GLOBAL = '__DSH_SESSION_MARKER_CONFIG__'
+
+/**
+ * Effective configuration the Host pushes to the page.
+ *
+ * Every field is the value the Host actually resolved from `cordis.patch.yml`
+ * plus schema defaults, so the settings page can show what this install runs
+ * with instead of repeating default literals in the UI. Adding a field here is
+ * backward compatible: the Client reads each key defensively and falls back to
+ * its own default when the Host predates the key.
+ */
+export interface ClientEffectiveConfig {
+  /** Slot order of the row-action status button. */
+  readonly rowActionOrder: number
+  /** Slot order of the row-menu status item. */
+  readonly menuItemOrder: number
+  /** Whether event-driven inference writes automatic marks. */
+  readonly autoInfer: boolean
+  /** Whether the fallback net marks otherwise-blank sessions. */
+  readonly autoFallback: boolean
+  /** Whether a normally completed turn falls back to `awaiting-answer`. */
+  readonly turnEndAwaitingAnswer: boolean
+  /** Maximum note length the Host accepts, in characters. */
+  readonly maxNoteLength: number
+  /** Age at which an automatic mark is discarded, in ms; `0` disables expiry. */
+  readonly autoExpireMs: number
+  /** Browser re-read cadence for the mark list, in ms. */
+  readonly refreshIntervalMs: number
+  /** Age at which a system observation renders as outdated, in ms; `0` never. */
+  readonly observationTtlMs: number
+}
 
 /**
  * Default upper bound of the per-session title cache on the Host. Beyond this
@@ -251,6 +341,15 @@ export interface MarkRecord {
   readonly subjectId: string | null
   readonly autoReason: AutoReasonCode | null
   readonly note: string | null
+  /**
+   * Observation layer: the last state the Host saw in the event log, kept
+   * beside the explicit mark instead of replacing it. `null` on rows written
+   * before the layer existed and on sessions nothing has observed yet.
+   */
+  readonly observedStatus: StatusEnum | null
+  readonly observedEvent: ObservedEvent | null
+  /** When the observation was taken, ms since epoch; `null` when there is none. */
+  readonly observedAtMs: number | null
 }
 
 /** Request body for the set action of the POST exact route and the `set_session_status` tool. */
@@ -301,6 +400,13 @@ export interface OverviewEntry {
   readonly autoReason: AutoReasonCode | null
   /** Last modification time of the mark, ms since epoch. */
   readonly updatedAtMs: number
+  /**
+   * Observation layer, optional so an older client that does not read these
+   * keys still parses the overview response.
+   */
+  readonly observedStatus?: StatusEnum | null
+  readonly observedEvent?: ObservedEvent | null
+  readonly observedAtMs?: number | null
 }
 
 /** All marked sessions grouped by status; only non-empty groups are present. */

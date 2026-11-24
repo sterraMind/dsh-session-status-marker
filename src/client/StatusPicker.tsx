@@ -17,9 +17,10 @@ import { useState } from 'react'
 import type { SyntheticEvent } from 'react'
 import css from './action.module.css'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import { STATUS_VALUES, STATUS_META, MARKER_MUTATE_ROUTE, DEFAULT_MAX_NOTE_LENGTH, MARK_VERSION } from '../contracts.js'
+import { STATUS_VALUES, STATUS_META, MARKER_MUTATE_ROUTE, DEFAULT_MAX_NOTE_LENGTH, MARK_VERSION, isObservationStale } from '../contracts.js'
 import type { MarkRecord, SetMarkBody, StatusEnum } from '../contracts.js'
 import { NS } from './locales.js'
+import { getObservationTtlMs } from './runtime.js'
 import { ICONS } from './icons.js'
 import { publishLocalMark } from './marks.js'
 import { useMark } from './useMark.js'
@@ -103,6 +104,21 @@ export async function clearSessionStatus(sessionId: string): Promise<void> {
   if (result.deleted) publishLocalMark(sessionId, null)
 }
 
+/**
+ * Format an observation timestamp as a short clock reading.
+ *
+ * Absolute rather than relative on purpose: the picker already shows a
+ * freshness demotion, and a relative "12 seconds ago" would need unit strings
+ * in eight languages for no extra information.
+ * @param ms - Epoch milliseconds, or `null` when there is no observation.
+ */
+function formatObservedAt(ms: number | null): string {
+  if (ms === null) return ''
+  const d = new Date(ms)
+  return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} `
+    + `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 /** Eight one-line status cells; clicking a cell writes that status and closes the host entry. */
 export function StatusPicker({ sessionId, t, onPicked, itemRole, showSummary = false }: StatusPickerProps) {
   const { mark, loading } = useMark(sessionId)
@@ -140,6 +156,11 @@ export function StatusPicker({ sessionId, t, onPicked, itemRole, showSummary = f
       subjectId: null,
       autoReason: null,
       note: previous?.note ?? null,
+      // An explicit pick rewrites only the explicit layer; the stored
+      // observation belongs to the row and the Host response carries it back.
+      observedStatus: previous?.observedStatus ?? null,
+      observedEvent: previous?.observedEvent ?? null,
+      observedAtMs: previous?.observedAtMs ?? null,
     })
     setSessionStatus(sessionId, status, previous?.note ?? null).then(
       () => { setBusy(false); onPicked?.() },
@@ -203,6 +224,19 @@ export function StatusPicker({ sessionId, t, onPicked, itemRole, showSummary = f
       {showSummary && mark?.note && (
         <span className={css.panelNote}>{t('hover.note', { note: mark.note.slice(0, 64) })}</span>
       )}
+      {showSummary && mark?.observedStatus != null && (() => {
+        const stale = isObservationStale(mark.observedAtMs, Date.now(), getObservationTtlMs())
+        return (
+          <span className={[css.observation, stale && css.observationStale].filter(Boolean).join(' ')}>
+            {t('observation.label')}{' '}
+            {t(STATUS_META[mark.observedStatus].labelKey)}
+            {mark.observedEvent !== null && <span className={css.observationEvent}> {mark.observedEvent}</span>}
+            {' · '}
+            {t('observation.at', { time: formatObservedAt(mark.observedAtMs) })}
+            {stale && ` · ${t('observation.stale')}`}
+          </span>
+        )
+      })()}
       <span
         className={css.grid}
         role={itemRole === 'menuitem' ? 'menu' : undefined}

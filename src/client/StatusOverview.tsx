@@ -1,12 +1,21 @@
-/** @module Status-overview settings page (`settings.section`).
+/** @module Session-status settings page (`settings.section`).
  *
- * One read-only page that groups every marked session by status, with a count
- * per group. It fetches `MARKER_OVERVIEW_ROUTE` on mount and polls on the
- * Host-configured cadence; the read pauses while the document is hidden and
- * refreshes immediately when the page becomes visible again (same pattern as
- * `marks.ts`). The `close` prop is the shell's only affordance for a section;
- * v1.1 does not act on it (no jump-to-session yet) but keeps it in the props so
- * the outlet contract stays satisfied.
+ * One settings section with two tabs:
+ *  - **Status overview** — every marked session grouped by status with a count
+ *    per group, plus the sessions that carry no mark yet. Read-only.
+ *  - **Plugin configuration** — the effective configuration the Browser half
+ *    can see, keyed by the literal `cordis.patch.yml` names so a value can be
+ *    looked up (and changed) in the profile without translating anything.
+ *
+ * Only the first tab fetches. It reads `MARKER_OVERVIEW_ROUTE` on mount and
+ * polls on the Host-configured cadence; the read pauses while the document is
+ * hidden and refreshes immediately when the page becomes visible again (same
+ * pattern as `marks.ts`). Both panels stay mounted and are toggled with the
+ * `hidden` attribute, so switching tabs neither restarts the poll loop nor
+ * drops the `revision` the conditional refresh depends on. The `close` prop is
+ * the shell's only affordance for a section; v1.1 does not act on it (no
+ * jump-to-session yet) but keeps it in the props so the outlet contract stays
+ * satisfied.
  *
  * Resource guards on the polling loop (each targets a different failure mode):
  *  - Full Jitter backoff: while the Host is slow or down, every consecutive
@@ -25,8 +34,8 @@
  *    actually changed.
  */
 
-import { useEffect, useState } from 'react'
-import type { SyntheticEvent } from 'react'
+import { useEffect, useId, useState } from 'react'
+import type { KeyboardEvent, SyntheticEvent } from 'react'
 import css from './overview.module.css'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { STATUS_META } from '../contracts.js'
@@ -59,6 +68,41 @@ function currentDocument(): OverviewDocument | undefined {
   return (globalThis as { document?: OverviewDocument }).document
 }
 
+/**
+ * Configuration the Browser half resolves once at apply time.
+ *
+ * The Host injects these as a page global (`webserver/index-inject`), so the
+ * configuration tab shows the values this client actually runs with instead of
+ * defaults copied into the UI.
+ */
+export interface StatusOverviewConfig {
+  /** Slot order of the row-action status button. */
+  readonly rowActionOrder: number
+  /** Slot order of the row-menu status item. */
+  readonly menuItemOrder: number
+  /**
+   * Whether event-driven inference writes automatic marks. `null` when the
+   * injected page global predates this field — the Host schema has no default
+   * for it, so the page shows an em dash rather than inventing a value.
+   */
+  readonly autoInfer: boolean | null
+  /** Whether the fallback net marks otherwise-blank sessions. */
+  readonly autoFallback: boolean
+  /** Whether a normally completed turn falls back to `awaiting-answer`. */
+  readonly turnEndAwaitingAnswer: boolean
+  /** Maximum note length the Host accepts, in characters. */
+  readonly maxNoteLength: number
+  /**
+   * Age at which an automatic mark is discarded, in ms; `0` disables expiry.
+   * `null` when the injected page global predates this field.
+   */
+  readonly autoExpireMs: number | null
+  /** Browser re-read cadence for the mark list, in ms. */
+  readonly refreshIntervalMs: number
+  /** Age at which a system observation renders as outdated, in ms; `0` never. */
+  readonly observationTtlMs: number
+}
+
 export type StatusOverviewInjected = {
   /** Section copy, bound to the active locale by the shell. */
   readonly t: (key: string, params?: Record<string, string>) => string
@@ -70,6 +114,8 @@ export type StatusOverviewInjected = {
    * payload.
    */
   readonly fetchOverview: (since?: string) => Promise<OverviewResponse>
+  /** Effective configuration, read from the Host-injected page global. */
+  readonly config: StatusOverviewConfig
 }
 
 export type StatusOverviewProps = StatusOverviewInjected & PropsRuntime<'settings.section'>
@@ -147,8 +193,13 @@ function UnmarkedBlock({ unmarked, t }: { unmarked: UnmarkedSessions; t: StatusO
   )
 }
 
-export function StatusOverview(props: StatusOverviewProps) {
-  const { t, fetchOverview } = props
+type StatusBoardProps = {
+  readonly t: StatusOverviewInjected['t']
+  readonly fetchOverview: StatusOverviewInjected['fetchOverview']
+}
+
+/** Tab one: the read-only status board and its polling loop. */
+function StatusBoard({ t, fetchOverview }: StatusBoardProps) {
   const [groups, setGroups] = useState<readonly StatusGroup[]>([])
   const [unmarked, setUnmarked] = useState<UnmarkedSessions>({ count: 0, entries: [] })
   const [totalMarked, setTotalMarked] = useState(0)
@@ -202,6 +253,8 @@ export function StatusOverview(props: StatusOverviewProps) {
         // Any successful response means the Host is reachable again: collapse
         // the retry window back to the normal cadence.
         consecutiveFailures = 0
+        // The Host's cadence can differ from the default when a profile
+        // overrides `refreshIntervalMs`; follow it from the first response on.
         if (typeof data.refreshIntervalMs === 'number' && data.refreshIntervalMs >= 250) {
           intervalMs = data.refreshIntervalMs
         }
@@ -209,7 +262,6 @@ export function StatusOverview(props: StatusOverviewProps) {
         // `unchanged`: the Host says the board payload is identical to what is
         // already rendered, so touching any state would only re-render React
         // and allocate a fresh object graph every tick for zero visual change.
-        // Only the cadence follows the Host here.
         if (data.unchanged === true) return
         // Remember the revision for the next `?since=` poll; `undefined` (Host
         // older than the conditional-refresh contract) is tolerated and simply
@@ -256,26 +308,175 @@ export function StatusOverview(props: StatusOverviewProps) {
     }
   }, [fetchOverview])
 
+  if (loading) {
+    return <div className={css.loading}>{t('hover.loading')}</div>
+  }
+  if (error) {
+    return <div className={css.loading}>{t('hover.error')}</div>
+  }
+  if (totalMarked === 0 && unmarked.count === 0) {
+    return <div className={css.empty}>{t('overview.empty')}</div>
+  }
+  return (
+    <>
+      {groups.map((group) => <GroupBlock key={group.status} group={group} t={t} />)}
+      <UnmarkedBlock unmarked={unmarked} t={t} />
+    </>
+  )
+}
+
+/** One read-only row of the configuration list. */
+interface ConfigRow {
+  /**
+   * Literal `cordis.patch.yml` key, shown verbatim: it is the string a user
+   * pastes into the profile, so translating it would make the row unusable.
+   */
+  readonly key: string
+  /** Formatted current value; `undefined` renders as an em dash. */
+  readonly value: string | undefined
+}
+
+/**
+ * Format a duration as `2000 ms (2 s)`.
+ *
+ * The raw millisecond count stays first because it is what
+ * `cordis.patch.yml` takes; the seconds are the readable restatement. Values
+ * below a whole second keep one decimal so a small interval does not read as
+ * `0 s`.
+ */
+function formatMs(ms: number): string {
+  const seconds = Math.round(ms / 100) / 10
+  return `${ms} ms (${seconds} s)`
+}
+
+/** Format a flag with the localized On/Off word. */
+function formatFlag(t: StatusOverviewInjected['t'], flag: boolean): string {
+  return flag ? t('config.on') : t('config.off')
+}
+
+/**
+ * Build the configuration rows in the Host contract's declaration order, so a
+ * reader can compare this list against `ClientEffectiveConfig` one line at a
+ * time.
+ */
+function configRows(config: StatusOverviewConfig, t: StatusOverviewInjected['t']): readonly ConfigRow[] {
+  return [
+    { key: 'rowActionOrder', value: String(config.rowActionOrder) },
+    { key: 'menuItemOrder', value: String(config.menuItemOrder) },
+    { key: 'autoInfer', value: config.autoInfer === null ? undefined : formatFlag(t, config.autoInfer) },
+    { key: 'autoFallback', value: formatFlag(t, config.autoFallback) },
+    { key: 'turnEndAwaitingAnswer', value: formatFlag(t, config.turnEndAwaitingAnswer) },
+    { key: 'maxNoteLength', value: String(config.maxNoteLength) },
+    { key: 'autoExpireMs', value: config.autoExpireMs === null ? undefined : formatMs(config.autoExpireMs) },
+    { key: 'refreshIntervalMs', value: formatMs(config.refreshIntervalMs) },
+    { key: 'observationTtlMs', value: formatMs(config.observationTtlMs) },
+  ]
+}
+
+type ConfigPanelProps = {
+  readonly t: StatusOverviewInjected['t']
+  readonly config: StatusOverviewConfig
+}
+
+/** Tab two: the effective configuration, read-only. */
+function ConfigPanel({ t, config }: ConfigPanelProps) {
+  return (
+    <div className={css.config}>
+      <dl className={css.configList}>
+        {configRows(config, t).map((row) => (
+          <div key={row.key} className={css.configRow}>
+            <dt className={css.configKey}>{row.key}</dt>
+            <dd className={css.configValue}>{row.value ?? '—'}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className={css.configHint}>{t('config.hint')}</p>
+    </div>
+  )
+}
+
+/** The two pages of this section, in tab order. */
+const TABS = [
+  { id: 'overview', labelKey: 'overview.nav' },
+  { id: 'config', labelKey: 'config.tab' },
+] as const
+
+type TabId = (typeof TABS)[number]['id']
+
+export function StatusOverview(props: StatusOverviewProps) {
+  const { t, fetchOverview, config } = props
+  // Default tab: the board, i.e. what the section showed before the tabs
+  // existed. The configuration tab is the deliberate second stop.
+  const [tab, setTab] = useState<TabId>('overview')
+  const tabsId = useId()
+
   /** Stop events bubbling to the settings panel's interactive chrome. */
   function stop(event: SyntheticEvent) {
     event.stopPropagation()
   }
   const guard = { onClick: stop, onKeyDown: stop }
 
-  if (loading) {
-    return <div className={css.page} {...guard}><div className={css.loading}>{t('hover.loading')}</div></div>
+  /**
+   * Roving tab stop plus arrow/Home/End selection, mirroring the shell's
+   * `SegmentedTabs` so the page behaves like the tabs elsewhere in the panel.
+   */
+  function onTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number): void {
+    let next: number
+    switch (event.key) {
+      case 'ArrowLeft': next = (index + TABS.length - 1) % TABS.length; break
+      case 'ArrowRight': next = (index + 1) % TABS.length; break
+      case 'Home': next = 0; break
+      case 'End': next = TABS.length - 1; break
+      default: return
+    }
+    event.preventDefault()
+    const nextTab: (typeof TABS)[number] | undefined = TABS[next]
+    if (nextTab === undefined) return
+    // Focus follows selection, and only the selected tab is a tab stop.
+    const tablist = event.currentTarget.parentElement
+    tablist?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
+    setTab(nextTab.id)
   }
-  if (error) {
-    return <div className={css.page} {...guard}><div className={css.loading}>{t('hover.error')}</div></div>
-  }
-  if (totalMarked === 0 && unmarked.count === 0) {
-    return <div className={css.page} {...guard}><div className={css.empty}>{t('overview.empty')}</div></div>
-  }
+
   return (
     <div className={css.page} {...guard}>
       <div className={css.title}>{t('overview.title')}</div>
-      {groups.map((group) => <GroupBlock key={group.status} group={group} t={t} />)}
-      <UnmarkedBlock unmarked={unmarked} t={t} />
+      <div role="tablist" aria-label={t('overview.nav')} className={css.tabList}>
+        {TABS.map((item, index) => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            id={`${tabsId}-${item.id}`}
+            className={tab === item.id ? css.tabSelected : css.tab}
+            aria-selected={tab === item.id}
+            aria-controls={`${tabsId}-${item.id}-panel`}
+            tabIndex={tab === item.id ? 0 : -1}
+            onClick={() => { setTab(item.id) }}
+            onKeyDown={(event) => { onTabKeyDown(event, index) }}
+          >
+            {t(item.labelKey)}
+          </button>
+        ))}
+      </div>
+      <div
+        role="tabpanel"
+        id={`${tabsId}-overview-panel`}
+        aria-labelledby={`${tabsId}-overview`}
+        className={tab === 'overview' ? css.panel : css.panelHidden}
+        hidden={tab !== 'overview'}
+      >
+        <StatusBoard t={t} fetchOverview={fetchOverview} />
+      </div>
+      <div
+        role="tabpanel"
+        id={`${tabsId}-config-panel`}
+        aria-labelledby={`${tabsId}-config`}
+        className={tab === 'config' ? css.panel : css.panelHidden}
+        hidden={tab !== 'config'}
+      >
+        <ConfigPanel t={t} config={config} />
+      </div>
     </div>
   )
 }

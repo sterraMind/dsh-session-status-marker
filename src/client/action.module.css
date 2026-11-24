@@ -185,6 +185,33 @@
   margin-top: 2px;
 }
 
+/* System observation layer: what the Host last saw in the event log. Rendered
+ * with a leading glyph so it cannot be mistaken for the explicit mark above it,
+ * and demoted to `--dsw-alias-label-tertiary` once stale — still readable, no
+ * longer authoritative. */
+.observation {
+  display: block;
+  margin-top: 4px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 17px;
+  white-space: normal;
+}
+
+.observationStale {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.observation::before {
+  content: '·';
+  margin-right: 4px;
+}
+
+.observationEvent {
+  font-family: var(--dsw-font-family-mono, monospace);
+  font-size: 10px;
+}
+
 .panel .grid {
   margin-top: 6px;
 }

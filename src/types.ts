@@ -12,8 +12,12 @@ import {
   MARK_SOURCES,
   EXPLICIT_SOURCES,
   AUTO_REASON_VALUES,
+  OBSERVED_EVENT_VALUES,
+  type ObservedEvent,
+  type ObservedSnapshot,
   DEFAULT_MAX_NOTE_LENGTH,
   DEFAULT_REFRESH_INTERVAL_MS,
+  DEFAULT_OBSERVATION_TTL_MS,
   DEFAULT_ROW_ACTION_ORDER,
   DEFAULT_MENU_ITEM_ORDER,
   CLIENT_CONFIG_GLOBAL,
@@ -62,8 +66,12 @@ export {
   type MarkSource,
   EXPLICIT_SOURCES,
   type ExplicitSource,
+  OBSERVED_EVENT_VALUES,
+  type ObservedEvent,
+  type ObservedSnapshot,
   DEFAULT_MAX_NOTE_LENGTH,
   DEFAULT_REFRESH_INTERVAL_MS,
+  DEFAULT_OBSERVATION_TTL_MS,
   DEFAULT_ROW_ACTION_ORDER,
   DEFAULT_MENU_ITEM_ORDER,
   CLIENT_CONFIG_GLOBAL,
@@ -109,6 +117,12 @@ export const MarkRecordSchema = z.object({
   subjectId: z.string().min(1).nullable(),
   autoReason: z.enum(AUTO_REASON_VALUES).nullable(),
   note: z.string().max(DEFAULT_MAX_NOTE_LENGTH).nullable(),
+  // Observation layer. `.nullable().default(null)` is what makes old rows
+  // readable: `.strict()` still rejects unknown keys, but a row written before
+  // this layer existed simply lacks these three, and the default fills them in.
+  observedStatus: z.enum(STATUS_VALUES).nullable().default(null),
+  observedEvent: z.enum(OBSERVED_EVENT_VALUES).nullable().default(null),
+  observedAtMs: z.number().int().nonnegative().nullable().default(null),
 }).strict()
 
 /** Compile-time check that the schema's inferred row matches the shared contract. */

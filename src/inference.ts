@@ -6,7 +6,7 @@
  * `docs/research/04-session-state-taxonomy.md`.
  */
 
-import type { AutoReasonCode, MarkRecord, StatusEnum } from './types.js'
+import type { AutoReasonCode, MarkRecord, ObservedSnapshot, StatusEnum } from './types.js'
 
 /** Normalized view of one session event for the inference engine. */
 export interface InferenceObservation {
@@ -149,6 +149,47 @@ export function inferStatus(observation: InferenceObservation): InferenceResult 
   }
 }
 
+/**
+ * Map one session event to the state the system observed, or `null` when the
+ * event carries no readable state.
+ *
+ * This is the observation layer's entry point, and it is deliberately separate
+ * from {@link inferStatus}: the two layers answer different questions.
+ * `inferStatus` proposes a mark and is gated so it never replaces explicit
+ * intent; `observationOf` records what was seen and rides beside the explicit
+ * mark without touching it. `subagent/start` and `subagent/end` are absent on
+ * purpose — they maintain only the process-local running counter and describe no
+ * state a reader could act on.
+ */
+export function observationOf(event: InferenceObservation): ObservedSnapshot | null {
+  switch (event.type) {
+    case 'turn/start':
+      return { status: 'todo', event: 'turn/start', atMs: event.time }
+    case 'turn/end': {
+      const kind = turnEndKind(event.data)
+      if (kind === 'blocked') return { status: 'blocked', event: 'turn/end', atMs: event.time }
+      if (kind === 'aborted' || kind === 'error') return { status: 'stopped', event: 'turn/end', atMs: event.time }
+      // `interrupted` and `forked` are synthesized at crash recovery and say
+      // nothing about where a live turn stands, so they observe nothing.
+      if (kind === 'completed') return { status: 'feedback', event: 'turn/end', atMs: event.time }
+      return null
+    }
+    case 'job/settled': {
+      const status = stringField(event.data, 'status')
+      if (status !== 'failed' && status !== 'killed') return null
+      return { status: 'stopped', event: 'job/settled', atMs: event.time }
+    }
+    case 'goal/change': {
+      if (stringField(event.data, 'operation') !== 'block') return null
+      const phase = stringField(field(event.data, 'goal'), 'phase')
+      if (phase !== 'blocked') return null
+      return { status: 'blocked', event: 'goal/change', atMs: event.time }
+    }
+    default:
+      return null
+  }
+}
+
 /** Whether an inferred mark may overwrite an existing stored row.
  *
  * Explicit intent (the user clicked, or the model called `set_session_status`)
@@ -158,6 +199,23 @@ export function shouldApplyInference(current: MarkRecord | null, proposed: Infer
   if (current === null) return true
   if (current.source !== 'auto') return false
   return current.status !== proposed.status || current.autoReason !== proposed.autoReason
+}
+
+/**
+ * Whether a new observation should be written onto the row.
+ *
+ * The observation layer is deliberately independent from
+ * {@link shouldApplyInference}: that guard stops inference from replacing an
+ * explicit mark, while this one lets the observation ride alongside an explicit
+ * mark without ever touching it. A row with no explicit mark still records
+ * observations, so the two layers are not coupled.
+ *
+ * Repeated observations of the same state are dropped so a burst of session
+ * events does not turn into a burst of storage writes.
+ */
+export function shouldRecordObservation(current: MarkRecord | null, next: ObservedSnapshot): boolean {
+  if (current === null) return true
+  return current.observedStatus !== next.status || current.observedEvent !== next.event
 }
 
 /** Whether an auto mark has expired according to the deployed retention window. */

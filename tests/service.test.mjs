@@ -260,23 +260,40 @@ describe('SessionStatusService auto inference', () => {
 })
 
 describe('SessionStatusService client config injection', () => {
-  it('injects configured slot orders as a page global', async () => {
+  it('injects the effective configuration as a page global', async () => {
     const { ctx, injections } = makeCtx()
     const svc = new SessionStatusService(ctx, { ...CONFIG, rowActionOrder: 410, menuItemOrder: 420 })
     await svc[Service.init]()
     expect(injections.length).toBe(1)
     const table = []
     injections[0](table, {})
-    expect(table).toEqual([{ kind: 'global', name: '__DSH_SESSION_MARKER_CONFIG__', value: { rowActionOrder: 410, menuItemOrder: 420 } }])
+    const value = table[0].value
+    // Top-level slot orders stay for older bundles that read them directly.
+    expect(value.rowActionOrder).toBe(410)
+    expect(value.menuItemOrder).toBe(420)
+    expect(value.effective).toEqual({
+      rowActionOrder: 410,
+      menuItemOrder: 420,
+      autoInfer: false,
+      autoFallback: false,
+      turnEndAwaitingAnswer: false,
+      maxNoteLength: 20,
+      autoExpireMs: 0,
+      refreshIntervalMs: 2000,
+      observationTtlMs: 300_000,
+    })
   })
 
-  it('falls back to default orders when config omits them', async () => {
+  it('fills default orders and optional values when config omits them', async () => {
     const { ctx, injections } = makeCtx()
     const svc = new SessionStatusService(ctx, { ...CONFIG })
     await svc[Service.init]()
     const table = []
     injections[0](table, {})
-    expect(table[0].value).toEqual({ rowActionOrder: 300, menuItemOrder: 300 })
+    expect(table[0].value.rowActionOrder).toBe(300)
+    expect(table[0].value.menuItemOrder).toBe(300)
+    expect(table[0].value.effective.rowActionOrder).toBe(300)
+    expect(table[0].value.effective.observationTtlMs).toBe(300_000)
   })
 
   it('keeps session/event listeners separate from the injection listener', async () => {

@@ -22,11 +22,30 @@ const validRow = {
   subjectId: null,
   autoReason: null,
   note: null,
+  observedStatus: null,
+  observedEvent: null,
+  observedAtMs: null,
 }
 
 describe('MarkRecordSchema', () => {
   it('accepts a valid row', () => {
     expect(MarkRecordSchema.parse(validRow)).toEqual(validRow)
+  })
+
+  it('reads a row written before the observation layer existed', () => {
+    // Every row on disk today predates the observation fields. `.strict()`
+    // must not turn those rows into parse failures, or the whole snapshot
+    // falls back on first read after the upgrade.
+    const { observedStatus, observedEvent, observedAtMs, ...legacy } = validRow
+    void observedStatus
+    void observedEvent
+    void observedAtMs
+    expect(MarkRecordSchema.parse(legacy)).toEqual(validRow)
+  })
+
+  it('accepts a populated observation', () => {
+    const populated = { ...validRow, observedStatus: 'todo', observedEvent: 'turn/start', observedAtMs: 42 }
+    expect(MarkRecordSchema.parse(populated)).toEqual(populated)
   })
 
   it('rejects an unknown status', () => {

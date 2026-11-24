@@ -59,6 +59,16 @@ export const zh = {
   'overview.count': '{count}',
   'overview.updatedAt': '更新于 {time}',
   'overview.noTitle': '未命名会话',
+  'config.tab': '插件配置',
+  'config.on': '开',
+  'config.off': '关',
+  'config.hint': '只读显示当前生效的值。带长划线的项表示服务端未上报；修改请编辑 cordis.patch.yml。',
+
+  // System observation layer
+  'observation.label': '系统观察',
+  'observation.none': '暂无系统观察',
+  'observation.stale': '已过时',
+  'observation.at': '观察于 {time}',
 } as const
 
 /** English dictionary. */
@@ -99,6 +109,16 @@ export const en: MarkerDict = {
   'overview.count': '{count}',
   'overview.updatedAt': 'Updated {time}',
   'overview.noTitle': 'Untitled session',
+  'config.tab': 'Configuration',
+  'config.on': 'On',
+  'config.off': 'Off',
+  'config.hint': 'Read-only view of the values in effect. An em dash means the Host did not report the field; edit cordis.patch.yml to change anything here.',
+
+  // System observation layer
+  'observation.label': 'System observation',
+  'observation.none': 'No system observation',
+  'observation.stale': 'outdated',
+  'observation.at': 'Observed {time}',
 }
 
 /** Japanese dictionary. */
@@ -139,6 +159,16 @@ export const ja: MarkerDict = {
   'overview.count': '{count}',
   'overview.updatedAt': '更新: {time}',
   'overview.noTitle': '無題セッション',
+  'config.tab': '設定',
+  'config.on': 'オン',
+  'config.off': 'オフ',
+  'config.hint': '現在有効な値の読み取り専用表示です。ダッシュはサーバーが値を報告していない項目です。変更するには cordis.patch.yml を編集してください。',
+
+  // System observation layer
+  'observation.label': 'システム観測',
+  'observation.none': 'システム観測なし',
+  'observation.stale': '古い',
+  'observation.at': '観測 {time}',
 }
 
 /** Spanish dictionary. */
@@ -179,6 +209,16 @@ export const es: MarkerDict = {
   'overview.count': '{count}',
   'overview.updatedAt': 'Actualizado {time}',
   'overview.noTitle': 'Sesión sin título',
+  'config.tab': 'Configuración',
+  'config.on': 'Activado',
+  'config.off': 'Desactivado',
+  'config.hint': 'Vista de solo lectura de los valores en vigor. Una raya indica que el servidor no informó ese campo; para cambiar algo, edite cordis.patch.yml.',
+
+  // System observation layer
+  'observation.label': 'Observación del sistema',
+  'observation.none': 'Sin observación del sistema',
+  'observation.stale': 'desactualizado',
+  'observation.at': 'Observado {time}',
 }
 
 /** French dictionary. */
@@ -219,6 +259,16 @@ export const fr: MarkerDict = {
   'overview.count': '{count}',
   'overview.updatedAt': 'Mis à jour {time}',
   'overview.noTitle': 'Session sans titre',
+  'config.tab': 'Configuration',
+  'config.on': 'Activé',
+  'config.off': 'Désactivé',
+  'config.hint': 'Vue en lecture seule des valeurs appliquées. Un tiret signale un champ non transmis par le serveur ; pour modifier une valeur, éditez cordis.patch.yml.',
+
+  // System observation layer
+  'observation.label': 'Observation système',
+  'observation.none': 'Aucune observation système',
+  'observation.stale': 'obsolète',
+  'observation.at': 'Observé {time}',
 }
 
 /** German dictionary. */
@@ -259,6 +309,16 @@ export const de: MarkerDict = {
   'overview.count': '{count}',
   'overview.updatedAt': 'Aktualisiert {time}',
   'overview.noTitle': 'Sitzung ohne Titel',
+  'config.tab': 'Konfiguration',
+  'config.on': 'Ein',
+  'config.off': 'Aus',
+  'config.hint': 'Schreibgeschützte Ansicht der wirksamen Werte. Ein Gedankenstrich bedeutet, dass der Server das Feld nicht gemeldet hat; Änderungen erfolgen in cordis.patch.yml.',
+
+  // System observation layer
+  'observation.label': 'Systembeobachtung',
+  'observation.none': 'Keine Systembeobachtung',
+  'observation.stale': 'veraltet',
+  'observation.at': 'Beobachtet {time}',
 }
 
 /** Russian dictionary. */
@@ -299,6 +359,16 @@ export const ru: MarkerDict = {
   'overview.count': '{count}',
   'overview.updatedAt': 'Обновлено {time}',
   'overview.noTitle': 'Сессия без названия',
+  'config.tab': 'Конфигурация',
+  'config.on': 'Вкл.',
+  'config.off': 'Выкл.',
+  'config.hint': 'Только просмотр действующих значений. Тире означает, что сервер не сообщил это поле; чтобы изменить значение, отредактируйте cordis.patch.yml.',
+
+  // System observation layer
+  'observation.label': 'Наблюдение системы',
+  'observation.none': 'Наблюдений нет',
+  'observation.stale': 'устарело',
+  'observation.at': 'Наблюдение {time}',
 }
 
 /** Portuguese dictionary. */
@@ -339,6 +409,16 @@ export const pt: MarkerDict = {
   'overview.count': '{count}',
   'overview.updatedAt': 'Atualizado {time}',
   'overview.noTitle': 'Sessão sem título',
+  'config.tab': 'Configuração',
+  'config.on': 'Ativado',
+  'config.off': 'Desativado',
+  'config.hint': 'Visão somente leitura dos valores em vigor. Um travessão indica que o servidor não informou esse campo; para alterar algo, edite cordis.patch.yml.',
+
+  // System observation layer
+  'observation.label': 'Observação do sistema',
+  'observation.none': 'Nenhuma observação do sistema',
+  'observation.stale': 'desatualizado',
+  'observation.at': 'Observado {time}',
 }
 
 /** Every dictionary registered by the Client half, in the shell's display order. */
