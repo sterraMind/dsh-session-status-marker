@@ -545,3 +545,36 @@ rc.2 在 dev4090 真实页面上暴露两个缺陷：看板所有条目标题显
 
 尚未验证：用户桌面更新到 1.3.1-rc.1 后看板是否即时出数据，需要用户安装后确认。
 
+
+### 3.29 1.3.1-rc.3 自动过期默认值、观察层刷新与桌面实测（2026-11-25）
+
+本节记录 1.3.1-rc.3 的发布核对与桌面 GUI 实测。rc.3 相对 rc.2 只改三处：自动标记默认一天过期、观察层在 `?since=` 轮询下正常刷新、`.mutate` 响应回写落库合并行。
+
+发布核对：
+
+| 项 | 结果 |
+| --- | --- |
+| `npm view dist-tags` | `{ latest: '1.3.0', rc: '1.3.1-rc.3' }` |
+| `npm pack` | `dsh-session-status-marker-1.3.1-rc.3.tgz`，152,301 字节 |
+| GitHub Release | [v1.3.1-rc.3](https://github.com/sterraMind/dsh-session-status-marker/releases/tag/v1.3.1-rc.3)（prerelease，附 tgz 资产） |
+| 桌面 profile 依赖 | `"dsh-session-status-marker": "1.3.1-rc.3"`（由 1.3.1-rc.1 升级） |
+| 安装产物 | `lib/client.js` 148,021 字节，sha256 `2FC59BC560AB3C97662F22CE999CC7906CDE05F317BE1DE48EC18CEB25D90900` |
+| 页面实际下发 | 148,103 字节（宿主包一层模块外壳），sha256 `9E6FE69A8E0D91D84C00C4C335CDFD286C7264645234F0E44C6E41F1F3506416` |
+
+桌面实测（GUI 0.2.3-alpha.2，`http://127.0.0.1:3099`，深色主题，CDP 驱动）：
+
+| 界面 | 结果 |
+| --- | --- |
+| 状态看板 | 277 毫秒内渲染完成，无「加载中」「加载失败」；分组 Stopped 1 行，Updated 显示 20min ago |
+| 插件配置页 | 九项键值全部正确：rowActionOrder 300 / menuItemOrder 300 / autoInfer On / autoFallback On / turnEndAwaitingAnswer Off / maxNoteLength 200 / autoExpireMs 86400000 ms / refreshIntervalMs 2000 ms / observationTtlMs 300000 ms；只读说明存在 |
+| 悬停卡 | 标题、workspace 路径、「20min ago」、「Auto-inferred (turn-interrupted): Stopped」、8 个 22×22 状态格同行、Edit note / Clear、宿主行状态 Idle |
+| 主题色 | 卡片背景 `rgb(44, 44, 46)`、正文 `rgb(249, 250, 251)`；Stopped 徽标 16×16 `rgb(236, 19, 19)` |
+
+`autoExpireMs` 显示 86400000 而不是 0，是运行代码为 rc.3 的直接反证：rc.1 的 `cordis.patch.yml` 把该值写成 0，rc.3 起改为一天。
+
+未覆盖：
+
+| 项 | 原因 |
+| --- | --- |
+| 浅色主题下的卡片对比度 | 宿主设置 `data-ds-theme-source=system` 会覆盖 CDP 的媒体模拟，切 `theme light` 后页面仍是 `data-ds-theme="dark"` |
+| 「设置目标 → 侧栏徽标 → 看板分类」完整链路 | 本机缺 `DEEPSEEK_API_KEY`，会话在首个回合即失败（`MISSING_CREDENTIAL`），只能验证到自动推断为 Stopped 这一步 |
