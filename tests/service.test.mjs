@@ -198,6 +198,59 @@ describe('SessionStatusService exact routes', () => {
   })
 })
 
+describe('SessionStatusService observation layer', () => {
+  it('keeps the explicit mark while recording what the system saw', async () => {
+    const { svc, listeners } = await bootService(true)
+    await svc.putMark(svc.explicitRow('s9', 'done', null, null))
+    await listeners[0]({ id: 's9' }, { type: 'turn/start', seq: 1, time: 100, data: {} })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(svc.getMark('s9')).toMatchObject({
+      status: 'done',
+      observedStatus: 'todo',
+      observedEvent: 'turn/start',
+      observedAtMs: 100,
+    })
+  })
+
+  it('serializes two events for the same session so the later state wins', async () => {
+    const { ctx, listeners } = makeCtx()
+    const svc = new SessionStatusService(ctx, { ...CONFIG, autoInfer: true, autoFallback: true })
+    await svc[Service.init]()
+    // Both handlers run their automatic layers without awaiting each other; the
+    // per-session chain is what keeps the second event from being overtaken by
+    // the first one's writes.
+    await listeners[0]({ id: 's9' }, { type: 'turn/start', seq: 1, time: 100, data: {} })
+    await listeners[0]({ id: 's9' }, { type: 'turn/end', seq: 2, time: 200, data: { reason: { kind: 'aborted' } } })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(svc.getMark('s9')?.status).toBe('stopped')
+  })
+
+  it('changes the list revision when only the observation changes', async () => {
+    const { svc, routes } = await bootService()
+    const row = svc.explicitRow('s1', 'done', null, null)
+    await svc.putMark(row)
+    const list = routes.find((r) => r.path.endsWith('.list'))
+    const first = await (await list.fetch(new Request('http://x/api/session-status-marker.list'))).json()
+    await svc.putMark({ ...row, observedStatus: 'todo', observedEvent: 'turn/start', observedAtMs: 100 })
+    const second = await (await list.fetch(new Request('http://x/api/session-status-marker.list'))).json()
+    expect(second.revision).not.toBe(first.revision)
+  })
+
+  it('mutate set responds with the stored observation instead of clearing it', async () => {
+    const { svc, routes } = await bootService()
+    const row = svc.explicitRow('s1', 'done', null, null)
+    await svc.putMark({ ...row, observedStatus: 'todo', observedEvent: 'turn/start', observedAtMs: 100 })
+    const mutate = routes.find((r) => r.path.endsWith('.mutate'))
+    const res = await mutate.fetch(new Request('http://x/api/session-status-marker.mutate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'set', sessionId: 's1', status: 'review', source: 'manual', note: null, subjectId: null }),
+    }))
+    const body = await res.json()
+    expect(body.mark).toMatchObject({ status: 'review', observedStatus: 'todo', observedAtMs: 100 })
+  })
+})
+
 describe('SessionStatusService tools', () => {
   it('registers set_session_status and clear_session_status', async () => {
     const { tools } = await bootService()

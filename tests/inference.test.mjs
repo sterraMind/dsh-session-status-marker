@@ -10,7 +10,7 @@ import {
   observationOf,
   shouldRecordObservation,
 } from '../lib/inference.js'
-import { isObservationStale } from '../lib/contracts.js'
+import { isObservationStale, isObservationOutdated } from '../lib/contracts.js'
 
 const NOW = 1_000_000
 
@@ -294,6 +294,23 @@ describe('isObservationStale', () => {
   it('is fresh up to and including the ttl, stale past it', () => {
     expect(isObservationStale(NOW - 1000, NOW, 1000)).toBe(false)
     expect(isObservationStale(NOW - 1001, NOW, 1000)).toBe(true)
+  })
+})
+
+describe('isObservationOutdated', () => {
+  it('never demotes a running observation, however old', () => {
+    // `turn/start` is the only producer of `todo`, and nothing contradicts it
+    // until the turn ends: its age says nothing about whether it still holds.
+    expect(isObservationOutdated('todo', NOW - 9_999_999, NOW, 1000)).toBe(false)
+  })
+
+  it('demotes an old terminal observation', () => {
+    expect(isObservationOutdated('stopped', NOW - 9_999_999, NOW, 1000)).toBe(true)
+  })
+
+  it('keeps a fresh terminal observation and honours ttlMs = 0', () => {
+    expect(isObservationOutdated('done', NOW - 500, NOW, 1000)).toBe(false)
+    expect(isObservationOutdated('done', NOW - 9_999_999, NOW, 0)).toBe(false)
   })
 })
 

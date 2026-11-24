@@ -106,10 +106,14 @@ export function apply(ctx: ClientContext): void {
   const browserConfig = (globalThis as { [CLIENT_CONFIG_GLOBAL]?: BrowserConfig })[CLIENT_CONFIG_GLOBAL] ?? {}
   const rowActionOrder = typeof browserConfig.rowActionOrder === 'number' ? browserConfig.rowActionOrder : DEFAULT_ROW_ACTION_ORDER
   const menuItemOrder = typeof browserConfig.menuItemOrder === 'number' ? browserConfig.menuItemOrder : DEFAULT_MENU_ITEM_ORDER
-  // Snapshot of the configuration the page actually runs with. The settings
-  // page's configuration tab renders these read-only instead of duplicating
-  // the defaults in the UI, so a profile override shows up there.
-  const clientConfig: StatusOverviewConfig = resolveClientConfig(browserConfig.effective ?? {})
+  // The configuration the page actually runs with, read on every render: the
+  // settings page's configuration tab shows these read-only so a profile
+  // override shows up there, and the injection row can land *after* `apply()`
+  // ran — a snapshot taken here would pin the tab to this bundle's defaults.
+  const readEffective = (): Record<string, unknown> => {
+    const injected = (globalThis as { [CLIENT_CONFIG_GLOBAL]?: BrowserConfig })[CLIENT_CONFIG_GLOBAL]
+    return injected?.effective ?? {}
+  }
   // Ship every language the shell offers (`locale/src/client/index.ts:23` lists
   // en, ja, es, fr, de, ru, pt, zh). Registering only zh/en made the six others
   // fall back to English, which read as "the language never switches".
@@ -192,7 +196,11 @@ export function apply(ctx: ClientContext): void {
       clearTimeout(timeout)
     }
   }
-  const overviewInjected = (): StatusOverviewInjected => ({ t, fetchOverview, config: clientConfig })
+  const overviewInjected = (): StatusOverviewInjected => ({
+    t,
+    fetchOverview,
+    config: resolveClientConfig(readEffective()),
+  })
   ctx.slots.inject('settings.section', () =>
     ctx.slots.register(
       {

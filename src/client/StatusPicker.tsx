@@ -17,7 +17,7 @@ import { useState } from 'react'
 import type { SyntheticEvent } from 'react'
 import css from './action.module.css'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import { STATUS_VALUES, STATUS_META, MARKER_MUTATE_ROUTE, DEFAULT_MAX_NOTE_LENGTH, MARK_VERSION, isObservationStale } from '../contracts.js'
+import { STATUS_VALUES, STATUS_META, MARKER_MUTATE_ROUTE, DEFAULT_MAX_NOTE_LENGTH, MARK_VERSION, isObservationOutdated } from '../contracts.js'
 import type { MarkRecord, SetMarkBody, StatusEnum } from '../contracts.js'
 import { NS } from './locales.js'
 import { getObservationTtlMs } from './runtime.js'
@@ -225,7 +225,7 @@ export function StatusPicker({ sessionId, t, onPicked, itemRole, showSummary = f
         <span className={css.panelNote}>{t('hover.note', { note: mark.note.slice(0, 64) })}</span>
       )}
       {showSummary && mark?.observedStatus != null && (() => {
-        const stale = isObservationStale(mark.observedAtMs, Date.now(), getObservationTtlMs())
+        const stale = isObservationOutdated(mark.observedStatus, mark.observedAtMs, Date.now(), getObservationTtlMs())
         return (
           <span className={[css.observation, stale && css.observationStale].filter(Boolean).join(' ')}>
             {t('observation.label')}{' '}

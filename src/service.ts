@@ -78,6 +78,13 @@ export interface Config {
    * Fallback mark when a turn completes normally and neither the model nor an
    * earlier inference rule produced a mark for the session. Defaults to
    * `false` so existing installs keep their current behaviour.
+   *
+   * Interacts with {@link Config.autoFallback}: with the fallback net on (the
+   * default), a normally-completed turn with no mark becomes `feedback` before
+   * this layer runs, so this switch only decides the status when the fallback
+   * net is off. The two are not alternatives — `feedback` and `awaiting-answer`
+   * both mean "the turn ended and the user has not replied", and the fallback
+   * net is the newer, subagent-aware owner of that transition.
    */
   turnEndAwaitingAnswer: boolean
   /**
@@ -85,10 +92,12 @@ export interface Config {
    * `autoInfer` maps a *specific* event to a state, the fallback fires on the
    * *absence* of a mark: a running turn with no mark reads as `todo`, and a
    * normally-completed turn with no mark reads as `feedback` (or
-   * `pending-subagent` when subagents are still running). Every fallback write
-   * is gated on the session having no mark at all, so explicit marks and
-   * inference-produced marks are never touched. Defaults to `true` so a
-   * session is marked from its first running turn instead of staying blank.
+   * `pending-subagent` when subagents are still running). It never touches an
+   * explicit mark and never overwrites a mark the inference layer produced; the
+   * one write it does make over an existing row is upgrading its own transient
+   * `fallback-running` into a terminal state on the same turn's `turn/end`.
+   * Defaults to `true` so a session is marked from its first running turn
+   * instead of staying blank.
    */
   autoFallback: boolean
   /**
@@ -347,6 +356,39 @@ export class SessionStatusService extends Service {
   #subagentsRunning = new Map<string, number>()
 
   /**
+   * Per-session write chain for the automatic layers.
+   *
+   * Every automatic layer is a read-modify-write: it reads the current row,
+   * decides whether to act, and writes the whole row back. Two events for the
+   * same session can arrive while an earlier chain is still awaiting storage,
+   * and the slower writer would then clobber the faster one — a status
+   * regression no user could explain and no log would show. Chaining per session
+   * id makes the layers for one session run in event order, while different
+   * sessions still run concurrently.
+   */
+  #writeChains = new Map<string, Promise<void>>()
+
+  /**
+   * Run one event's automatic layers after every previously queued task for the
+   * same session.
+   *
+   * `task` owns its own error handling: a rejected chain must not poison the
+   * next event's run, so the stored tail always resolves.
+   */
+  #enqueue(sessionId: SessionId, task: () => Promise<void>): void {
+    const key: string = sessionId as string
+    const previous = this.#writeChains.get(key) ?? Promise.resolve()
+    const next = previous.then(task, task)
+    this.#writeChains.set(key, next)
+    const settle = (): void => {
+      // Drop the chain once it is the tail, so the map tracks in-flight work
+      // rather than every session ever seen.
+      if (this.#writeChains.get(key) === next) this.#writeChains.delete(key)
+    }
+    next.then(settle, settle)
+  }
+
+  /**
    * Await a promise but never let it block the board forever.
    *
    * The optional Host services (`sessionPersistence`, `sessionQuery`) are
@@ -499,19 +541,20 @@ export class SessionStatusService extends Service {
 
     if (this.config.autoInfer || this.config.autoFallback) {
       this.ctx.on('session/event', (session: Session, event: SessionEvent) => {
-        // Run the inference layer first when enabled; it is the more specific
-        // mapping and writes a mark that the fallback net must not touch.
-        const inference = this.config.autoInfer
-          ? this.#observe(session, event)
-          : Promise.resolve()
-        void inference
-          .then(() => this.#observeFallback(session, event))
-          // The observation layer runs last so it sees the row the two layers
-          // above may have just created; it never creates a row itself.
-          .then(() => this.#recordObservation(session, event))
-          .catch((error: unknown) => {
+        this.#enqueue(session.id, async () => {
+          try {
+            // Run the inference layer first when enabled; it is the more
+            // specific mapping and writes a mark that the fallback net must
+            // not touch.
+            if (this.config.autoInfer) await this.#observe(session, event)
+            await this.#observeFallback(session, event)
+            // The observation layer runs last so it sees the row the two layers
+            // above may have just created; it never creates a row itself.
+            await this.#recordObservation(session, event)
+          } catch (error: unknown) {
             this.ctx.logger.warn('session-status-marker: inference/fallback failed:', error)
-          })
+          }
+        })
       }, { global: true })
     } else {
       // Both automatic layers are off, so no mark is ever written from events.
@@ -522,8 +565,12 @@ export class SessionStatusService extends Service {
       // chain to append to — and it must not create rows, which keeps the
       // "automatic marking disabled" contract intact.
       this.ctx.on('session/event', (session: Session, event: SessionEvent) => {
-        void this.#recordObservation(session, event).catch((error: unknown) => {
-          this.ctx.logger.warn('session-status-marker: observation failed:', error)
+        this.#enqueue(session.id, async () => {
+          try {
+            await this.#recordObservation(session, event)
+          } catch (error: unknown) {
+            this.ctx.logger.warn('session-status-marker: observation failed:', error)
+          }
         })
       }, { global: true })
     }
@@ -589,8 +636,12 @@ export class SessionStatusService extends Service {
    * observations, and the stored observation is inherited instead of erased.
    * Only a caller that actually observed something sets `observedAtMs`, and
    * then all three observation fields are taken from that row.
+   *
+   * @returns the row that was actually stored, observation fields included. A
+   *   caller that writes only the explicit layer must respond with *this* row,
+   *   not its argument, or the browser briefly sees the observation disappear.
    */
-  async putMark(row: MarkRecord): Promise<void> {
+  async putMark(row: MarkRecord): Promise<MarkRecord> {
     const previous = this.getMark(row.sessionId)
     const merged: MarkRecord = previous === null || row.observedAtMs !== null
       ? row
@@ -601,6 +652,7 @@ export class SessionStatusService extends Service {
           observedAtMs: previous.observedAtMs,
         }
     await this.#table().put(merged.sessionId, merged)
+    return merged
   }
 
   /** Remove one mark. Returns whether a row existed. */
@@ -676,6 +728,7 @@ export class SessionStatusService extends Service {
       turnEndAwaitingAnswer: this.config.turnEndAwaitingAnswer,
     })
     if (proposed === null) return
+    const current = await this.effectiveMark(session.id)
     // The `turn/completed` fallback mark only fires when the session has no
     // mark at all — an explicit mark from the user or the model this turn, or
     // any auto mark from an earlier rule, must not be overwritten. This is
@@ -684,11 +737,7 @@ export class SessionStatusService extends Service {
     // fallback replace an auto mark from TodoWrite or `job/settled` earlier in
     // the same turn. Gating on `current === null` here keeps the fallback as a
     // true last-resort catch-all.
-    if (proposed.autoReason === 'turn-completed') {
-      const existing = await this.effectiveMark(session.id)
-      if (existing !== null) return
-    }
-    const current = await this.effectiveMark(session.id)
+    if (proposed.autoReason === 'turn-completed' && current !== null) return
     if (!shouldApplyInference(current, proposed)) return
     const row: MarkRecord = {
       version: MARK_VERSION,
@@ -1292,9 +1341,10 @@ export class SessionStatusService extends Service {
         parsed.data.subjectId,
         parsed.data.source,
       )
-      await this.putMark(row)
-      return Response.json({ ok: true, sessionId: row.sessionId, mark: row })
-    }
+      // Respond with the row `putMark` actually stored: it inherits the stored
+      // observation, and the browser caches this response verbatim.
+      const stored = await this.putMark(row)
+      return Response.json({ ok: true, sessionId: stored.sessionId, mark: stored })    }
 
     return Response.json({ ok: false, code: 'unsupported-action', message: String(action) }, { status: 400 })
   }

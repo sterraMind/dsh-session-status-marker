@@ -128,6 +128,32 @@ export function isObservationStale(observedAtMs: number | null, now: number, ttl
 }
 
 /**
+ * Whether an observation should be *rendered* as outdated.
+ *
+ * Differs from {@link isObservationStale} in one case: a `todo` observation
+ * describes an activity that is still going. `turn/start` is the only event
+ * that produces it and nothing contradicts it until the turn ends, so its age
+ * says nothing about whether it still holds — demoting it after the TTL would
+ * label every turn longer than five minutes as outdated while it is running.
+ * Terminal states do go stale, because "finished, and nothing heard since" is
+ * exactly what an outdated observation means.
+ *
+ * @param status the observed status.
+ * @param observedAtMs when the observation was taken, ms since epoch.
+ * @param now the current time, ms since epoch.
+ * @param ttlMs how long an observation stays fresh; `<= 0` means it never goes stale.
+ */
+export function isObservationOutdated(
+  status: StatusEnum,
+  observedAtMs: number | null,
+  now: number,
+  ttlMs: number,
+): boolean {
+  if (status === 'todo') return false
+  return isObservationStale(observedAtMs, now, ttlMs)
+}
+
+/**
  * Deadline for one overview fetch. The Host reads three optional services in
  * sequence; a hung service must not leave the settings board on "loading"
  * forever. Past the deadline the client aborts, surfaces the error state and
@@ -260,7 +286,9 @@ export const OVERVIEW_CACHE_TTL_JITTER_MS = 2000
  * stored data yields the same revision after a Host restart. A module-level
  * counter would reset on restart and leave browsers permanently stuck on 304.
  * Every mutable field participates, so a note or source change cannot be
- * mistaken for an unchanged snapshot.
+ * mistaken for an unchanged snapshot. The observation fields participate too:
+ * they change without touching the explicit layer, and a revision that ignored
+ * them would leave an already-open browser panel showing a frozen observation.
  */
 export function markRevisionPart(row: MarkRecord): string {
   return JSON.stringify([
@@ -272,6 +300,9 @@ export function markRevisionPart(row: MarkRecord): string {
     row.subjectId,
     row.autoReason,
     row.note,
+    row.observedStatus,
+    row.observedEvent,
+    row.observedAtMs,
   ])
 }
 
