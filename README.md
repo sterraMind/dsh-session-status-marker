@@ -83,6 +83,34 @@ dsh --profile desktop --dump-config   # 输出里应出现 session-status-marker
 
 界面文字支持八种语言，包括简体中文、英文、日文、西班牙文、法文、德文、俄文和葡萄牙文，跟随 Harness 当前的语言设置。
 
+## 界面预览（简体中文）
+
+下面是简体中文界面下的实际截图，覆盖侧栏徽标、悬停卡片、跨会话总览和插件配置几个界面。
+
+**侧栏徽标与会话状态总览**：侧栏会话标题后面带状态图标；设置面板里按状态分组、带数量与更新时间。
+
+![简体中文下的会话状态总览面板](https://raw.githubusercontent.com/sterraMind/dsh-session-status-marker/main/docs/images/preview-2026-11-25/overview-zh-light.png)
+
+**插件配置页**：只读展示当前生效的配置项，带说明。
+
+![简体中文下的插件配置页](https://raw.githubusercontent.com/sterraMind/dsh-session-status-marker/main/docs/images/preview-2026-11-25/config-zh-light.png)
+
+**悬停状态卡片（浅色）**：八个状态格子加备注与编辑入口。
+
+![浅色主题下的悬停状态卡片](https://raw.githubusercontent.com/sterraMind/dsh-session-status-marker/main/docs/images/preview-2026-11-25/hover-zh-light.png)
+
+**编辑备注**：点「编辑备注」在卡片里直接写一句话说明。
+
+![编辑备注的悬停卡片](https://raw.githubusercontent.com/sterraMind/dsh-session-status-marker/main/docs/images/preview-2026-11-25/hover-editnote-zh.png)
+
+**深色主题下的悬停卡片**：卡片底与文字颜色跟随 DSH 主题切换。
+
+![深色主题下的悬停状态卡片](https://raw.githubusercontent.com/sterraMind/dsh-session-status-marker/main/docs/images/preview-2026-11-25/hover-zh-dark.png)
+
+**深色主题下的状态总览**
+
+![深色主题下的会话状态总览](https://raw.githubusercontent.com/sterraMind/dsh-session-status-marker/main/docs/images/preview-2026-11-25/board-zh-dark.png)
+
 ## 已知限制
 
 - 浏览器端靠定时读取来发现其它窗口或 AI 写入的状态，不是服务端实时推送。读取时带一个版本号，状态没变就只用极小响应、不重绘界面，所以延迟最多是一个轮询周期（默认 2 秒）。

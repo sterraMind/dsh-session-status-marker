@@ -578,3 +578,20 @@ rc.2 在 dev4090 真实页面上暴露两个缺陷：看板所有条目标题显
 | --- | --- |
 | 浅色主题下的卡片对比度 | 宿主设置 `data-ds-theme-source=system` 会覆盖 CDP 的媒体模拟，切 `theme light` 后页面仍是 `data-ds-theme="dark"` |
 | 「设置目标 → 侧栏徽标 → 看板分类」完整链路 | 本机缺 `DEEPSEEK_API_KEY`，会话在首个回合即失败（`MISSING_CREDENTIAL`），只能验证到自动推断为 Stopped 这一步 |
+
+### 3.30 1.3.1-rc.3 简体中文预览截图（隔离实例，2026-11-25）
+
+本节记录在隔离 DSH_HOME（`$env:TEMP\dsh-smoke-rc3`，rc.3 tgz 安装，`profiles\web\package.json` 指向 `file:...dsh-session-status-marker-1.3.1-rc.3.tgz`）里，把宿主语言切到简体中文后，用 CDP 驱动真实页面抓取的预览截图。这些截图用于丰富 GitHub README 与插件介绍页。
+
+操作步骤：CDP 驱动连到 `http://127.0.0.1:3099`，在设置面板把语言从 English 切到「中文」（`htmlLang=zh-CN`），再分别打开「会话状态」总览页、插件配置页、悬停卡片、编辑备注，并把主题切到深色再抓一次。
+
+| 截图 | 文件（`docs/images/preview-2026-11-25/`） | 说明 |
+| --- | --- | --- |
+| 会话状态总览（浅色） | `overview-zh-light.png` | 设置面板里「已停止 1」分组，会话标题关联 |
+| 插件配置页（浅色） | `config-zh-light.png` | 九项键值只读展示，带说明文案 |
+| 悬停卡片（浅色） | `hover-zh-light.png` | 八状态格 + 备注/编辑入口，卡片底白底深色字 |
+| 编辑备注（浅色） | `hover-editnote-zh.png` | 点「编辑备注」在卡片里写一句话说明 |
+| 悬停卡片（深色） | `hover-zh-dark.png` | 卡片底深灰、正文浅色，跟随 DSH 深色主题 |
+| 状态总览（深色） | `board-zh-dark.png` | 深色主题下的分组看板 |
+
+浅色与深色卡片底色分别对应 DSH 主题的 `--dsw-alias-bg-layer-2` 别名（浅色白底 `rgb(255, 255, 255)`、深色深灰 `rgb(44, 44, 46)`），与 1.1.2 起的整卡主题接管口径一致。README 的「界面预览（简体中文）」小节引用了上面六张截图。
