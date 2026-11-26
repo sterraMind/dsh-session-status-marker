@@ -619,4 +619,27 @@ rc.2 在 dev4090 真实页面上暴露两个缺陷：看板所有条目标题显
 
 截图：`.drafts/shots/rc5-card-light.png`、`.drafts/shots/rc5-tip-light.png`、`.drafts/shots/rc5-card-dark.png`、`.drafts/shots/rc5-tip-dark.png`。
 
-门禁：`pnpm run typecheck`、`pnpm run build` 退出码 0；`node --test --test-isolation=none tests/*.test.mjs` 实跑 208 项测试 / 47 个套件全部通过（1.3.1-rc.3 为 196 项 / 45 个套件）。本轮新增 `tests/tooltip.test.mjs` 六个用例，`tests/theme.test.mjs` 的卡面用例改为断言 `:has` 块只剩 `cursor: default`、整份 CSS 不出现卡面变量重定向。按发布政策，1.3.1-rc.5 只发布预版本，等用户真机验收后再决定转正。
+门禁（§3.31 写作时的快照）：`pnpm run typecheck`、`pnpm run build` 退出码 0；`node --test --test-isolation=none tests/*.test.mjs` 实跑 208 项测试 / 47 个套件全部通过（1.3.1-rc.3 为 196 项 / 45 个套件）。本轮新增 `tests/tooltip.test.mjs`，`tests/theme.test.mjs` 的卡面用例改为断言 `:has` 块只剩 `cursor: default`、整份 CSS 不出现卡面变量重定向。本节之后又补了八格气泡的网格级锚定与看板重挂载缓存，测试数与用例清单的最终数字见 §3.32 结尾。按发布政策，1.3.1-rc.5 只发布预版本，等用户真机验收后再决定转正。
+
+### 3.32 1.3.1-rc.5 六条判据真实页面复验（隔离实例，2026-11-26 晚）
+
+本节是 §3.31 之后的第二轮复验，把「自动推断怎么归正」「八格气泡锚在哪」「看板标签条与右列」「分节来回切换」这六条各用一个可复算的数字判定，判据全部通过。
+
+环境：隔离 `DSH_HOME` 为 `R:\Temp\dsh-accept-rc5`，profile `web`，端口 3112，装的是本轮打包的 `dsh-session-status-marker-1.3.1-rc.5.tgz`（160,740 字节，sha256 `e2d218d505f6ecfc88b6b9b1aa4fe09c9acdb82c78a562fe9bdc3d788bc589ef`），装后 `lib/client.js` 152,089 字节、`lib/inference.js` 16,601 字节、`lib/service.js` 64,343 字节；页面用无头 Chrome 158（CDP 9333）驱动。原始数据见 `.drafts/rc5-acceptance/report-merged.json` 与 `.drafts/rc5-acceptance/notes-merged.md`，截图在 `.drafts/rc5-acceptance/shots/`。
+
+| 判据 | 做法 | 实测结果 | 截图 |
+|---|---|---|---|
+| 1 自动行归正 | 磁盘上把一条 `source=auto` 的行写成 `status=stopped`、`autoReason=turn-interrupted`、`observedStatus=todo`、观察时间戳比插入时间戳晚 120,000 毫秒，重启 Host 后读 | `list` 返回 `status=todo`、`autoReason=fallback-running`，三个观察字段清空，插入时间戳改写为观察时刻；侧栏徽标 `data-status=todo`，悬停卡标签 `Auto-inferred (fallback-running): TODO` | `shots/auto-corrected.png` |
+| 2 等时戳不误改 | 观察时间戳与插入时间戳相差 0 的两条 `source=auto` 行 | `pending-subagent` 保持不变、`observedStatus=feedback` 保留，卡片 `Auto-inferred (fallback-subagent): Subagent running`；`awaiting-answer` 保持不变，卡片 `Auto-inferred (turn-completed): Awaiting answer`，没有被改成「待反馈」 | `shots/auto-equal-ts.png`、`shots/auto-equal-ts-awaiting.png` |
+| 3 显式标记不被改写 | 一条 `source=manual`、`status=done`、带备注、观察晚 120,000 毫秒的行 | 返回 `status=done`、`autoReason=null`、备注原样；徽标 `done`，卡片 `Manual: Done` 加 `Note: manual keep probe` | `shots/manual-kept.png` |
+| 4 八格整组气泡 | 真实指针移到「已停止」格再移到相邻「受阻」格 | 网格框 `[296, 639, 212, 22]`、中心 x=402，八格 22×22、底边 661；气泡 `role=tooltip`、顶边 669，**顶边减格底边 = 8**，气泡中心与网格中心差 0.005 像素；移到相邻格后文字变「Blocked」、顶边与中心不变、左边移动 1.55 像素；深色复测气泡底 `rgb(67,69,74)`、间距仍为 8 | `shots/tip-group-light.png`、`tip-group-moved.png`、`tip-group-dark.png` |
+| 5 看板标签条与右列 | 打开设置页「会话状态」分节，读标签与每行右列 | 两个标签四边边框宽度都是 0、背景全透明，选中态由 tablist 内的 `span[aria-hidden="true"]`（框 `[551, 118, 275.5, 34]`、绝对定位、边框 `1px solid rgba(0,0,0,0.12)`、底色 `rgb(255,255,255)`、不接收指针事件）承担；看板 218 行，右列 218 条全部是时间格式、没有一条是状态字样，抽查 5 行分别是 `Updated 2026-11-26 22:31 / 17:44 / 16:31 / 09:24` 与 `Updated 2026-11-23 11:24`；有备注的行，备注框顶边减标题框底边 = 0，落在标题正下方第二行 | `shots/board-tabs-light.png`、`board-rows-light.png` |
+| 6 来回切换分节 | 在「通用」与「会话状态」之间切三段，页面内 8 毫秒采样器记录骨架行数 | 三段切换全程骨架行数为 0，切回直接画出 218 行，加载中 0 毫秒（上限 1,500 毫秒） | `shots/board-switch.png` |
+
+另记一条不算失败但需要说明的现象：页面重载后第一次进入该分节时出现 4 条骨架行、`aria-busy=1`，从 8,095 毫秒到 10,123 毫秒，共 2,028 毫秒。成因是 `src/contracts.ts:203` 的 `OVERVIEW_REFRESH_WAIT_MS = 2000` 要求首屏先等一次看板刷新，加上 `src/client/StatusOverview.tsx:249` 的 `useState(() => cachedBoard === undefined)`，所以同一页面会话内只有首屏转圈，之后重新挂载直接用缓存渲染。
+
+判据 1 至 3 另有一组独立证据：用实例原有的 197 条真实标记做磁盘与 `list` 对照，17 条被归正的行全部是 `source=auto` 且观察时间戳晚于插入时间戳；等时戳的 100 条里被归正 0 条；非 `auto` 的 31 条里被改写 0 条。
+
+三条踩坑记录：运行中的 Host 不会重读 `marks` 目录（`packages/storage/storage-domain/src/index.ts:119` 的 `DomainFacility.open()` 只在启动时 `loadAll()` 一次，storage 目录内没有任何文件监听），外部写的标记文件在运行期间查不到，必须停掉旧进程用同一 `DSH_HOME` 重起；`source=auto` 且插入时间距今超过 `DEFAULT_AUTO_EXPIRE_MS`（86,400,000 毫秒）的行会被 `isAutoMarkExpired` 丢弃；悬停卡必须用真实指针移动并等一秒以上，页面内合成 `PointerEvent` 不触发。
+
+门禁：`pnpm run typecheck`、`pnpm run build` 退出码 0；`pnpm run test` 实跑 223 项测试 / 50 个套件全部通过。
