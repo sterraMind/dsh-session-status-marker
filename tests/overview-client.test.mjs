@@ -112,6 +112,34 @@ describe('overview polling resource guards (client)', () => {
   })
 })
 
+describe('overview board remount cache (client)', () => {
+  it('keeps the last painted payload in module scope, not per instance', () => {
+    // The settings shell renders only the active section, so every visit to
+    // "Session status" mounts a fresh StatusBoard. A module-scoped snapshot is
+    // what lets that mount paint the previous board instead of a spinner.
+    expect(OVERVIEW).toMatch(/^let cachedBoard: BoardSnapshot \| undefined$/m)
+    expect(OVERVIEW).toContain('cachedBoard = { groups: data.groups, unmarked: nextUnmarked, totalMarked: data.totalMarked, revision: data.revision }')
+  })
+
+  it('seeds state from the snapshot so a remount starts painted', () => {
+    expect(OVERVIEW).toContain('useState<readonly StatusGroup[]>(() => cachedBoard?.groups ?? [])')
+    expect(OVERVIEW).toContain('useState(() => cachedBoard?.totalMarked ?? 0)')
+    // Only the first load of the page session may block on a spinner.
+    expect(OVERVIEW).toContain('useState(() => cachedBoard === undefined)')
+    // The conditional-refresh revision survives the remount too.
+    expect(OVERVIEW).toContain('let lastRevision: string | undefined = cachedBoard?.revision')
+  })
+
+  it('never collapses a painted board to a blank page', () => {
+    // The board area shows placeholder rows on first load ...
+    expect(OVERVIEW).toContain('css.skeletonRow')
+    expect(OVERVIEW).toContain('aria-busy="true"')
+    // ... and a refresh failure keeps the rows, reporting the failure above.
+    expect(OVERVIEW).toContain('if (error && !hasBoard)')
+    expect(OVERVIEW).toContain('css.stale')
+  })
+})
+
 describe('overview conditional-refresh transport (client)', () => {
   it('appends ?since= only for a non-empty revision', () => {
     expect(INDEX).toContain('async (since?: string): Promise<OverviewResponse>')

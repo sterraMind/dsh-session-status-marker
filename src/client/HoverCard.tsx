@@ -24,6 +24,7 @@ import type { SyntheticEvent } from 'react'
 import css from './hover.module.css'
 import type { PropsRuntime, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { STATUS_VALUES, STATUS_META, MARKER_MUTATE_ROUTE, DEFAULT_MAX_NOTE_LENGTH } from '../contracts.js'
 import type { MarkRecord, StatusEnum } from '../contracts.js'
 import { NS } from './locales.js'
@@ -145,17 +146,17 @@ export function SessionStatusHover({ sessionId, t }: HoverProps) {
           const m = STATUS_META[s]
           const active = s === mark?.status
           return (
-            <button
-              key={s}
-              className={[css.cell, active && css.active].filter(Boolean).join(' ')}
-              title={t(m.labelKey)}
-              aria-label={t(m.labelKey)}
-              aria-pressed={active}
-              style={{ color: m.hoverTone }}
-              onClick={() => { void handleSet(s, mark?.note ?? null) }}
-            >
-              <span className={css.iconCell} dangerouslySetInnerHTML={{ __html: ICONS[m.icon] ?? '' }} />
-            </button>
+            <Tooltip key={s} label={t(m.labelKey)} side="bottom" delayMs={400}>
+              <button
+                className={[css.cell, active && css.active].filter(Boolean).join(' ')}
+                aria-label={t(m.labelKey)}
+                aria-pressed={active}
+                style={{ color: m.hoverTone }}
+                onClick={() => { void handleSet(s, mark?.note ?? null) }}
+              >
+                <span className={css.iconCell} dangerouslySetInnerHTML={{ __html: ICONS[m.icon] ?? '' }} />
+              </button>
+            </Tooltip>
           )
         })}
       </div>

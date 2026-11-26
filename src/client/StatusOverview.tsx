@@ -38,6 +38,7 @@ import { useEffect, useId, useState } from 'react'
 import type { KeyboardEvent, SyntheticEvent } from 'react'
 import css from './overview.module.css'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { STATUS_META } from '../contracts.js'
 import type { OverviewResponse, StatusGroup, UnmarkedSessions } from '../contracts.js'
 
@@ -156,9 +157,11 @@ function GroupBlock({ group, t }: { group: StatusGroup; t: StatusOverviewInjecte
       <ul className={css.list}>
         {group.entries.map((entry) => (
           <li key={entry.sessionId} className={css.row}>
-            <span className={css.rowTitle} title={entry.title ?? entry.sessionId}>
-              {entry.title ?? t('overview.noTitle')}
-            </span>
+            <Tooltip label={entry.title ?? entry.sessionId} side="bottom" portal delayMs={400} onlyWhenClipped>
+              <span className={css.rowTitle}>
+                {entry.title ?? t('overview.noTitle')}
+              </span>
+            </Tooltip>
             <span className={css.rowMeta}>
               {entry.note ? entry.note.slice(0, 48) : ''}
               {entry.note ? ' · ' : ''}{t('overview.updatedAt', { time: formatTime(entry.updatedAtMs) })}
@@ -180,9 +183,11 @@ function UnmarkedBlock({ unmarked, t }: { unmarked: UnmarkedSessions; t: StatusO
       <ul className={css.list}>
         {unmarked.entries.map((entry) => (
           <li key={entry.sessionId} className={css.row}>
-            <span className={css.rowTitle} title={entry.title ?? entry.sessionId}>
-              {entry.title ?? t('overview.noTitle')}
-            </span>
+            <Tooltip label={entry.title ?? entry.sessionId} side="bottom" portal delayMs={400} onlyWhenClipped>
+              <span className={css.rowTitle}>
+                {entry.title ?? t('overview.noTitle')}
+              </span>
+            </Tooltip>
             <span className={css.rowMeta}>
               {t('overview.updatedAt', { time: formatTime(entry.updatedAtMs) })}
             </span>
@@ -198,12 +203,42 @@ type StatusBoardProps = {
   readonly fetchOverview: StatusOverviewInjected['fetchOverview']
 }
 
+/** Last successful board payload, kept across mounts of the section. */
+interface BoardSnapshot {
+  readonly groups: readonly StatusGroup[]
+  readonly unmarked: UnmarkedSessions
+  readonly totalMarked: number
+  /** Revision of that payload, so the next mount can poll conditionally. */
+  readonly revision: string | undefined
+}
+
+/**
+ * Board payload of the last successful load.
+ *
+ * The settings shell renders only the active section
+ * (`ui-settings-general` `SettingsRoot`: `renderSlot('settings.section', …,
+ * { only: active })`), so navigating away and back unmounts this component and
+ * a fresh instance starts with empty state. Before this cache existed every
+ * remount showed "loading" until its own first response arrived; on a store
+ * with hundreds of sessions that window is long enough to read as a board that
+ * never loads. Keeping the last payload module-scoped lets a remount paint the
+ * previous board immediately and refresh in the background, and lets the
+ * `?since=` revision survive the remount.
+ *
+ * Deliberately not persisted (no localStorage): it is a paint cache for one
+ * page session, and a stale board from a previous app run would be worse than
+ * a short spinner.
+ */
+let cachedBoard: BoardSnapshot | undefined
+
 /** Tab one: the read-only status board and its polling loop. */
 function StatusBoard({ t, fetchOverview }: StatusBoardProps) {
-  const [groups, setGroups] = useState<readonly StatusGroup[]>([])
-  const [unmarked, setUnmarked] = useState<UnmarkedSessions>({ count: 0, entries: [] })
-  const [totalMarked, setTotalMarked] = useState(0)
-  const [loading, setLoading] = useState(true)
+  const [groups, setGroups] = useState<readonly StatusGroup[]>(() => cachedBoard?.groups ?? [])
+  const [unmarked, setUnmarked] = useState<UnmarkedSessions>(() => cachedBoard?.unmarked ?? { count: 0, entries: [] })
+  const [totalMarked, setTotalMarked] = useState(() => cachedBoard?.totalMarked ?? 0)
+  // A remount that already has a payload paints it instead of a spinner: the
+  // board only blocks on the first load of the whole page session.
+  const [loading, setLoading] = useState(() => cachedBoard === undefined)
   const [error, setError] = useState(false)
 
   // One mount: fetch immediately, then poll; pause while hidden, refresh on visible.
@@ -224,7 +259,7 @@ function StatusBoard({ t, fetchOverview }: StatusBoardProps) {
     // `revision` from the last full response, sent back as `?since=` so the
     // Host can answer `unchanged` when the board did not change. Stays
     // `undefined` (and is never sent) when the Host omits the field.
-    let lastRevision: string | undefined = undefined
+    let lastRevision: string | undefined = cachedBoard?.revision
     let inFlight = false
 
     /**
@@ -267,9 +302,13 @@ function StatusBoard({ t, fetchOverview }: StatusBoardProps) {
         // older than the conditional-refresh contract) is tolerated and simply
         // never sent.
         lastRevision = data.revision
+        const nextUnmarked = data.unmarked ?? { count: 0, entries: [] }
+        // The paint cache follows every payload that is actually rendered, so a
+        // remount shows exactly the board the user last saw.
+        cachedBoard = { groups: data.groups, unmarked: nextUnmarked, totalMarked: data.totalMarked, revision: data.revision }
         setGroups(data.groups)
         setTotalMarked(data.totalMarked)
-        setUnmarked(data.unmarked ?? { count: 0, entries: [] })
+        setUnmarked(nextUnmarked)
         setError(false)
       } catch {
         // A failed load widens the next tick's retry window (Full Jitter, see
@@ -308,17 +347,28 @@ function StatusBoard({ t, fetchOverview }: StatusBoardProps) {
     }
   }, [fetchOverview])
 
+  // First load of the page session only: the tab strip and the config tab are
+  // already usable, and the board area shows placeholder rows rather than one
+  // centred "loading" line, so the section never reads as a blank page.
   if (loading) {
-    return <div className={css.loading}>{t('hover.loading')}</div>
+    return (
+      <div className={css.board} aria-busy="true" aria-label={t('hover.loading')}>
+        {[0, 1, 2, 3].map((index) => (
+          <div key={index} className={css.skeletonRow} />
+        ))}
+      </div>
+    )
   }
-  if (error) {
+  const hasBoard = totalMarked > 0 || unmarked.count > 0
+  // A failure with nothing painted yet is the only case that replaces the
+  // board; with a cached payload the rows stay and the hint below reports it.
+  if (error && !hasBoard) {
     return <div className={css.loading}>{t('hover.error')}</div>
-  }
-  if (totalMarked === 0 && unmarked.count === 0) {
-    return <div className={css.empty}>{t('overview.empty')}</div>
   }
   return (
     <>
+      {error ? <div className={css.stale}>{t('hover.error')}</div> : null}
+      {!hasBoard ? <div className={css.empty}>{t('overview.empty')}</div> : null}
       {groups.map((group) => <GroupBlock key={group.status} group={group} t={t} />)}
       <UnmarkedBlock unmarked={unmarked} t={t} />
     </>

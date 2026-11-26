@@ -1,223 +1,76 @@
 /** @module CSS Modules for SessionStatusHover.
  *
- * Theme integration: the host renders our slot inside its own session-row hover
- * card. That card is authored with a hard-coded dark surface in BOTH themes and
- * its title/path/time/status lines with hard-coded light text
- * (`ui-primitives/HoverCard.module.css:9-19` and
- * `ui-workspace/.../rows/Rows.module.css:410-444`). Painting only our panel with
- * a theme surface produces a white block wedged between dark host text (the
- * 1.0.3–1.1.0 defect), and leaving everything dark ignores the DSH theme (the
- * 1.1.1 defect). The fix is to retarget the WHOLE host card from our scoped slot:
- * the `:has([data-status-slot])` rules below recolor the host surface and text
- * lines with the same theme aliases the rest of DSH uses, so light shows a light
- * card and dark a dark one. Attribute selectors survive the CSS-module build
- * (which only rewrites `.class` selectors), letting us address the host's hashed
- * class names by stable substring. Only the card that actually contains our
- * slot is touched; other HoverCards are unaffected.
+ * The host mounts this content inside its own session-row hover card. Two things
+ * follow from that:
  *
- * Our panel keeps a transparent background and uses theme-alias text and status
- * colors, so it sits on the single themed card surface without a seam.
+ * 1. Typography comes from the host card. Its labels are published as aliases
+ *    (`--dsw-alias-hovercard-label-*`), so our block reads those instead of the
+ *    page's `label-*` ink: the alias set is what the host paints its own rows
+ *    with, which keeps our rows on the same colour ramp as the title and path
+ *    above them.
+ * 2. The card's surface, padding, radius and width belong to the host. Its
+ *    "hovercard" aliases are already the right pair in every theme — a dark
+ *    floating surface with near-white labels, exactly like the card the host
+ *    paints for its own titles and paths — so this block leaves them alone and
+ *    only reads `--dsw-alias-hovercard-label-*`. Repainting the surface from the
+ *    page theme (1.3.1-rc.3 and rc.4) is what produced a white card with
+ *    near-white text in a dark window: the host's dark surface is the design,
+ *    not a bug to correct.
+ * 3. Our block adds content — a status line, a note line, an eight-cell picker
+ *    and two quiet text actions — and every rule below only touches that markup,
+ *    apart from the cursor reset.
  *
- * Typography: the host's session-title line is one step larger than the official
- * tooltips around the sidebar, so the same rule below gives the title line the
- * tooltip type step (13px/20px, weight 400).
- *
- * `.root::before` is the anchor-to-card bridge: the compact hover card offers
- * only a 200 ms pointer grace across the eight-pixel gap and no bridge element,
- * so a pointer crossing from the row to this content could lose the card on the
- * way. The transparent strip sits inside this content (a React descendant of the
- * host card's root span), so pointer events over it bubble to the card's
- * `onPointerEnter` and cancel the pending close.
+ * The host marks the card `copyable` (cursor: pointer); we reset that because
+ * our block is meant to be selectable, not copied as a whole card.
  */
 
-/* Retarget the host card that contains our slot, not any other HoverCard.
- * Newer DSH builds paint the card with `background: var(--dsw-alias-hovercard-bg)`
- * (a fixed-dark alias), older ones with `--dsw-hovercard-bg`; we override both so
- * the surface follows the DSH theme regardless of which alias the build reads. */
 [class*='card']:has([data-status-slot]) {
-  --dsw-alias-hovercard-bg: var(--dsw-alias-bg-layer-2) !important;
-  --dsw-hovercard-bg: var(--dsw-alias-bg-layer-2) !important;
-  /* The host marks the card `copyable` and styles it with `cursor: pointer`
-   * (`HoverCard.module.css:21-23`), which makes the whole floating surface look
-   * like one big button. Reading and selecting text is the normal intent there,
-   * so the card itself shows the default cursor; the cells and buttons inside
-   * our slot opt back into `cursor: pointer`. */
   cursor: default;
 }
 
-/* Official tooltips set their label to 13px/20px at weight 400
- * (`Tooltip.module.css:19-20`; the `--dsw-font-xs-13` step in
- * `gradient-shadow-text.css:234-239`). The host title line is 14px/20px, so the
- * card reads one step larger than the tooltips in the same sidebar. Apply the
- * theme's type step instead of copying the pixel values, so a scale change moves
- * both together. */
-[class*='card']:has([data-status-slot]) [class*='hoverTitle'] {
-  font: var(--dsw-font-xs-13) !important;
-  color: var(--dsw-alias-label-primary) !important;
-}
-
-[class*='card']:has([data-status-slot]) [class*='hoverPath'],
-[class*='card']:has([data-status-slot]) [class*='hoverTime'],
-[class*='card']:has([data-status-slot]) [class*='hoverStatus'] {
-  color: var(--dsw-alias-label-secondary) !important;
-}
-
-/* The host card is `copyable` for sessions with a title, so the official
- * stylesheet paints the whole card with `cursor: pointer`
- * (`ui-primitives/HoverCard.module.css:21-23`). Inside our slot that reads as
- * "everything is a button", which is wrong: only the cells and the action
- * buttons act on click. Reset the inherited pointer here and let each
- * interactive child opt back in. */
 .root {
   position: relative;
-  cursor: default;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--dsw-alias-label-primary);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  cursor: default;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--dsw-alias-hovercard-label-secondary, var(--dsw-static-neutral-bluish-300));
 }
 
+/* Anchor-to-card bridge: the compact card allows only a short pointer grace
+ * across the gap between the row and the card, and has no bridge element of its
+ * own. A transparent strip inside our content bubbles pointer entry to the card,
+ * which cancels the pending close. */
 .root::before {
   content: '';
   position: absolute;
-  left: -8px;
   top: 0;
   bottom: 0;
+  left: -8px;
   width: 8px;
 }
 
 .label {
-  font-weight: 600;
-  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+  color: var(--dsw-alias-hovercard-label-primary, var(--dsw-static-neutral-bluish-00));
 }
 
 .note {
-  color: var(--dsw-alias-label-secondary);
-  font-style: italic;
+  color: var(--dsw-alias-hovercard-label-secondary, var(--dsw-static-neutral-bluish-300));
   word-break: break-word;
 }
 
-.actions {
-  display: flex;
-  gap: 4px;
-}
-
-.btn,
-.clearBtn {
-  background: transparent;
-  border: 1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 24%, transparent);
-  border-radius: var(--dsw-radius-sm);
-  padding: 2px 6px;
-  font: inherit;
-  color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
-  opacity: 0.85;
-}
-
-.btn:hover,
-.clearBtn:hover {
-  opacity: 1;
-  color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.clearBtn {
-  opacity: 0.7;
-}
-
-/* Note editing inside the hover card summary: an underline trigger, a
- * single-line input and Save/Cancel. Colors come from `--dsw-*` aliases so the
- * field stays legible on the themed card surface in both themes. */
-.editBtn {
-  padding: 2px 6px;
-  border: 1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 24%, transparent);
-  border-radius: var(--dsw-radius-sm);
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
-  opacity: 0.85;
-}
-
-.editBtn:hover:not(:disabled) {
-  opacity: 1;
-  color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.editBtn:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-
-.noteEditor {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 4px;
-}
-
-.noteInput {
-  box-sizing: border-box;
-  flex: 1;
-  min-width: 0;
-  padding: 2px 6px;
-  border: 1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 24%, transparent);
-  border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-bg-layer-1);
-  color: var(--dsw-alias-label-primary);
-  font: inherit;
-  font-size: 11px;
-  line-height: 17px;
-}
-
-.noteInput::placeholder {
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.noteInput:focus {
-  outline: 1px solid var(--dsw-alias-label-primary);
-  outline-offset: 0;
-}
-
-.noteEditor .saveBtn,
-.noteEditor .cancelBtn {
-  flex: none;
-  padding: 2px 6px;
-  border: 1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 24%, transparent);
-  border-radius: var(--dsw-radius-sm);
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.noteEditor .saveBtn:hover:not(:disabled),
-.noteEditor .cancelBtn:hover:not(:disabled) {
-  color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.noteEditor .saveBtn:disabled,
-.noteEditor .cancelBtn:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-
+/* Fixed eight-column rail: 8 * 22px + 7 * 2px = 190px, which stays on one line
+ * inside the card's content box (~220px). A grid (not flex-wrap) keeps the cells
+ * on one line at any font size, so the picker never reflows into two rows. */
 .grid {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(8, 22px);
   gap: 2px;
-  flex-wrap: wrap;
-  margin-top: 4px;
 }
 
-/* The card content box is 244px wide (border-box). 8 * 22px cells plus seven
- * 2px gaps = 190px, so the row stays on one line inside the host card.
- * `box-sizing: border-box` keeps the 2px padding inside each cell. */
 .cell {
   box-sizing: border-box;
   display: inline-flex;
@@ -225,18 +78,16 @@
   justify-content: center;
   width: 22px;
   height: 22px;
-  padding: 2px;
+  padding: 0;
   border: none;
+  border-radius: var(--dsw-radius-xs, 4px);
   background: transparent;
-  border-radius: var(--dsw-radius-sm);
   cursor: pointer;
-  opacity: 0.75;
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  opacity: 0.8;
 }
 
-/* Same collapse hazard as the badge: the inline glyph needs a sized flex box. */
+/* The glyph wrapper must be a flex box, otherwise the inline SVG collapses and
+ * the cell renders blank even though the markup is present. */
 .iconCell,
 .cell > span {
   display: flex;
@@ -254,11 +105,85 @@
 }
 
 /* The active cell must not repaint `color`: `background: currentColor` resolves
-   to the *same* computed color as the glyph, which erases the icon. Keep the
-   glyph in its status token and mark selection with a translucent surface and
-   a ring. */
+ * to the cell's own glyph colour and erases the icon. Selection is a translucent
+ * surface plus a hairline ring in the status colour. */
 .cell.active {
   opacity: 1;
   background: var(--dsw-alias-interactive-bg-active);
   box-shadow: inset 0 0 0 1px currentColor;
 }
+
+/* Text actions, not bordered buttons: the card already carries enough chrome,
+ * and every other control in this card is a quiet text/icon affordance. */
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.btn,
+.clearBtn,
+.editBtn,
+.saveBtn,
+.cancelBtn {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-hovercard-label-tertiary, var(--dsw-static-neutral-bluish-400));
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled),
+.clearBtn:hover:not(:disabled),
+.editBtn:hover:not(:disabled),
+.saveBtn:hover:not(:disabled),
+.cancelBtn:hover:not(:disabled) {
+  color: var(--dsw-alias-hovercard-label-primary, var(--dsw-static-neutral-bluish-00));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.btn:disabled,
+.clearBtn:disabled,
+.editBtn:disabled,
+.saveBtn:disabled,
+.cancelBtn:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+/* Note editing: a single quiet line that reads as an inline field rather than a
+ * form control dropped into the tooltip. */
+.noteEditor {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.noteInput {
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  padding: 2px 0;
+  border: none;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 32%, transparent);
+  background: transparent;
+  color: var(--dsw-alias-hovercard-label-primary, var(--dsw-static-neutral-bluish-00));
+  font: inherit;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.noteInput::placeholder {
+  color: var(--dsw-alias-hovercard-label-tertiary, var(--dsw-static-neutral-bluish-400));
+}
+
+.noteInput:focus {
+  outline: none;
+  border-bottom-color: var(--dsw-alias-hovercard-label-primary, var(--dsw-static-neutral-bluish-00));
+}
+

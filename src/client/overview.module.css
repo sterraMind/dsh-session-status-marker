@@ -102,6 +102,31 @@
   color: var(--dsw-alias-label-secondary);
 }
 
+/* One-line notice above a board that is already painted: a failed refresh
+ * keeps the previous rows on screen and reports the failure separately, so the
+ * section never collapses into a blank page. */
+.stale {
+  padding: 6px 8px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-module-platform);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* First-load placeholder: four shimmerless bars in the rows' rhythm. */
+.board {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.skeletonRow {
+  height: 26px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-module-platform);
+}
+
 .group {
   display: flex;
   flex-direction: column;

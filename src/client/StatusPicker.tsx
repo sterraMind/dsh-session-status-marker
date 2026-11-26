@@ -17,6 +17,7 @@ import { useState } from 'react'
 import type { SyntheticEvent } from 'react'
 import css from './action.module.css'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { STATUS_VALUES, STATUS_META, MARKER_MUTATE_ROUTE, DEFAULT_MAX_NOTE_LENGTH, MARK_VERSION, isObservationOutdated } from '../contracts.js'
 import type { MarkRecord, SetMarkBody, StatusEnum } from '../contracts.js'
 import { NS } from './locales.js'
@@ -247,20 +248,20 @@ export function StatusPicker({ sessionId, t, onPicked, itemRole, showSummary = f
           const meta = STATUS_META[status]
           const active = status === mark?.status
           return (
-            <button
-              key={status}
-              type="button"
-              role={itemRole}
-              className={[css.cell, active && css.active].filter(Boolean).join(' ')}
-              title={t(meta.labelKey)}
-              aria-label={t(meta.labelKey)}
-              aria-pressed={active}
-              disabled={busy}
-              style={{ color: meta.hoverTone }}
-              onClick={() => { pick(status) }}
-            >
-              <span className={css.iconCell} dangerouslySetInnerHTML={{ __html: ICONS[meta.icon] ?? '' }} />
-            </button>
+            <Tooltip key={status} label={t(meta.labelKey)} side="bottom" delayMs={400}>
+              <button
+                type="button"
+                role={itemRole}
+                className={[css.cell, active && css.active].filter(Boolean).join(' ')}
+                aria-label={t(meta.labelKey)}
+                aria-pressed={active}
+                disabled={busy}
+                style={{ color: meta.hoverTone }}
+                onClick={() => { pick(status) }}
+              >
+                <span className={css.iconCell} dangerouslySetInnerHTML={{ __html: ICONS[meta.icon] ?? '' }} />
+              </button>
+            </Tooltip>
           )
         })}
       </span>

@@ -1,6 +1,6 @@
 # Acceptance & Regression
 
-> **文档版本**：v1.3.1-rc.1 · 2026-11-24（对应插件 1.3.1-rc.1）
+> **文档版本**：v1.3.1-rc.5 · 2026-11-26（对应插件 1.3.1-rc.5）
 
 > 记录验收标准、已通过证据、待执行集成回归清单。
 > 对应实现进度见 `docs/implementation-plan.md` §2，风险优先级见 `docs/feasibility-and-risks.md`。
@@ -18,7 +18,7 @@
 | 行操作 / 菜单入口 / 共享状态选择器 | `tests/action.test.mjs` | 13 项全绿 |
 | 备注编辑 | `tests/note-input.test.mjs` | 9 项全绿（含悬停卡备注编辑器与换状态保留备注） |
 | i18n / 图标 / 样式契约 | `tests/i18n.test.mjs`、`tests/theme.test.mjs` | i18n 12 项 + theme 11 项全绿 |
-| `pnpm run test` | `tests 130 / suites 30 / pass 130 / fail 0`（目录形式 `node --test tests/` 在 Node 26 下另计入 4 个 `.test.ts` 薄壳，同一批断言） |
+| `pnpm run test` | `tests 208 / suites 47 / pass 208 / fail 0`（1.3.1-rc.5，2026-11-26 实跑；目录形式 `node --test tests/` 在 Node 26 下另计入 4 个 `.test.ts` 薄壳，同一批断言） |
 | pnpm pack | `pnpm pack` | `dsh-session-status-marker-1.3.0-rc.3.tgz`（98,666 B），含 `cordis.patch.yml`、`locale/`、`icon.svg`、`lib/`、`package.json`、`README.md`；`docs/` 与截图不入包 |
 | 真实装载 | `dsh plugin --profile smoke add <tgz>`（dev4090） | profile 初始化成功并安装插件，详见 §3 |
 | **前端视觉与交互** | 真实 GUI 上操作（dev4090 + CDP） | sidebar 行尾标记、hover card、状态改写/清除、跨进程持久化全部实测通过，见 §3.4 与 §4 |
@@ -34,14 +34,14 @@
 | `tests/service.test.mjs` | 20 | `getMark`/`clearMark`/`listAll`/`putMark`；state route 400 与命中；mutate set→clear 往返；unsupported-action；两个 tool 注册与 execute（含覆盖规则描述、`source:'agent'`）；note 超长抛错；`turn/end interrupted` auto inference + manual mark not overwritten；`?since=<revision>` 条件刷新（命中时返回 `unchanged` 且不带 revision）；`rowActionOrder`/`menuItemOrder` 页面全局注入与默认回退 |
 | `tests/smoke.test.mjs` | 1 | 端到端 inference round-trip + state route read-back + neutral-event no-op |
 | `tests/i18n.test.mjs` | 12 | `STATUS_META`/tone/schema 默认值一致性 + `MARK_SOURCES`/`EXPLICIT_SOURCES` 顺序 + 图标盒尺寸 + Shell 8 语言字典键集合与占位符 |
-| `tests/theme.test.mjs` | 11 | 零字面颜色、inline glyph 盒、active 格不重设 color、badge 尺寸、`:has([data-status-slot])` 整卡覆盖宿主（同时覆盖 `--dsw-alias-hovercard-bg` 与 `--dsw-hovercard-bg`）、面板与状态色用主题别名、hover/active 用 interactive 令牌、桥接命中区、8 格盒尺寸、总览页主题别名 |
+| `tests/theme.test.mjs` | 11 | 零字面颜色、inline glyph 盒、active 格不重设 color、badge 尺寸、`:has([data-status-slot])` 作用域只保留 `cursor: default`（不重绘宿主卡表面与宿主行文字）、插件文字读 `--dsw-alias-hovercard-label-*` 并带静态兜底、面板与状态色用主题别名、hover/active 用 interactive 令牌、桥接命中区、8 格盒尺寸、总览页主题别名 |
 | `tests/marks.test.mjs` | 9 | 共享读取器：快照分发、本地写透、消失会话分发 `null`、采纳 Host 读取间隔、读取失败保留上次、`?since` + host 判 unchanged 时跳过 publish、读取失败保留 revision、晚加入会话全量读取、可见性恢复强制全量读取 |
 | `tests/overview.test.mjs` | 11 | overview route：分组排序、仅非空组、标题关联、`sessionTitle` 缺失/抛错回退 null、空态、冷会话标题由 `sessionQuery.readTitleSnapshots` 补全、未标记会话按创建时间降序且截断 20 条、无查询引擎时 unmarked 为空 |
 | `tests/action.test.mjs` | 13 | 行操作/菜单项 slot 注册（id、order 300、排在官方 archive/pin 之后）、行按钮只负责打开宿主悬停卡并 stopPropagation、菜单项用 owner menu hook + `role=menuitem`、共享选择器契约（8×22px 单行、主题令牌、POST 既有 route）、bundle 表与 8 语言字典键、默认 order + 页面全局读取回退、profile 配置暴露 |
 | `tests/copy-guard.test.mjs` | 9 | 整卡防复制守卫（document capture 注册与移除、`stopPropagation` 且不 `preventDefault`、keydown 只拦 Enter/Space、`:has` 作用域限定、交互元素不拦、HoverCard 挂载）+ 行内图标只开宿主悬停卡（不含 popover/StatusPicker、`pointerover` 重放、document capture 拦 pointerdown 与 click） |
 | `tests/touch-icon.test.mjs` | 6 | 插件页图标 36×36 填充渐变且无 `currentColor`、菜单项官方字号与 14px 图标列、菜单项与状态选择器接线、CSS 只用主题令牌 |
 | `tests/note-input.test.mjs` | 9 | 备注编辑：`setSessionNote` 走既有 mutate route、`normalizeNote` 去空白与空串归 null、编辑态进入/取消/保存、`maxLength` 取 `DEFAULT_MAX_NOTE_LENGTH`、8 语言 `hover.noteEdit/noteSave/noteCancel` 键齐全 |
-| **合计** | **130** | suites 30 / pass 130 / fail 0 |
+| **合计** | **130**（1.3.0-rc.3 时点的逐文件快照） | suites 30 / pass 130 / fail 0；1.3.1-rc.5 为 208 项 / 47 套件，见 §1 与 §3.31 |
 
 ## 3. 真实集成验证（dev4090，已执行）
 
@@ -218,15 +218,15 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 
 截图：`.drafts/shots/v111-light-picker.png`、`.drafts/shots/v111-dark-picker.png`（均 1576×861，已目检）。部署链路同 §3.10：base64 经 ssh stdin 上传 tgz → 停 3099 → `dsh plugin add`（1.1.1 需 `allow-version --accept-risk`）→ 常驻 ssh 起 web → CDP 复核；远程 `lib/client.js` 实测含 `--dsw-static-neutral-00`、不含悬停卡白底声明。
 
-> **1.1.1 已被 1.1.2 取代**：1.1.1 只改了自己面板（透明 + 固定浅色文字），整卡仍是宿主固定深色，浅色主题下整卡仍黑，未满足「跟随 DSH 主题」。见 §3.12。
+> **1.1.1 已被 1.1.2 取代**：1.1.1 只改了自己面板（透明 + 固定浅色文字），整卡仍是宿主固定深色，浅色主题下整卡仍黑。见 §3.12。**2026-11-26 起验收标准已更新：宿主这张卡在两套配色下都是深底，验收读 `cardBg` 时两套主题都必须读到宿主深色（约 `rgb(44,44,46)`），浅色主题读到白色即回归失败，见 §3.31 与 `AGENTS.md` 悬停卡交互约束。**
 
 ### 3.12 1.1.2 整卡主题接管（真实页面，2026-11-18）
 
-1.1.1 被用户否决（「light 这回也是黑色浮窗」）：验收口径应是**整张卡**跟随主题（读 `cardBg`，light≠dark 才算通过），只看「面板透明/文字白」是错误口径。根因：官方 `div.card`（`ui-primitives/src/HoverCard.module.css:9-19`）`--dsw-hovercard-bg` 写死 `#2C2C2E`，宿主标题/路径/时间/状态行也写死深底浅字（`ui-workspace/.../rows/Rows.tsx:473-495`、`Rows.module.css:417-444`），我们 slot 只是卡里的一段，只调自己面板无法让整卡跟随主题。
+1.1.1 被用户否决（「light 这回也是黑色浮窗」）。1.1.2 当时把「让整张卡随页面主题变浅」定为验收目标，判据是两套主题读到的 `cardBg` 不相等，只查「面板透明/文字白」被判为错误判据；本节记录的是 1.1.2 当时的做法与证据。2026-11-26 起验收标准已更新：宿主这张卡在两套配色下都是深底，`cardBg` 两套主题都必须读到宿主深色（约 `rgb(44,44,46)`），见 1.3.1-rc.5（§3.31）。根因：官方 `div.card`（`ui-primitives/src/HoverCard.module.css:9-19`）`--dsw-hovercard-bg` 写死 `#2C2C2E`，宿主标题/路径/时间/状态行也写死深底浅字（`ui-workspace/.../rows/Rows.tsx:473-495`、`Rows.module.css:417-444`），我们 slot 只是卡里的一段，只调自己面板无法改变整卡表面。
 
 1.1.2 从内容区用 `:has([data-status-slot])` 覆盖宿主整张卡（方案先经 `.drafts/probe-takeover.mjs` 在 1.1.1 页面注入验证成立）：
 
-- `src/client/hover.module.css` 新增 4 组全局规则（属性选择器不被 `build-client.mjs` 的 `.class` 哈希改写，`:has()` + `!important` 特异性高于官方样式，只命中含我们 slot 的那张卡）：`[class*='card']:has([data-status-slot]) { --dsw-hovercard-bg: var(--dsw-alias-bg-layer-2) !important }`；`[class*='hoverTitle'] → --dsw-alias-label-primary`、`[class*='hoverPath']/[class*='hoverTime']/[class*='hoverStatus'] → --dsw-alias-label-secondary`（均 `!important`）。我们面板 `.root` 透明、`--dsw-alias-label-primary`，hover/active 用 `--dsw-alias-interactive-bg-hover/active`，状态图标用主题别名。
+- `src/client/hover.module.css` 新增 4 组全局规则（属性选择器不被 `build-client.mjs` 的 `.class` 哈希改写，`:has()` + `!important` 特异性高于官方样式，只命中含我们 slot 的那张卡）：`[class*='card']:has([data-status-slot]) { --dsw-hovercard-bg: var(--dsw-alias-bg-layer-2) !important }`；`[class*='hoverTitle'] → --dsw-alias-label-primary`、`[class*='hoverPath']/[class*='hoverTime']/[class*='hoverStatus'] → --dsw-alias-label-secondary`（均 `!important`）。我们面板 `.root` 透明、`--dsw-alias-label-primary`，hover/active 用 `--dsw-alias-interactive-bg-hover/active`，状态图标用主题别名。（这组变量重定向在 1.3.1-rc.5 全部撤除，`:has` 块只保留 `cursor: default`，见 §3.31。）
 - `src/client/HoverCard.tsx`：`data-status-slot` 锚点 spread 到三个根 div；`guard`（`stopPropagation` 阻断官方整卡复制）保留。
 - `src/contracts.ts`：八项 `hoverTone` 改回主题别名（awaiting-answer 用 `--dsw-alias-label-secondary`）。
 - `tests/theme.test.mjs`：新增 `:has` 整卡覆盖、面板主题别名、主题感知 hover 色三条断言。
@@ -237,7 +237,7 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 |---|---|---|
 | 浅色主题整卡变浅 | `ui-theme preference: system` + `prefers-color-scheme: light`，悬停会话行 → 点「Change status」 | `bodyBg rgb(255,255,255)`、**`cardBg rgb(255,255,255)`**、`titleColor rgb(15,17,21)`、`metaColor rgb(97,102,107)`、`ourPanelColor rgb(15,17,21)`；8 格单行 `cellRows:[378]` |
 | 深色主题整卡变深 | 同上切 `prefers-color-scheme: dark` | `bodyBg rgb(21,21,23)`、**`cardBg rgb(44,44,46)`**、`titleColor rgb(249,250,251)`、`metaColor rgb(207,211,214)`、`ourPanelColor rgb(249,250,251)`；8 格单行 |
-| 整卡随主题（验收口径） | 对比两主题 `cardBg` | light `rgb(255,255,255)` ≠ dark `rgb(44,44,46)` → 通过 |
+| 整卡随主题（1.1.2 当时的判据，2026-11-26 起作废） | 对比两主题 `cardBg` | light `rgb(255,255,255)` ≠ dark `rgb(44,44,46)` → 当时判为通过；这张浅色白面就是 1.3.1-rc.5 修掉的白底白字 |
 
 截图：`.drafts/shots/v112-light-picker.png`（53,023 B，白卡深字彩色图标）、`.drafts/shots/v112-dark-picker.png`（51,214 B，深灰卡浅字），均 1576×861，已目检。部署：`.drafts/upload-112-chunked.ps1` 分块 base64 ssh 上传（REMOTE_BYTES=56683）→ `allow-version dsh-session-status-marker@1.1.2 --dsh-version 0.2.0-rc.2 --accept-risk` + `dsh plugin add`（INSTALLED_VERSION=1.1.2）。本地 73 项测试全绿、`pnpm pack` 56,683 B（发布前；放宽 engines 下限后重打包为 56,921 B）。
 
@@ -281,7 +281,7 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 | `tests/service.test.mjs` | 20 | `getMark`/`clearMark`/`listAll`/`putMark`；state route 400 与命中；mutate set→clear 往返；unsupported-action；两个 tool 注册与 execute；note 超长抛错；`turn/end interrupted` auto inference + manual mark not overwritten；`?since` 条件刷新 + revision 稳定；`rowActionOrder`/`menuItemOrder` 页面全局注入 |
 | `tests/smoke.test.mjs` | 1 | 完整 inference round-trip + GET state route read-back + neutral-event no-op |
 | `tests/i18n.test.mjs` | 11 | STATUS_META/tone/schema/defaults 跨模块一致性 + 图标尺寸契约 + Shell 8 语言字典键集合与占位符 |
-| `tests/theme.test.mjs` | 11 | 零字面颜色、图标盒尺寸、active 格不覆盖 color、badge 盒尺寸、`[class*='card']:has([data-status-slot])` 整卡覆盖宿主（含 `--dsw-alias-hovercard-bg` 双变量）、状态 hover 色用主题别名、`.root::before` 桥接命中区、格子 22px border-box + 2px 内边距 + 2px 间距、总览页主题别名 |
+| `tests/theme.test.mjs` | 11 | 零字面颜色、图标盒尺寸、active 格不覆盖 color、badge 盒尺寸、`[class*='card']:has([data-status-slot])` 整卡覆盖宿主（Phase 2 快照的说法；1.3.1-rc.5 起改为只保留 `cursor: default`，不重绘宿主卡表面）、状态 hover 色用主题别名、`.root::before` 桥接命中区、格子 22px border-box + 2px 内边距 + 2px 间距、总览页主题别名 |
 | `tests/marks.test.mjs` | 9 | 共享读取器：快照分发、本地写透、消失的会话分发 `null`、采纳 Host 下发的读取间隔、读取失败保留上一次结果、`?since` + unchanged 跳过 publish、晚加入会话全量读取、可见性恢复强制全量读取 |
 | `tests/overview.test.mjs` | 5 | overview route：分组排序、仅非空组、标题关联、`sessionTitle` 缺失/抛错回退 null、空态 |
 | `tests/action.test.mjs` | 12 | 行操作/菜单项 slot 注册（order 300、官方 archive/pin 之后）、行按钮接共享选择器、菜单项 `role=menuitem`、共享选择器 8×22px 单行 + 主题令牌、bundle 表 + 8 语言字典键、order 默认值与页面全局回退、profile 配置暴露 |
@@ -334,7 +334,7 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 | `GET /api/session-status-marker.list?since=<revision>` 条件刷新：revision 命中返回 `unchanged:true` + 空 marks，Client 跳过重绘；可见性恢复与首次订阅无缓存时强制全量读取 | **PASS**：`?since=<revision>` 多轮返回 unchanged:true；mutate 后 revision 变化、全量 5 条；页面另一会话被 mutate 后徽标 323ms 更新、canary 12345 不变（无整页重载）。注：无头 Edge 新开标签页抢占前台时原页面按可见性感知暂停轮询，关闭新标签页并 bringToFront 后立即恢复，属设计行为 |
 | `awaiting-answer` 状态色改用 `--dsw-alias-label-secondary`（明暗主题对比度） | **PASS**：light rgb(97,102,107) == 卡片次要文字色；dark rgb(207,211,214) == 次要文字色；不再使用 idle 蓝（对照 todo active rgb(65,118,230)） |
 | `set_session_status` 工具描述重写（WHEN TO USE / WHEN NOT TO USE / DO NOT USE FOR / USAGE / EXAMPLES，明确手动标记不被推断覆盖） | 代码完成，工具契约测试全绿（描述内容经系统提示词下发，无法在页面直接断言） |
-| 整卡主题接管同时覆盖 `--dsw-alias-hovercard-bg` 与 `--dsw-hovercard-bg`（兼容较新 DSH 构建的卡底变量） | **PASS**：light cardBg=rgb(255,255,255)/标题 rgb(15,17,21)；dark cardBg=rgb(44,44,46)/标题 rgb(249,250,251)；截图 `.drafts/shots/v120-rc5-{light,dark}-picker.png` 已目检 |
+| 整卡主题接管同时覆盖 `--dsw-alias-hovercard-bg` 与 `--dsw-hovercard-bg`（1.2.0 当时的做法，2026-11-26 起撤除，见 §3.31） | **PASS（按当时的判据）**：light cardBg=rgb(255,255,255)/标题 rgb(15,17,21)；dark cardBg=rgb(44,44,46)/标题 rgb(249,250,251)；截图 `.drafts/shots/v120-rc5-{light,dark}-picker.png` 已目检。该浅色白面就是 1.3.1-rc.5 修掉的白底白字 |
 | `engines.dsh` 收紧为 `>=0.2.2 <0.3.0` | **PASS**：dev4090 DSH 0.2.2-rc.5，npm 源直接安装成功（INSTALLED_VERSION=1.2.0，无需 allow-version） |
 | 测试 | 95 tests / 23 suites / pass 95 / fail 0（脚本形式 `pnpm run test`）；目录形式 `node --test tests/` 报告 99/23（4 个 `.test.ts` 薄壳各计 1 条，同一批断言） |
 | 打包 | `pnpm pack` → `dsh-session-status-marker-1.2.0.tgz`（70,350 B）；`lib/client.js` 72,264 B |
@@ -499,7 +499,7 @@ rc.2 在 dev4090 真实页面上暴露两个缺陷：看板所有条目标题显
 | 看板渲染（设置 → 会话状态） | 待办 2（Todo Write Tool Test / 未命名会话 integration smoke）、审查中 2（回复 OK 测试 含备注「验收 130rc3 备注」/ Mark session status for review）、未标记会话 7（5 条真实标题）；无「加载中」 |
 | 悬停卡 | 8 格单行，active=审查中，备注行显示「验收 130rc3 备注」，含「编辑备注」与「清除」 |
 | 备注编辑与焦点漂移 | 点「编辑备注」→ INPUT 聚焦、值「验收 130rc3 备注」；改写为「验收 130rc3 备注-drift-test」后把指针漂到相邻行，卡片仍开、INPUT 仍聚焦、草稿完整保留（cardLock 生效）；点「取消」回到读态，备注未被改写 |
-| 主题跟随 | 单连接检查脚本：dark `cardBg=rgb(44,44,46)` / light `cardBg=rgb(255,255,255)`，两者均 8 格单行；截图 `.drafts/shots/rc5-dark.png`、`.drafts/shots/rc5-light.png` |
+| 主题跟随（1.3.0-rc.5 当时按整卡随主题变浅判据） | 单连接检查脚本：dark `cardBg=rgb(44,44,46)` / light `cardBg=rgb(255,255,255)`，两者均 8 格单行；截图 `.drafts/shots/rc5-dark.png`、`.drafts/shots/rc5-light.png`。2026-11-26 起浅色应读到宿主深色，白色卡面即回归失败，见 §3.31 |
 | 复制守卫回归 | 整个验收流程未出现「已复制」 |
 
 截图：`.drafts/shots/rc5-home.png`（主页行尾徽标）、`.drafts/shots/rc5-card.png`（悬停卡读态）、`.drafts/shots/rc5-note-edit.png`（悬停卡备注编辑态）、`.drafts/shots/rc5-board.png`（设置页看板）、`.drafts/shots/rc5-dark.png` 与 `.drafts/shots/rc5-light.png`（两主题）。
@@ -594,4 +594,29 @@ rc.2 在 dev4090 真实页面上暴露两个缺陷：看板所有条目标题显
 | 悬停卡片（深色） | `hover-zh-dark.png` | 卡片底深灰、正文浅色，跟随 DSH 深色主题 |
 | 状态总览（深色） | `board-zh-dark.png` | 深色主题下的分组看板 |
 
-浅色与深色卡片底色分别对应 DSH 主题的 `--dsw-alias-bg-layer-2` 别名（浅色白底 `rgb(255, 255, 255)`、深色深灰 `rgb(44, 44, 46)`），与 1.1.2 起的整卡主题接管口径一致。README 的「界面预览（简体中文）」小节引用了上面六张截图。
+浅色与深色卡片底色分别对应 `--dsw-alias-bg-layer-2` 别名（浅色白底 `rgb(255, 255, 255)`、深色深灰 `rgb(44, 44, 46)`），这是 1.1.2 起整卡接管时期的状态；2026-11-26 起插件不再重绘宿主卡表面，浅色主题下卡片同样落在宿主深底，这里两张浅色预览图记录的白色卡面已被 1.3.1-rc.5 修掉（见 §3.31）。README 的「界面预览（简体中文）」小节引用了上面六张截图。
+
+### 3.31 1.3.1-rc.5 宿主深底悬停卡与卡内提示气泡（隔离实例，2026-11-26）
+
+本节记录 1.3.1-rc.5 的核心修复与实测证据。DSH 宿主的侧栏行悬停卡在两套配色下都是固定深色表面：官方调色板把 `--dsw-alias-hovercard-bg` 在浅色块与深色块里都取 `rgb(44,44,46)`，配套文字用 `--dsw-alias-hovercard-label-primary/secondary/tertiary`，官方设计文档写明「该表面在两套配色中均保持深色」。1.1.2 至 1.3.1-rc.4 用 `[class*='card']:has([data-status-slot])` 把这组别名重绘成 `--dsw-alias-bg-layer-2`（浅色主题下是白色），而宿主行文字仍是固定的近白，浅色主题下因此出现白底白字。1.3.1-rc.5 起插件不再重绘宿主卡表面与宿主行文字，`:has` 块里只保留 `cursor: default`；插件自己的文字只读 `--dsw-alias-hovercard-label-*`，兜底用 `--dsw-static-neutral-bluish-*`。卡内八格的提示气泡改用宿主 `@deepseek-ai/dsh-client-ui-primitives` 的 `Tooltip`（`side="bottom"`、`delayMs=400`），不再用原生 `title=`，气泡出现在格子下方。此外，设置页的会话状态看板在离开分节再回来时不再整页停在「加载中」：最后一次成功的数据保留在客户端内存里，重挂载先用缓存渲染、再在后台刷新，首次加载改用看板区域内的占位条，刷新失败保留已有数据行并在顶部给出单行提示。
+
+验收标准改为：读 `cardBg`，两套主题都必须是宿主深色（约 `rgb(44,44,46)`），浅色主题下读到白色即回归失败。
+
+实测在隔离 `DSH_HOME` 的冒烟实例 `http://127.0.0.1:3111/` 上由 CDP 驱动，原始数据见 `.drafts/rc5-verify-report.json`：
+
+| 验收点 | 浅色主题实测 | 深色主题实测 |
+|---|---|---|
+| 悬停卡背景 `cardBg` | `rgb(44, 44, 46)`，圆角 16px | `rgb(44, 44, 46)`，圆角 16px |
+| 卡片正文色 `cardColor` | `rgb(15, 17, 21)` | `rgb(249, 250, 251)` |
+| 宿主行标题 `hoverTitle` | `rgb(255,255,255)` 14px/20px | `rgb(255,255,255)` 14px/20px |
+| 宿主行路径与时间 | `rgb(207,211,214)` 12px/16px | `rgb(207,211,214)` 12px/16px |
+| 宿主行状态文字 | `rgb(173,178,184)` 12px/20px | `rgb(173,178,184)` 12px/20px |
+| 插件文字 `ourLabel` / `rootColor` | `rgb(255,255,255)` / `rgb(207,211,214)` | `rgb(255,255,255)` / `rgb(207,211,214)` |
+| 八格布局 | 8 格同一行，22×22，x 从 296 到 464 每 24px（y=480） | 8 格同一行，22×22，x 从 296 到 464 每 24px（y=480） |
+| 提示气泡底色 | `rgb(44,44,46)` | `rgb(67,69,74)` |
+
+卡内提示气泡取八格之一实测：气泡矩形 59×26，位于 x349 y510，`placement: bottom`、`role: tooltip`，距格子底边 8px；字号 13px/20px、内边距 `3px 7px`、圆角 8px，与宿主 Tooltip 一致。
+
+截图：`.drafts/shots/rc5-card-light.png`、`.drafts/shots/rc5-tip-light.png`、`.drafts/shots/rc5-card-dark.png`、`.drafts/shots/rc5-tip-dark.png`。
+
+门禁：`pnpm run typecheck`、`pnpm run build` 退出码 0；`node --test --test-isolation=none tests/*.test.mjs` 实跑 208 项测试 / 47 个套件全部通过（1.3.1-rc.3 为 196 项 / 45 个套件）。本轮新增 `tests/tooltip.test.mjs` 六个用例，`tests/theme.test.mjs` 的卡面用例改为断言 `:has` 块只剩 `cursor: default`、整份 CSS 不出现卡面变量重定向。按发布政策，1.3.1-rc.5 只发布预版本，等用户真机验收后再决定转正。

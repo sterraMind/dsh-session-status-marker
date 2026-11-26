@@ -32,6 +32,7 @@ import { useEffect } from 'react'
 import css from './action.module.css'
 import type { PropsRuntime, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { NS } from './locales.js'
 import { STATUS_META } from '../contracts.js'
 import { ICONS } from './icons.js'
@@ -109,15 +110,16 @@ export function SessionStatusRowAction({ sessionId, t }: RowActionProps) {
 
   return (
     <span className={css.rowAction}>
-      <button
-        type="button"
-        className={css.trigger}
-        aria-label={t('action.aria')}
-        title={t('action.aria')}
-        {...{ [ACTION_ANCHOR]: '' }}
-      >
-        <span className={css.triggerIcon} aria-hidden="true" dangerouslySetInnerHTML={{ __html: ICONS[icon] ?? '' }} />
-      </button>
+      <Tooltip label={t('action.aria')} side="bottom" align="end" portal delayMs={300}>
+        <button
+          type="button"
+          className={css.trigger}
+          aria-label={t('action.aria')}
+          {...{ [ACTION_ANCHOR]: '' }}
+        >
+          <span className={css.triggerIcon} aria-hidden="true" dangerouslySetInnerHTML={{ __html: ICONS[icon] ?? '' }} />
+        </button>
+      </Tooltip>
     </span>
   )
 }

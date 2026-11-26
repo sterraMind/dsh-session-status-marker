@@ -53,28 +53,36 @@ describe('stylesheet contract', () => {
     expect(badge).toMatch(/height:\s*16px/)
   })
 
-  // Regression: the DSH host card is authored with a hard-coded dark surface
-  // and hard-coded light text in BOTH themes. Painting only our panel (1.0.3)
-  // wedged a white block between dark host text; blending into the fixed dark
-  // card (1.1.1) left the light theme showing a black card. The fix retargets
-  // the whole host card from our slot with theme aliases, gated by :has() so
-  // other HoverCards are untouched. Assert the takeover covers surface + every
-  // host text line and is scoped to the card containing our slot.
-  it('retargets the whole host card to theme aliases, scoped by :has', () => {
-    expect(HOVER_CSS).toMatch(/\[class\*=['"]card['"]\]:has\(\[data-status-slot\]\)/)
-    expect(HOVER_CSS).toMatch(/--dsw-hovercard-bg:\s*var\(--dsw-alias-bg-layer-2\)/)
-    // Newer DSH builds paint the card with `var(--dsw-alias-hovercard-bg)`;
-    // override that alias too so the surface follows the theme in both builds.
-    expect(HOVER_CSS).toMatch(/--dsw-alias-hovercard-bg:\s*var\(--dsw-alias-bg-layer-2\)/)
+  // Regression: the host paints its session-row hover card with the fixed-dark
+  // `--dsw-alias-hovercard-*` aliases in both theme blocks (design-platform.css
+  // 182/306 and the hovercard alias set), so the card is a dark floating surface
+  // on purpose. 1.3.1-rc.3/rc.4 re-pointed that surface at `--dsw-alias-bg-layer-2`
+  // and the light theme resolved it to white — a white card with near-white text
+  // over a dark window. The card surface and the host's own title/path/time rows
+  // are therefore left untouched: we only reset the copy cursor and read the
+  // card aliases from our own markup.
+  it('leaves the host hover card surface untouched, scoped by :has', () => {
+    const scope = HOVER_CSS.match(/\[class\*=['"]card['"]\]:has\(\[data-status-slot\]\)\s*\{([^}]*)\}/)
+    expect(scope !== null).toBe(true)
+    expect(scope[1]).toMatch(/cursor:\s*default/)
+    expect(scope[1]).not.toMatch(/--dsw-alias-hovercard-bg/)
+    expect(scope[1]).not.toMatch(/--dsw-hovercard-bg/)
+    expect(scope[1]).not.toMatch(/--dsw-alias-hovercard-label-/)
+    expect(HOVER_CSS).not.toMatch(/--dsw-alias-hovercard-bg:\s*var\(/)
     for (const line of ['hoverTitle', 'hoverPath', 'hoverTime', 'hoverStatus']) {
-      expect(HOVER_CSS).toMatch(new RegExp(`\\[class\\*=['"]${line}['"]\\][^}]*color:\\s*var\\(--dsw-alias-label-`))
+      expect(HOVER_CSS).not.toMatch(new RegExp(`\\[class\\*=['"]${line}['"]\\]`))
     }
   })
 
-  it('paints our own panel with theme aliases, not fixed dark-surface tokens', () => {
-    expect(HOVER_CSS).toMatch(/--dsw-alias-label-primary/)
-    expect(HOVER_CSS).toMatch(/--dsw-alias-label-secondary/)
-    expect(HOVER_CSS).not.toMatch(/--dsw-static-neutral-00/)
+  // Our block sits on that surface, so it reads the card's label aliases. The
+  // fallback has to be the host's static palette, so a build that predates the
+  // aliases still renders light text instead of inheriting the page ink onto a
+  // dark card.
+  it('paints our own panel with the card label aliases, falling back to the static palette', () => {
+    expect(HOVER_CSS).toMatch(/var\(--dsw-alias-hovercard-label-primary,\s*var\(--dsw-static-neutral-bluish-00\)\)/)
+    expect(HOVER_CSS).toMatch(/var\(--dsw-alias-hovercard-label-secondary,\s*var\(--dsw-static-neutral-bluish-300\)\)/)
+    expect(HOVER_CSS).toMatch(/var\(--dsw-alias-hovercard-label-tertiary,\s*var\(--dsw-static-neutral-bluish-400\)\)/)
+    expect(HOVER_CSS).not.toMatch(/var\(--dsw-alias-hovercard-label-[a-z]+,\s*var\(--dsw-alias-label-/)
   })
 
   it('gives every status a theme-aware hover color', () => {
@@ -92,8 +100,8 @@ describe('stylesheet contract', () => {
     expect(OVERVIEW_CSS).toMatch(/\.row:hover\s*\{[^}]*background:\s*var\(--dsw-alias-interactive-bg-hover\)/)
   })
 
-  // The card surface now follows the theme, so interaction feedback uses the
-  // same theme-aware tokens as the rest of the DSH surfaces.
+  // The host card is dark in both themes, so the interactive feedback tokens are
+  // low-alpha overlays that read as a subtle patch on either palette.
   it('answers hover and active through theme interactive tokens', () => {
     expect(HOVER_CSS).toMatch(/\.cell:hover\s*\{[^}]*background:\s*var\(--dsw-alias-interactive-bg-hover\)/)
     expect(HOVER_CSS).toMatch(/\.cell\.active\s*\{[^}]*background:\s*var\(--dsw-alias-interactive-bg-active\)/)
@@ -116,10 +124,10 @@ describe('stylesheet contract', () => {
     const cell = block(HOVER_CSS, '\\.cell')
     expect(cell).toMatch(/box-sizing:\s*border-box/)
     expect(cell).toMatch(/width:\s*22px/)
-    expect(cell).toMatch(/padding:\s*2px/)
-    // 8 * 22 + 7 * 2 = 190px, inside the ~196px left after this root's own
-    // 6px/8px padding is taken out of the official 212px content box. A 3px
-    // gap measured 197px and wrapped the eighth cell onto a second line.
+    // 8 * 22 + 7 * 2 = 190px inside the card's 212px content box (244px card,
+    // 16px horizontal padding). A fixed 8-column grid keeps that true without
+    // depending on flex-wrap behaviour at the user's font size.
     expect(block(HOVER_CSS, '\\.grid')).toMatch(/gap:\s*2px/)
+    expect(block(HOVER_CSS, '\\.grid')).toMatch(/grid-template-columns:\s*repeat\(8,\s*22px\)/)
   })
 })

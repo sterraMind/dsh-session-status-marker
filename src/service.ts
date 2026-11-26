@@ -218,9 +218,29 @@ interface TitleObservationResult {
   }
 }
 
+/**
+ * Structural slice of a stored Session header: the fields a listing can witness
+ * about the log a session id currently names.
+ *
+ * The projection cache binds every stored checkpoint to the log lifecycle that
+ * produced it (`formatVersion`, `createdAt`, `cwd`, `isSeeded`) and refuses a
+ * lookup that cannot witness them — a bare `{ id }` therefore matches nothing.
+ */
+interface SessionHeaderLike {
+  readonly id: SessionId
+  readonly createdAt?: number
+  /** Session log format generation; the cache's `formatVersion` witness. */
+  readonly version?: number
+  readonly cwd?: string
+  readonly isSeeded?: boolean
+}
+
+/** Listed headers by session id, the shape both the candidate merge and the title join read. */
+type HeaderIndex = ReadonlyMap<string, SessionHeaderLike>
+
 /** Structural slice of one session record returned by `listSessions`. */
 interface SessionRecordLike {
-  readonly header: { readonly id: SessionId; readonly createdAt?: number }
+  readonly header: SessionHeaderLike
 }
 
 /**
@@ -240,7 +260,7 @@ function isSessionRecord(value: unknown): value is SessionRecordLike {
 
 /** Structural slice of one persisted session snapshot returned by `list`. */
 interface PersistedSnapshotLike {
-  readonly header: { readonly id: SessionId; readonly createdAt?: number }
+  readonly header: SessionHeaderLike
 }
 
 /** Structural slice of the Host's session-persistence service that this plugin uses. */
@@ -251,7 +271,7 @@ interface SessionPersistenceLike {
 /** Structural slice of the Host's session-projection cache that this plugin uses. */
 interface SessionProjectionCacheLike {
   cachedSnapshot(
-    meta: { readonly id: SessionId },
+    meta: SessionHeaderLike,
     keys?: readonly string[],
   ): { readonly values: Readonly<Record<string, unknown>> }
 }
@@ -308,7 +328,7 @@ export class SessionStatusService extends Service {
    * ten seconds. Reading them once per window keeps the board from listing the
    * whole on-disk corpus on every two-second refresh.
    */
-  #headerCache = new Map<string, { readonly id: SessionId; readonly createdAt: number }>()
+  #headerCache = new Map<string, SessionHeaderLike>()
   #headerCacheAt = 0
 
   /**
@@ -1117,7 +1137,7 @@ export class SessionStatusService extends Service {
    * sessions the Host has not loaded into memory. A Host without that service
    * simply returns the previous (possibly empty) snapshot.
    */
-  async #persistedHeaders(): Promise<Map<string, { readonly id: SessionId; readonly createdAt: number }>> {
+  async #persistedHeaders(): Promise<Map<string, SessionHeaderLike>> {
     const now = Date.now()
     if (now - this.#headerCacheAt < 10_000) return this.#headerCache
     const persistence = this.#optionalService<SessionPersistenceLike>('sessionPersistence')
@@ -1125,10 +1145,21 @@ export class SessionStatusService extends Service {
     try {
       const snapshots: unknown = await this.#withDeadline(persistence.list(), null)
       if (Array.isArray(snapshots)) {
-        const next = new Map<string, { readonly id: SessionId; readonly createdAt: number }>()
+        const next = new Map<string, SessionHeaderLike>()
         for (const snapshot of snapshots as readonly PersistedSnapshotLike[]) {
+          // Keep the whole header, not just id + createdAt: the projection cache
+          // refuses a lookup that cannot witness the log lifecycle (format
+          // generation, creation time, cwd, seeded lineage), and this index is
+          // the only header source the request path has.
           const header = snapshot?.header
-          if (typeof header?.id === 'string') next.set(header.id, { id: header.id, createdAt: header.createdAt ?? 0 })
+          if (typeof header?.id !== 'string') continue
+          next.set(header.id, {
+            id: header.id,
+            createdAt: typeof header.createdAt === 'number' ? header.createdAt : 0,
+            ...(typeof header.version === 'number' ? { version: header.version } : {}),
+            ...(typeof header.cwd === 'string' ? { cwd: header.cwd } : {}),
+            isSeeded: header.isSeeded === true,
+          })
         }
         if (next.size > 0) {
           this.#headerCache = next
@@ -1197,10 +1228,20 @@ export class SessionStatusService extends Service {
     return snapshot
   }
 
-  /** Folded titles from the projection cache for ids whose header is known. */
+  /**
+   * Folded titles from the projection cache for ids whose header is known.
+   *
+   * The cache binds each stored record to the log lifecycle that produced it
+   * and refuses a lookup that cannot witness that lifecycle: format
+   * generation, creation time, working directory, and seeded lineage. Passing
+   * a bare `{ id }` therefore matched no record at all, so every cold session
+   * on the board kept its "Untitled" placeholder while the folded titles sat
+   * in the cache untouched. Ids whose header cannot witness all four fields
+   * are skipped instead of asked for: the answer is known to be `undefined`.
+   */
   #cachedTitles(
     ids: readonly string[],
-    headers: ReadonlyMap<string, { readonly id: SessionId }>,
+    headers: HeaderIndex,
   ): Map<string, string> {
     const out = new Map<string, string>()
     const cache = this.#optionalService<SessionProjectionCacheLike>('sessionProjectionCache')
@@ -1208,8 +1249,15 @@ export class SessionStatusService extends Service {
     for (const id of ids) {
       const header = headers.get(id)
       if (header === undefined) continue
+      if (typeof header.version !== 'number' || typeof header.createdAt !== 'number') continue
       try {
-        const snapshot = cache.cachedSnapshot({ id: header.id }, ['title'])
+        const snapshot = cache.cachedSnapshot({
+          id: header.id,
+          version: header.version,
+          createdAt: header.createdAt,
+          ...(header.cwd === undefined ? {} : { cwd: header.cwd }),
+          isSeeded: header.isSeeded === true,
+        }, ['title'])
         const text = projectionText(snapshot?.values?.title)
         if (text !== null) out.set(id, text)
       } catch { /* no cached projection for this header */ }
@@ -1274,7 +1322,7 @@ export class SessionStatusService extends Service {
    */
   #unmarkedCandidates(
     marked: ReadonlySet<string>,
-    headerMap: ReadonlyMap<string, { readonly id: SessionId; readonly createdAt: number }>,
+    headerMap: HeaderIndex,
     sessionList: ReadonlyMap<SessionId, number>,
   ): Map<SessionId, number> {
     const candidates = new Map<SessionId, number>()
@@ -1310,7 +1358,7 @@ export class SessionStatusService extends Service {
     marked: ReadonlySet<string>,
     sessionList: ReadonlyMap<SessionId, number>,
     coldTitles: ReadonlyMap<string, string>,
-    headerMap: ReadonlyMap<string, { readonly id: SessionId; readonly createdAt: number }>,
+    headerMap: HeaderIndex,
   ): Promise<UnmarkedSessions> {
     const candidates = this.#unmarkedCandidates(marked, headerMap, sessionList)
     const ordered = [...candidates.entries()].sort((a, b) => b[1] - a[1])

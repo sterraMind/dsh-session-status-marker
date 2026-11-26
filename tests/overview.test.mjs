@@ -53,15 +53,26 @@ function makeCtx({ titles = new Map(), throwTitles = new Set(), coldTitles, allS
       )),
     }
     if (allSessions !== undefined) {
-      sessionQuery.listSessions = async () => allSessions.map((s) => ({ header: { id: s.id, createdAt: s.createdAt } }))
+      sessionQuery.listSessions = async () => allSessions.map((s) => ({ header: { ...s } }))
     }
     if (rawListSessions !== undefined) {
       sessionQuery.listSessions = async () => rawListSessions
     }
   }
-  const sessionPersistence = persisted === undefined ? undefined : { list: async () => persisted.map((p) => ({ header: { id: p.id, createdAt: p.createdAt } })) }
+  const sessionPersistence = persisted === undefined ? undefined : { list: async () => persisted.map((p) => ({ header: { ...p } })) }
   const sessionProjectionCache = projectionTitles === undefined ? undefined : {
-    cachedSnapshot: (meta) => ({ values: { title: projectionTitles.get(meta.id) } }),
+    // Mirrors the Host's binding: a stored record is readable only by a caller
+    // that can witness the log lifecycle it was folded under (format
+    // generation, creation time, working directory, seeded lineage). A lookup
+    // carrying a bare `{ id }` matches nothing — which is exactly the bug that
+    // left every cold board row untitled on DSH 0.2.2.
+    cachedSnapshot: (meta) => {
+      const witness = meta.version === STORED_LIFECYCLE.version
+        && meta.createdAt === STORED_LIFECYCLE.createdAt
+        && meta.cwd === STORED_LIFECYCLE.cwd
+        && (meta.isSeeded ?? false) === STORED_LIFECYCLE.isSeeded
+      return witness ? { values: { title: projectionTitles.get(meta.id) } } : undefined
+    },
   }
   const optionalService = (name) => {
     if (name === 'sessionQuery') return sessionQuery
@@ -93,6 +104,12 @@ function makeCtx({ titles = new Map(), throwTitles = new Set(), coldTitles, allS
 }
 
 const CONFIG = { autoInfer: false, maxNoteLength: 20, autoExpireMs: 0, refreshIntervalMs: 2000 }
+
+/**
+ * The lifecycle a fake projection-cache record was folded under. Listings must
+ * repeat these fields to read the record, mirroring the Host's binding.
+ */
+const STORED_LIFECYCLE = { version: 4, createdAt: 500, cwd: '/work', isSeeded: false }
 
 function row(sessionId, status, insertedAtMs) {
   return { version: 1, insertedAtMs, seq: 0, sessionId, status, source: 'manual', subjectId: null, autoReason: null, note: null }
@@ -241,7 +258,7 @@ describe('overview route', () => {
   })
 
   it('names a cold session from the projection cache using persisted headers', async () => {
-    const persisted = [{ id: 'c1', createdAt: 500 }]
+    const persisted = [{ id: 'c1', ...STORED_LIFECYCLE }]
     const projectionTitles = new Map([['c1', 'Cold cached title']])
     const { table, overviewRoute } = await boot({ titles: new Map(), persisted, projectionTitles })
     await table.put('c1', row('c1', 'done', 100))
@@ -249,5 +266,17 @@ describe('overview route', () => {
     expect(data.groups[0].entries[0].title).toBe('Cold cached title')
     // The same cold session is also offered in the unmarked block? No: it is marked.
     expect(data.unmarked.count).toBe(0)
+  })
+
+  it('leaves a cold session untitled when its header cannot witness the cache lifecycle', async () => {
+    // Regression guard: the board used to ask the projection cache with a bare
+    // `{ id }`, so the cache refused every lookup and each cold row fell back to
+    // "Untitled session" even though the folded title was stored.
+    const persisted = [{ id: 'c1', createdAt: 500 }]
+    const projectionTitles = new Map([['c1', 'Cold cached title']])
+    const { table, overviewRoute } = await boot({ titles: new Map(), persisted, projectionTitles })
+    await table.put('c1', row('c1', 'done', 100))
+    const data = await callOverview(overviewRoute)
+    expect(data.groups[0].entries[0].title).toBe(null)
   })
 })
