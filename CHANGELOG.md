@@ -21,6 +21,15 @@
 - `pnpm run typecheck`、`pnpm run build` 退出码 0；223 项测试 / 50 个套件全部通过（1.3.1-rc.3 为 196 项 / 45 个套件）。
 - 测试：`tests/tooltip.test.mjs` 从 6 例扩到 9 例（不再出现原生 `title=`、五处提示宿主都引入平台 Tooltip、标签全部走翻译函数、无障碍名保留、peer 区间与渲染包一致、产物只 `require` 不内联；新增三例钉住气泡锚在整排网格上（`side="bottom"`、`align="center"`、`gap={8}`、`delayMs={300}`）、「当前悬停的是哪一格」由整排清空而不是每格清空、以及没有悬停任何格时回落到标记自身的状态）。`tests/overview-client.test.mjs` 从 10 例扩到 16 例，新增六个用例钉住重挂载缓存（模块作用域快照、首屏状态从快照取、`?since=` revision 跨挂载保留）与「已画出的看板不整页替换成加载或错误」，以及标签条改用宿主 `SegmentedTabs`（自绘 `role="tablist"` 与 `.tabSelected` 已经不存在）与行右侧恒为更新时间、备注另起一行、每个面板与自己的页签正确配对（`items.id`↔`aria-labelledby`、`items.panelId`↔面板 `id`）。`tests/inference.test.mjs` 新增六个用例覆盖自动行归正（复现「中断后继续运行」的真实行、六种观察状态对应的代码、手动与模型标记原样返回、观察更旧时不动、**同一事件同时盖了两层时间戳时不改**）。`tests/theme.test.mjs` 的卡面用例改为断言 `:has` 块只剩 `cursor: default`、整份 CSS 不出现卡面变量重定向；`tests/overview.test.mjs` 的假投影缓存按真实见证语义拒绝裸 `{ id }`，并新增「会话头无法见证缓存生命周期时保持无标题」的回归用例。
 - 真实页面（隔离实例，浅色主题）：悬停卡 rect 244×198、背景 `rgb(44,44,46)`（仍是宿主深底）、标题 `rgb(255,255,255)` 14px/20px、路径与时间 `rgb(207,211,214)`、八格同一行且 22×22、状态气泡 `side="bottom"` 落在格子下方 8 像素、气泡样式 13px/20px + `3px 7px` 内边距 + 8px 圆角，与宿主 Tooltip 一致。
+- 真实页面复验（隔离实例，2026-11-26 晚）六条判据全部通过，记录见 `docs/acceptance-and-regression.md` §3.32：自动行按观察归正、等时戳不误改、显式标记不被改写、八格整组气泡落在格下 8 像素且换格位移 1.55 像素、看板行右侧恒为时间且备注另起一行、来回切换分节加载中 0 毫秒。
+
+### 发布
+
+- `2026-11-26` 提交 `7fb7eef`（本版全部改动）与 `43f6d8a`（补记真实页面复验结果），附注标签 `v1.3.1-rc.5` 已推送。
+- GitHub Release `v1.3.1-rc.5`（prerelease，附 tgz 160,740 B，sha256 `e2d218d505f6ecfc88b6b9b1aa4fe09c9acdb82c78a562fe9bdc3d788bc589ef`）。
+- npm 发布待完成：本机会话历史里的那枚发布令牌对 registry 的读接口与写接口都被拒（`npm publish` 返回 404 PUT，npm 把「没有发布权限」报成 404），已在浏览器里发起交互式登录等待完成。
+- 桌面端安装方式：因 npm 上还没有 1.3.1-rc.5，桌面 profile 暂以本地 tarball 钉入（`file:…/dsh-session-status-marker-1.3.1-rc.5.tgz`），`lib/client.js` 152,089 B、`lib/inference.js` 16,601 B、`lib/service.js` 64,343 B，与本仓库产物一致。
+- `1.3.1` 正式版待用户在桌面端实际验收通过后发布。
 
 ## [1.3.1-rc.3] - 2026-11-24
 

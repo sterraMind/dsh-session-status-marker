@@ -273,12 +273,12 @@ npm 走暂存发布流程，命令输出 `+ name@version` 只代表请求被接�
 
 ### 10.1 分发标签与版本
 
-下表于 2026-11-24 用 `npm view dsh-session-status-marker dist-tags` 核对。
+下表于 2026-11-26 用 `npm view dsh-session-status-marker dist-tags` 核对。
 
 | 分发标签 | 指向版本 | 状态 | 说明 |
 |---|---|---|---|
 | `latest` | 1.3.0 | 正式版 | 用户已在 2026-11-24 在 DSH 0.2.3-alpha.2 上实际验收，普通安装得到这个版本 |
-| `rc` | 1.3.0-rc.6 | 预发布 | 2026-11-24 上线，修 DSH 0.2.3-alpha 兼容（`engines.dsh` 预发布比较器 + 官方 `sessionStatus` 服务名冲突），仅供追溯 |
+| `rc` | 1.3.1-rc.3 | 预发布 | 2026-11-26 上线前的最后一个已发布 rc；1.3.1-rc.5 的 npm 发布尚未完成，见 §10.4 |
 | `next` | 未使用 | 保留 | 供实验性改动使用 |
 
 ### 10.2 下一次发布计划
@@ -301,12 +301,30 @@ npm 走暂存发布流程，命令输出 `+ name@version` 只代表请求被接�
 `1.3.0-rc.5`（2026-11-23）针对用户桌面（会话量 800+ 的宿主）看板一直卡在「加载中」的问题做性能与轮询健壮化：宿主侧 `#handleOverview` 三路可选服务读取并行化、全量会话清单单飞合并 + 10 秒带抖动 TTL 缓存、未标记区块消费共享快照、4 秒 per-service 截止兜底、标题缓存 4096 条上限；`overview` 响应带 16 字符 `revision` 并支持 `?since=` 条件刷新（未变化回 `unchanged: true`）；客户端侧轮询加 Full Jitter 失败退避、随机初始偏移与 ±25% 抖动、未变化短路。做法依据 `docs/research/15-polling-and-cache-practices.md`（单飞合并 / SWR / 有界并发 / 轮询退避 / 解压不落盘的调研与引用）。153 项测试 / 35 套件全绿，tgz 118,080 B（SHA-256 `D217C714E6565AA97D9DCBBD2AD89A1916A95B76641C1EC76DAD38496E6D87CE`）。dev4090 真实页面验收全过（见 `docs/acceptance-and-regression.md` §3.26）：overview 6 次采样 200（延迟 11–57 ms）、条件刷新 `unchanged:true`、看板待办2/审查2/未标记7 无「加载中」、悬停卡备注编辑期指针漂移卡片仍开且草稿保留。发布：提交 `ecdc7ce`、附注标签 `v1.3.0-rc.5`、GitHub Release 455690598（prerelease，附 tgz 118,080 B）、`npm publish --tag rc` 后 `dist-tags` 为 `rc=1.3.0-rc.5`、`latest=1.2.3`（未动）。registry 元数据：71 个文件、解包 `415,075` B、shasum `56dc794422c32f58aeb8f056125033204ed6e960`；从 registry 取回 tgz 与本地 `pnpm pack` 产物 SHA-256 相同（`d217c714e6565aa97d9dcbbd2ad89a1916a95b76641c1ec76dad38496e6d87ce`）。`1.3.0` 正式版仍待用户实际前端验收通过后发布。
 1.3.0 已于 2026-11-24 转为正式版：用户在 DSH 0.2.3-alpha.2 上验收通过（「1.3.0可以正式发布了」，见 `docs/acceptance-and-regression.md` §3.27 与 §3.28），`package.json` 版本、git 标签 `v1.3.0`、GitHub Release v1.3.0（非 prerelease，附 118,251 B 的 tgz，sha256 `3a2cb80929c420b020fd78f40d407a1dd6d5b6a999dcbf0346ea4a6b9413594d`）、npm `latest` 四者一致；`rc` 标签继续指向 `1.3.0-rc.6` 供追溯。发布序列：`1.3.0-rc.3`/`rc.4`/`rc.5` 完成三块前端修复与性能健壮化、`1.3.0-rc.6` 修 DSH 0.2.3-alpha 兼容（`engines.dsh` 预发布比较器 + 官方 `sessionStatus` 服务名冲突），提交 `8f25af8` 把 `1.3.0-rc.6` 的 `CHANGELOG` 标题改为 `1.3.0` 转正式版；测试 154 项 / 36 套件全绿。
 
-### 10.3 已知的待办事项
+### 10.3 1.3.1-rc.5 的发布记录与 npm 发布受阻情况
+
+`1.3.1-rc.5`（2026-11-26）修掉七处用户在真机上直接看到的问题：浅色主题下悬停卡白底白字、设置页看板里大量会话显示「未命名会话」、卡内提示气泡画在目标上方且字体不跟官方、设置页来回切换后看板停在「加载中」、被中断过的会话继续运行后仍顶着「已停止」、设置页标签条是硬边框方块且行右侧信息时有时无、悬停卡里八格提示跟着指针左右跳。1.3.1-rc.4 是本地验证版，没有发布到 npm 和 GitHub，这一版包含它的全部内容。223 项测试 / 50 套件全绿，tgz 160,740 B（SHA-256 `E2D218D505F6ECFC88B6B9B1AA4FE09C9ACDB82C78A562FE9BDC3D788BC589EF`）。真实页面复验见 `docs/acceptance-and-regression.md` §3.32。
+
+已完成的发布动作：提交 `7fb7eef`（本版全部改动）与 `43f6d8a`（补记真实页面复验结果），附注标签 `v1.3.1-rc.5` 已推送，GitHub Release `v1.3.1-rc.5`（prerelease，附 tgz 160,740 B）已发布。
+
+npm 发布受阻的排查结论：
+
+- 本机只有一枚 npm 发布令牌（会话历史里那枚，40 字符 `npm_` 前缀）。它对 registry 的读接口（`/-/whoami`、`/-/npm/v1/tokens`）与写接口（PUT 包元数据）全部返回 401/404，且与故意构造的假令牌响应完全一致，无法据此区分。
+- npm 把「包存在但当前身份没有发布权限」报成 **404 PUT** 而不是 401/403，提示「could not be found or you do not have permission to access it」，这是排查时最容易误判的一点。
+- `npm owner ls` / `npm view … maintainers` 走公开端点，**不带凭据也能成功**，因此不能用它判断凭据是否有效。
+- npm 官方在 2026-07-31 起限制了「绕过双因素认证的细粒度令牌」用于账户管理与直接发布；`npm publish` 本身也会打印 `npm tokens that bypass 2FA are being restricted for account changes and direct publishing`。
+- 官方给出的三条合规路径：交互式 `npm login`（浏览器里完成登录与双因素认证）、带双因素认证能力且权限覆盖目标包的细粒度令牌、GitHub Actions 的 npm trusted publishing（用 OIDC 换短期发布凭据）。本仓库没有 `.github` 工作流，第三条路径需要先新建工作流并配置 trusted publisher。
+- 本轮已发起交互式 `npm login --auth-type=web`，等待在浏览器里完成登录；登录成功后即可重试 `npm publish --tag rc --access=public`。
+
+桌面端的临时安装方式：npm 上还没有 1.3.1-rc.5，桌面 profile 暂以本地 tarball 钉入（`file:…/dsh-session-status-marker-1.3.1-rc.5.tgz`），产物三件套（`lib/client.js` 152,089 B、`lib/inference.js` 16,601 B、`lib/service.js` 64,343 B）与本仓库一致。
+
+### 10.4 已知的待办事项
 
 - .github 目录尚不存在，Issue 模板与 Pull Request 模板属于待创建项。LICENSE（MIT）与 package.json 的 license 字段已于 2026-11-20 补齐，目录站提交所需的前置条件只剩 homepage 与模板。
-- 分发执行按 docs/distribution-plan.md 走：仓库话题已加，六个目录站与三个社区渠道待 1.3.0 转正后执行。
+- 分发执行按 docs/distribution-plan.md 走：仓库话题已加，六个目录站与三个社区渠道待 1.3.1 转正后执行。
 - `CHANGELOG.md` 的「验证」「发布」两个标题需要在下次发布时按 §6.3 归并。
 - 提交信息风格不统一的历史记录不做回溯修改，新提交按 `CONTRIBUTING.md` 的提交规范执行。
+- 1.3.1-rc.5 的 npm 发布待交互式登录完成后补做；`1.3.1` 正式版仍待用户在桌面端实际验收通过后发布。
 
 ---
 
