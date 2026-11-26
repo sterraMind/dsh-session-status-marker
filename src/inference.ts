@@ -218,6 +218,80 @@ export function shouldRecordObservation(current: MarkRecord | null, next: Observ
   return current.observedStatus !== next.status || current.observedEvent !== next.event
 }
 
+/**
+ * The auto-reason code that matches an observed status.
+ *
+ * A derived row has to carry a code the schema accepts; reusing the codes the
+ * two automatic layers already write keeps the hover card's "自动推断（…）"
+ * line meaningful without adding a value that no layer produces.
+ * @param status - observed status to label.
+ * @returns the code an automatic layer would have written for it.
+ */
+function autoReasonForStatus(status: StatusEnum): AutoReasonCode {
+  switch (status) {
+    case 'todo':
+      return 'fallback-running'
+    case 'feedback':
+      return 'fallback-feedback'
+    case 'pending-subagent':
+      return 'fallback-subagent'
+    case 'stopped':
+      return 'turn-interrupted'
+    case 'blocked':
+      return 'turn-blocked'
+    case 'awaiting-answer':
+      return 'turn-completed'
+    case 'done':
+    case 'review':
+      // No automatic layer infers these two, so nothing produces the pair; if a
+      // future observation does, the row keeps the completion code rather than
+      // silently claiming an interruption. Listed explicitly so adding a status
+      // fails the build instead of falling into a default.
+      return 'turn-completed'
+  }
+}
+
+/**
+ * Bring an automatic row back in line with the event the log showed after it.
+ *
+ * Automatic marks are written at one instant of a turn. When that turn is
+ * interrupted the row says `stopped`, and if the session then keeps working the
+ * row never changes again: the inference layer only fires on events it has a
+ * rule for, and the fallback net refuses to touch a row another layer wrote. A
+ * session that is running right now therefore kept a red "已停止" badge, which
+ * users read as a wrong inference rather than a stale one.
+ *
+ * The observation layer already records what the log showed, on the row, with
+ * the time it was seen. So the correction needs no log access: when the stored
+ * observation is strictly newer than the row itself and disagrees with it, the
+ * row is reported as what was seen. Equal stamps are not a correction — the
+ * fallback and inference layers can write a row and record an observation from
+ * the same event, and that row is already what the event said. Explicit marks
+ * (`manual` / `agent`) are never touched — they are the user's intent and the
+ * observation already rides beside them as a separate line.
+ * @param mark - stored row, observation fields included.
+ * @returns the row as it should be shown; the same object when nothing is stale.
+ */
+export function resolveAutoFromObservation(mark: MarkRecord): MarkRecord {
+  if (mark.source !== 'auto') return mark
+  const observedStatus = mark.observedStatus
+  const observedAtMs = mark.observedAtMs
+  if (observedStatus === null || observedAtMs === null) return mark
+  if (observedAtMs <= mark.insertedAtMs) return mark
+  if (observedStatus === mark.status) return mark
+  return {
+    ...mark,
+    status: observedStatus,
+    autoReason: autoReasonForStatus(observedStatus),
+    insertedAtMs: observedAtMs,
+    // The observation became the mark; keeping both would let the next read
+    // derive it again from a time that no longer means anything.
+    observedStatus: null,
+    observedEvent: null,
+    observedAtMs: null,
+  }
+}
+
 /** Whether an auto mark has expired according to the deployed retention window. */
 export function isAutoMarkExpired(mark: MarkRecord, now: number, autoExpireMs: number): boolean {
   if (autoExpireMs <= 0 || mark.source !== 'auto') return false

@@ -25,6 +25,7 @@ import { describe, it, expect } from './vitest-shim.mjs'
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const read = (...parts) => readFile(join(ROOT, ...parts), 'utf8')
 const OVERVIEW = await read('src', 'client', 'StatusOverview.tsx')
+const OVERVIEW_CSS = await read('src', 'client', 'overview.module.css')
 const INDEX = await read('src', 'client', 'index.ts')
 
 /**
@@ -153,5 +154,79 @@ describe('overview conditional-refresh transport (client)', () => {
     expect(INDEX).toContain('setTimeout(() => controller.abort(), OVERVIEW_FETCH_TIMEOUT_MS)')
     expect(INDEX).toContain('signal: controller.signal')
     expect(INDEX).toContain('clearTimeout(timeout)')
+  })
+})
+
+describe('overview tab strip (client)', () => {
+  // The shell draws selection as a sliding indicator behind transparent tabs;
+  // our old hand-drawn strip painted the selected tab itself, which read as a
+  // hard-bordered square next to every other tab strip in the settings panel.
+  it('renders the host SegmentedTabs instead of a local tablist', () => {
+    expect(OVERVIEW).toContain('import { SegmentedTabs, type SegmentedTab } from \'@deepseek-ai/dsh-client-ui-primitives\'')
+    expect(OVERVIEW).toContain('<SegmentedTabs items={tabItems} value={tab} onChange={setTab} label={t(\'overview.nav\')} />')
+    expect(OVERVIEW).toContain('const tabItems: [SegmentedTab<TabId>, ...SegmentedTab<TabId>[]] = [')
+    // The panels stay ours and keep matching the items' `panelId` values.
+    expect(OVERVIEW).toContain('panelId: `${tabsId}-overview-panel`')
+    expect(OVERVIEW).toContain('panelId: `${tabsId}-config-panel`')
+    expect(OVERVIEW).toContain('id={`${tabsId}-overview-panel`}')
+    expect(OVERVIEW).toContain('id={`${tabsId}-config-panel`}')
+  })
+
+  it('wires each panel to its own tab', () => {
+    // The host tabs carry the `id` that labels a panel, so the panel's
+    // `aria-labelledby` must be the id of the tab that opens it, and the
+    // panel's `id` must be the `panelId` the tab points at.
+    expect(OVERVIEW).toContain('aria-labelledby={`${tabsId}-overview`}')
+    expect(OVERVIEW).toContain('aria-labelledby={`${tabsId}-config`}')
+    expect(OVERVIEW).toContain('id: `${tabsId}-overview`, panelId: `${tabsId}-overview-panel`')
+    expect(OVERVIEW).toContain('id: `${tabsId}-config`, panelId: `${tabsId}-config-panel`')
+  })
+
+  it('drops the self-drawn tablist, its keyboard handler, and its styles', () => {
+    expect(OVERVIEW).not.toContain('role="tablist"')
+    expect(OVERVIEW).not.toContain('onTabKeyDown')
+    expect(OVERVIEW).not.toContain('css.tabList')
+    expect(OVERVIEW).not.toContain('css.tabSelected')
+    expect(OVERVIEW_CSS).not.toContain('.tabList')
+    expect(OVERVIEW_CSS).not.toContain('.tabSelected')
+    // No bare `.tab` rule may survive either: the bundle builder does not hash
+    // selectors it cannot scope, so a leftover `.tab` would leak globally.
+    expect(OVERVIEW_CSS).not.toMatch(/(?:^|\n)\.tab\s*[{:]/)
+  })
+})
+
+describe('overview row meta (client)', () => {
+  // Half the rows used to show a note summary where the other half showed a
+  // date, because the note and the timestamp shared the right-hand column.
+  it('always puts the update time in the right column', () => {
+    const metaBlocks = OVERVIEW.match(/<span className=\{css\.rowMeta\}>[\s\S]*?<\/span>/g) ?? []
+    expect(metaBlocks.length).toBe(2)
+    for (const block of metaBlocks) {
+      expect(block).toContain("t('overview.updatedAt', { time: formatTime(entry.updatedAtMs) })")
+      expect(block).not.toContain('entry.note')
+    }
+  })
+
+  it('renders the note as a second line under the title', () => {
+    expect(OVERVIEW).toContain('{entry.note ? <span className={css.rowNote}>{entry.note}</span> : null}')
+    // The note sits inside the same column as the title, above the meta line.
+    expect(OVERVIEW).toMatch(/<div className=\{css\.rowMain\}>[\s\S]*?css\.rowNote[\s\S]*?<\/div>/)
+    expect(OVERVIEW).not.toContain('entry.note.slice(0, 48)')
+    // Both blocks share the column wrapper, so the rows line up across groups.
+    expect((OVERVIEW.match(/className=\{css\.rowMain\}/g) ?? []).length).toBe(2)
+  })
+
+  it('styles the note as a single truncated secondary line', () => {
+    const note = /(?:^|\n)\.rowNote\s*\{([^}]*)\}/.exec(OVERVIEW_CSS)
+    expect(note !== null).toBe(true)
+    expect(note[1]).toMatch(/font-size:\s*12px/)
+    expect(note[1]).toMatch(/line-height:\s*18px/)
+    expect(note[1]).toMatch(/color:\s*var\(--dsw-alias-label-secondary\)/)
+    expect(note[1]).toMatch(/text-overflow:\s*ellipsis/)
+    expect(note[1]).toMatch(/white-space:\s*nowrap/)
+    // The title column must be able to shrink, or the note pushes the date out.
+    const main = /(?:^|\n)\.rowMain\s*\{([^}]*)\}/.exec(OVERVIEW_CSS)
+    expect(main !== null).toBe(true)
+    expect(main[1]).toMatch(/min-width:\s*0/)
   })
 })

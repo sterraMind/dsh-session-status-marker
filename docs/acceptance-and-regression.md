@@ -246,7 +246,7 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 | 目标 | 状态 | 证据 |
 |---|---|---|
 | 放宽 dsh 版本下限 | 完成 | `package.json` `engines.dsh` = `>=0.2.0-rc.2 <0.3.0`（匹配 dev4090 真实验收的常规安装 0.2.0-rc.2）；提交 `f836a4c`，tag `v1.1.2` 重打到该提交 |
-| GitHub 发布 | 完成 | `sterraMind/dsh-session-status-marker`（public），`git push -u origin main` + `git push origin v1.1.2` EXIT=0；Release <https://github.com/sterraMind/dsh-session-status-marker/releases/tag/v1.1.2>，附 `dsh-session-status-marker-1.1.2.tgz`（56,921 B，sha256 `f5d0edec8fe24a75633d2bd65d70226bed08a0938c308d308ffe02a29313778a`）。SSH push 被沙箱拦（198.18.0.78:443），改用 `git remote set-url origin https://x-access-token:$tok@github.com/...`（`$tok = gh auth token`）后成功 |
+| GitHub 发布 | 完成 | `sterraMind/dsh-session-status-marker`（public），`git push -u origin main` + `git push origin v1.1.2` EXIT=0；Release <https://github.com/sterraMind/dsh-session-status-marker/releases/tag/v1.1.2>，附 `dsh-session-status-marker-1.1.2.tgz`（56,921 B，sha256 `f5d0edec8fe24a75633d2bd65d70226bed08a0938c308d308ffe02a29313778a`）。SSH push 被沙箱拦（198.18.0.78:443），改用带仓库发布权限的 https 远端地址后成功（凭据取自本机 GitHub 登录状态，不写进本文档） |
 | npm 发布 | 完成 | `npm publish` 输出 `+ dsh-session-status-marker@1.1.2`、EXIT=0、publish 日志 `PUT 202`（非 201）。走 staged publishing：发布后约 1 分钟 `npm view version` 仍是 `0.0.0-stage`、`@1.1.2` tarball HEAD 404、`/-/stage` 为空；第 11 分钟重读时 `versions` 含 `1.1.2`、`latest` 变 `1.1.2`、tarball HEAD 200、`dist.integrity` `sha512-3ws7itHa9zP5M...`（与 dry-run shasum `a6cb9c1848edeb3c8a96d2df72214b10212fc574` 一致）。上线：<https://www.npmjs.com/package/dsh-session-status-marker/v/1.1.2>。详见 `docs/project-memory.md` §6 教训 28 |
 
 > 发布是否上线不能只看 `npm publish` 的输出：它只代表请求被接受。判据是三个独立视图重读——两个 packument 视图（`/dsh-session-status-marker` 与 `/-/package/.../dist-tags`）、版本端点、tarball HEAD；registry 读副本约 4.5 分钟、staged→publish 约 14 分钟延迟（借鉴 dsh-triage `docs/HANDOFF.md`）。
@@ -281,7 +281,7 @@ DSH 的悬停浮层在两个主题下都固定使用深色底（`.research/dsh-r
 | `tests/service.test.mjs` | 20 | `getMark`/`clearMark`/`listAll`/`putMark`；state route 400 与命中；mutate set→clear 往返；unsupported-action；两个 tool 注册与 execute；note 超长抛错；`turn/end interrupted` auto inference + manual mark not overwritten；`?since` 条件刷新 + revision 稳定；`rowActionOrder`/`menuItemOrder` 页面全局注入 |
 | `tests/smoke.test.mjs` | 1 | 完整 inference round-trip + GET state route read-back + neutral-event no-op |
 | `tests/i18n.test.mjs` | 11 | STATUS_META/tone/schema/defaults 跨模块一致性 + 图标尺寸契约 + Shell 8 语言字典键集合与占位符 |
-| `tests/theme.test.mjs` | 11 | 零字面颜色、图标盒尺寸、active 格不覆盖 color、badge 盒尺寸、`[class*='card']:has([data-status-slot])` 整卡覆盖宿主（Phase 2 快照的说法；1.3.1-rc.5 起改为只保留 `cursor: default`，不重绘宿主卡表面）、状态 hover 色用主题别名、`.root::before` 桥接命中区、格子 22px border-box + 2px 内边距 + 2px 间距、总览页主题别名 |
+| `tests/theme.test.mjs` | 11 | 零字面颜色、图标盒尺寸、active 格不覆盖 color、badge 盒尺寸、`[class*='card']:has([data-status-slot])` 作用域只保留 `cursor: default`（Phase 2 快照的说法是「整卡覆盖宿主」，1.3.1-rc.5 起改为不重绘宿主卡表面）、状态 hover 色用主题别名、`.root::before` 桥接命中区、格子 22px border-box + 2px 内边距 + 2px 间距、总览页主题别名 |
 | `tests/marks.test.mjs` | 9 | 共享读取器：快照分发、本地写透、消失的会话分发 `null`、采纳 Host 下发的读取间隔、读取失败保留上一次结果、`?since` + unchanged 跳过 publish、晚加入会话全量读取、可见性恢复强制全量读取 |
 | `tests/overview.test.mjs` | 5 | overview route：分组排序、仅非空组、标题关联、`sessionTitle` 缺失/抛错回退 null、空态 |
 | `tests/action.test.mjs` | 12 | 行操作/菜单项 slot 注册（order 300、官方 archive/pin 之后）、行按钮接共享选择器、菜单项 `role=menuitem`、共享选择器 8×22px 单行 + 主题令牌、bundle 表 + 8 语言字典键、order 默认值与页面全局回退、profile 配置暴露 |
@@ -598,7 +598,7 @@ rc.2 在 dev4090 真实页面上暴露两个缺陷：看板所有条目标题显
 
 ### 3.31 1.3.1-rc.5 宿主深底悬停卡与卡内提示气泡（隔离实例，2026-11-26）
 
-本节记录 1.3.1-rc.5 的核心修复与实测证据。DSH 宿主的侧栏行悬停卡在两套配色下都是固定深色表面：官方调色板把 `--dsw-alias-hovercard-bg` 在浅色块与深色块里都取 `rgb(44,44,46)`，配套文字用 `--dsw-alias-hovercard-label-primary/secondary/tertiary`，官方设计文档写明「该表面在两套配色中均保持深色」。1.1.2 至 1.3.1-rc.4 用 `[class*='card']:has([data-status-slot])` 把这组别名重绘成 `--dsw-alias-bg-layer-2`（浅色主题下是白色），而宿主行文字仍是固定的近白，浅色主题下因此出现白底白字。1.3.1-rc.5 起插件不再重绘宿主卡表面与宿主行文字，`:has` 块里只保留 `cursor: default`；插件自己的文字只读 `--dsw-alias-hovercard-label-*`，兜底用 `--dsw-static-neutral-bluish-*`。卡内八格的提示气泡改用宿主 `@deepseek-ai/dsh-client-ui-primitives` 的 `Tooltip`（`side="bottom"`、`delayMs=400`），不再用原生 `title=`，气泡出现在格子下方。此外，设置页的会话状态看板在离开分节再回来时不再整页停在「加载中」：最后一次成功的数据保留在客户端内存里，重挂载先用缓存渲染、再在后台刷新，首次加载改用看板区域内的占位条，刷新失败保留已有数据行并在顶部给出单行提示。
+本节记录 1.3.1-rc.5 的核心修复与实测证据。DSH 宿主的侧栏行悬停卡在两套配色下都是固定深色表面：官方调色板把 `--dsw-alias-hovercard-bg` 在浅色块与深色块里都取 `rgb(44,44,46)`，配套文字用 `--dsw-alias-hovercard-label-primary/secondary/tertiary`，官方设计文档写明「该表面在两套配色中均保持深色」。1.1.2 至 1.3.1-rc.4 用 `[class*='card']:has([data-status-slot])` 把这组别名重绘成 `--dsw-alias-bg-layer-2`（浅色主题下是白色），而宿主行文字仍是固定的近白，浅色主题下因此出现白底白字。1.3.1-rc.5 起插件不再重绘宿主卡表面与宿主行文字，`:has` 块里只保留 `cursor: default`；插件自己的文字只读 `--dsw-alias-hovercard-label-*`，兜底用 `--dsw-static-neutral-bluish-*`。卡内八格的提示气泡改用宿主 `@deepseek-ai/dsh-client-ui-primitives` 的 `Tooltip`（整排共用一个气泡，锚在网格上，`side="bottom"`、`align="center"`、`gap={8}`、`delayMs={300}`），不再用原生 `title=`，气泡出现在格子下方。此外，设置页的会话状态看板在离开分节再回来时不再整页停在「加载中」：最后一次成功的数据保留在客户端内存里，重挂载先用缓存渲染、再在后台刷新，首次加载改用看板区域内的占位条，刷新失败保留已有数据行并在顶部给出单行提示。
 
 验收标准改为：读 `cardBg`，两套主题都必须是宿主深色（约 `rgb(44,44,46)`），浅色主题下读到白色即回归失败。
 

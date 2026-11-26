@@ -8,6 +8,7 @@ import {
   shouldApplyFallback,
   isAutoMarkExpired,
   observationOf,
+  resolveAutoFromObservation,
   shouldRecordObservation,
 } from '../lib/inference.js'
 import { isObservationStale, isObservationOutdated } from '../lib/contracts.js'
@@ -337,5 +338,104 @@ describe('shouldRecordObservation', () => {
   it('records when only the event changed', () => {
     const observed = mark({ observedStatus: 'todo', observedEvent: 'turn/start', observedAtMs: NOW - 10 })
     expect(shouldRecordObservation(observed, { ...next, event: 'turn/end' })).toBe(true)
+  })
+})
+
+describe('resolveAutoFromObservation', () => {
+  it('reports the newer observation when an auto row was left behind by an interrupted turn', () => {
+    // The real row that started this: `turn/end aborted` wrote stopped at
+    // 16:56, the user kept the session going, and `turn/start` was observed two
+    // minutes later. The row never changed again, so the badge stayed red.
+    const stale = mark({
+      status: 'stopped',
+      autoReason: 'turn-interrupted',
+      insertedAtMs: NOW - 120_000,
+      observedStatus: 'todo',
+      observedEvent: 'turn/start',
+      observedAtMs: NOW,
+    })
+    const resolved = resolveAutoFromObservation(stale)
+    expect(resolved).toMatchObject({
+      status: 'todo',
+      autoReason: 'fallback-running',
+      insertedAtMs: NOW,
+      observedStatus: null,
+      observedEvent: null,
+      observedAtMs: null,
+    })
+  })
+
+  it('maps every observed status to a code the automatic layers already write', () => {
+    const cases = {
+      todo: 'fallback-running',
+      feedback: 'fallback-feedback',
+      'pending-subagent': 'fallback-subagent',
+      stopped: 'turn-interrupted',
+      blocked: 'turn-blocked',
+      'awaiting-answer': 'turn-completed',
+    }
+    for (const [status, autoReason] of Object.entries(cases)) {
+      const resolved = resolveAutoFromObservation(
+        mark({ status: 'stopped', insertedAtMs: NOW - 1, observedStatus: status, observedAtMs: NOW }),
+      )
+      expect(resolved.status).toBe(status)
+      expect(resolved.autoReason).toBe(autoReason)
+    }
+  })
+
+  it('never touches an explicit mark, whatever the observation says', () => {
+    for (const source of ['manual', 'agent']) {
+      const explicit = mark({
+        source,
+        status: 'done',
+        autoReason: null,
+        insertedAtMs: NOW - 120_000,
+        observedStatus: 'todo',
+        observedEvent: 'turn/start',
+        observedAtMs: NOW,
+      })
+      expect(resolveAutoFromObservation(explicit)).toBe(explicit)
+    }
+  })
+
+  it('leaves a row alone when the observation is not newer, or agrees with it', () => {
+    const older = mark({ status: 'stopped', insertedAtMs: NOW, observedStatus: 'todo', observedAtMs: NOW - 1 })
+    expect(resolveAutoFromObservation(older)).toBe(older)
+    const same = mark({ status: 'stopped', insertedAtMs: NOW - 1, observedStatus: 'stopped', observedAtMs: NOW })
+    expect(resolveAutoFromObservation(same)).toBe(same)
+    const bare = mark({ status: 'stopped', insertedAtMs: NOW - 1 })
+    expect(resolveAutoFromObservation(bare)).toBe(bare)
+  })
+
+  it('leaves a pending-subagent row alone when the same event stamped both layers', () => {
+    // `turn/end completed` writes the fallback pending-subagent row and records
+    // the feedback observation with the same `event.time`; an equal stamp is
+    // not a correction, so the badge must stay on pending-subagent.
+    const stored = mark({
+      status: 'pending-subagent',
+      autoReason: 'fallback-subagent',
+      insertedAtMs: 1000,
+      observedStatus: 'feedback',
+      observedEvent: 'turn/end',
+      observedAtMs: 1000,
+    })
+    const resolved = resolveAutoFromObservation(stored)
+    expect(resolved).toBe(stored)
+    expect(resolved.status).toBe('pending-subagent')
+    expect(resolved.observedStatus).toBe('feedback')
+  })
+
+  it('leaves an awaiting-answer row alone when the same event stamped both layers', () => {
+    const stored = mark({
+      status: 'awaiting-answer',
+      autoReason: 'turn-completed',
+      insertedAtMs: 1000,
+      observedStatus: 'feedback',
+      observedEvent: 'turn/end',
+      observedAtMs: 1000,
+    })
+    const resolved = resolveAutoFromObservation(stored)
+    expect(resolved).toBe(stored)
+    expect(resolved.status).toBe('awaiting-answer')
   })
 })

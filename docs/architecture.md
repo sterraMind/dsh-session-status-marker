@@ -42,12 +42,13 @@
 
 ```
 src/
-  contracts.ts          # 零依赖共享契约：状态枚举、MarkRecord、STATUS_META、3 组 /api 路径
+  contracts.ts          # 零依赖共享契约：状态枚举、MarkRecord、STATUS_META、4 组 /api 路径
   types.ts              # zod schema（MarkRecordSchema / SetMarkBodySchema / ClearMarkBodySchema）
                         #   + 编译期双向 extends 校验 zod 推导 === contracts.ts 契约
   domain.ts             # defineDomain({name:'session_status_marker', version:1, ...})
-  inference.ts          # inferStatus / shouldApplyInference / isAutoMarkExpired（纯函数）
-  service.ts            # SessionStatusService：Service.init + 3 routes + 2 tools + 观察器
+  inference.ts          # inferStatus / shouldApplyInference / isAutoMarkExpired
+                        #   / resolveAutoFromObservation（纯函数）
+  service.ts            # SessionStatusService：Service.init + 4 routes + 2 tools + 观察器
   index.ts              # 纯导出入口（default = SessionStatusService，供 loader 作为 class plugin 加载）
   client/
     index.ts            # Browser apply：locale.register + slots.inject × 2

@@ -1,128 +1,90 @@
 # AGENTS · dsh-session-status-marker
 
-## Standing Orders（所有 Agent 必读，优先级最高）
+> 本文件写给编码智能体，不是给人看的 README。给人看的说明在 `README.md`，提交与协作规范在 `CONTRIBUTING.md`。
+> 读法：先读「命令表」与「硬规则」，需要细节时按「更深文档」表格里的「何时读」跳转，不要在仓库里盲目遍历。
 
-1. **网络优先**：遇到问题先搜索已有解决方案，再动手。搜索时把问题拆成原子化关键词再检索（`research` 工具除外），并避开内容农场与云厂商营销站：CSDN、腾讯云、阿里云、华为云、抖音、百家号一类站点不作为依据，优先官方文档、规范原文、上游仓库源码与 issue。禁词列表：硬/绕弯子/发射/配方/天花板/xx钥匙/阶梯/一句话总结/还狠/更绝的是/就是xx/把xx撑住/把xx走好/直接拉满/这波/xx账/认/接下/收下/xx的锅/纯纯的xx/名场面/问就是/属于是。
-2. **事实源唯一**：官方 API / 行为 / 契约一律以 `.research/dsh-repo/` 本地镜像中的文件:行号为准。外部网页资料只用于竞品/市场/社区最佳实践，不得用于断言 DSH 官方行为。
-3. **路径规范**：所有 DSH 相关路径从 `$env:DSH_HOME`、`$env:TEMP`、工作区根解析；仓库内不写死本机用户目录的绝对路径（例如 `<user-home>/...`）。临时脚本与生成产物放 `$env:TEMP/.drafts/<会话id>/`，可复用代码落盘到本仓库。
-4. **包管理**：优先 pnpm；Node fetch 走代理时确保 `NODE_USE_ENV_PROXY=1`。npm 日志目录若权限不足，重定向到工作区或 temp。
-5. **审批政策**：删除文件前必先请示用户说明目的、影响与风险；批量删除优先用 `send2trash`。
-6. **rtk wrap**：常用命令用 `rtk <cmd>` wrap 节省 token，如 `rtk read <file>`、`rtk grep <pattern>`。
-7. **每步一行 status**：在正文最前面单独写一行 `⏵ <正在做的事>`（≤20字），切换任务必须更新。
-8. **智能体团队原子化拆解**：支持子代理或智能体团队时，把目标拆成互不依赖、可单独验收的原子任务再分别派发，不要按线性顺序一个人做完全部。每个派发单必须写清五项：输入（必读文件与已知事实）、产出（文件路径与格式）、验收判据、写入范围白名单、时间预算；共享文件（`AGENTS.md`、`README.md`、`CHANGELOG.md`、`package.json`）由主会话独占，子代理只写各自范围内的文件。子代理完成后主会话必须按判据逐条复核产物并自己跑一遍测试，不得只凭子代理的结论判定通过。判定子代理是否真在工作看产物文件修改时间，10 分钟无改动先询问、30 分钟无改动中断并接手。条文与来源见 `docs/research/11-agent-team-practices.md`，落地要求见 `CONTRIBUTING.md` §6。
-9. **文档不得出现占位符与敏感内容**（2026-11-23，用户指定）：写入仓库文档（`AGENTS.md`、`README.md`、`CHANGELOG.md`、`CONTRIBUTING.md`、`docs/**`）时，禁止记录任何会话凭据占位符——包括占位符本身的语法形式、它的变量名、它的片段，以及任何对它的描述（如「某 token 是多少位、以什么前缀开头」）。也不要写入真实 token、密钥、口令、内网地址凭据等敏感内容。原因：这套运行环境会在渲染时把占位符替换成真实值，文档里写到占位符等价于把真实凭据落盘，推送时会被 GitHub secret scanning 拦截，且历史提交难以彻底清除。文档里需要说明「某次发布用了 npm 发布权限」时，只写操作步骤与可公开的结果（版本号、标签、Release 编号），凭据一律用中性措辞指代（如「使用仓库发布权限」），不描述凭据本身。每次改完文档、推送前，先 `git grep` 确认没有占位符语法与凭据前缀再提交。
+## 项目定位与背景
 
-## 项目概要
+- **一句话背景**：为 DeepSeek Harness 编写的「会话状态标记」插件，支持用户手动标记、也支持 AI 自主推断会话状态（8 种：todo / done / stopped / blocked / review / pending-subagent / awaiting-answer / feedback），Client 侧用徽标与悬停卡展示。
+- **形态**：仓库外的独立 npm bundle，不修改 DSH 主仓库源码；ESM + strict TypeScript + cordis Service + zod 严格 schema + React 18。
+- **官方镜像**：DSH 源码镜像在 `.research/dsh-repo/`（来源 `https://codeload.github.com/deepseek-ai/deepseek-harness/zip/refs/heads/master`），官方行为一律以这里的文件:行号为准。
 
-- **目标**：为 DeepSeek Harness 编写「会话状态标记」插件，支持用户手动标记会话状态（8 种：todo / done / stopped / blocked / review / pending-subagent / awaiting-answer / feedback）以及 AI 自主推断，Client 侧用徽标 + 悬停卡展示。
-- **约束**：必须是仓库外的独立 npm bundle，不修改 DSH 主仓库源码；遵循 DSH 工程化规范（ESM、strict TS、JSDoc、declaration merging、effect-based lifecycle）。
-- **入口文档**：`docs/architecture.md`（V2 最终架构）、`docs/research/01..11.md`（调研）、`docs/feasibility-and-risks.md`、`docs/implementation-plan.md`、`docs/acceptance-and-regression.md`、`docs/release-process.md`（版本规划与发布流程）、`docs/distribution-plan.md`（目录站与社区投放计划）、`CONTRIBUTING.md`（提交规范与协作规范）。
-- **官方镜像位置**：`.research/dsh-repo/`（来源 `https://codeload.github.com/deepseek-ai/deepseek-harness/zip/refs/heads/master`）。
+## 命令表
 
-## 架构红线（最重要，勿回退）
+除特别说明外全部在仓库根目录执行。`<workspace>` 指仓库根，不要替换成绝对路径。
 
-**仓库外 bundle 不能写自定义 `SessionEventMap` 事件。** `Session.append` 没有 `ignorable` 参数（`packages/core/session/src/index.ts:806-837`），`appendPluginRecord` 被明禁（`packages/core/session/README.md:70-74`），读路径对未知 required 事件整份拒读（`packages/session/session-persistence/src/storage-contract.ts:75-80`）。V1 曾这样设计，已证伪删除（`src/events.ts` 不存在）。
+| # | 命令 | 前置 | 完成的定义 |
+|---|---|---|---|
+| 1 | `pnpm install --ignore-scripts --store-dir "<workspace>/.pnpm-store" --node-linker=hoisted` | Node 24.9 以上、pnpm；本机 npm 日志目录权限不足，这三个参数不能省 | 无报错退出，`node_modules` 就位 |
+| 2 | `pnpm run typecheck` | 已完成第 1 步 | EXIT=0，无类型错误 |
+| 3 | `pnpm run build` | 已完成第 1 步 | EXIT=0，`lib/*.js` 与 `lib/client.js` 均已更新 |
+| 4 | `pnpm run test` | 已完成第 1 步 | EXIT=0，当前基线 223 项测试 / 50 套件全绿 |
+| 5 | `pnpm pack` | 第 2、3、4 步全过 | 产出 `dsh-session-status-marker-<版本>.tgz`，把文件名与字节数写进发布记录，不写进本文件 |
+| 6 | `dsh plugin --profile <name> add ./dsh-session-status-marker-<版本>.tgz` | 已有一个独立 profile，不要在正在用的 GUI profile 上装 | `dsh --profile <name> --dump-config` 显示 `application: applied` |
+| 7 | 真实页面验收：`pnpm pack` → scp 到 dev4090 → 停 3099 端口进程 → `dsh plugin add` → 刷新页面 → 读 `getBoundingClientRect()` 并截图 | 改过 `src/client/` 才需要；远程 Edge 需带 hover 模拟参数 | 几何与截图断言逐项通过，截图路径写进 `docs/acceptance-and-regression.md` |
 
-最终链路：
+分层验证：改单个模块时跑第 2、4 步即可；收尾时第 2、3、4 步全跑；只有动了共享契约（`src/contracts.ts`、`src/types.ts`）才需要再补真实页面复核。
+
+## 目录地图
 
 ```
-src/contracts.ts   共享契约（零依赖，Browser 不能带 zod）
+src/contracts.ts   零依赖共享契约（Browser 侧不能带 zod）
 src/types.ts       zod 严格 schema + 编译期双向 extends 校验
 src/domain.ts      defineDomain({name:'session_status_marker', version:1, tables:{marks}})
-src/inference.ts   inferStatus / shouldApplyInference / isAutoMarkExpired（纯函数）
-src/service.ts     SessionStatusService：Service.init + 4 exact routes + 2 tools + 观察器
+src/inference.ts   纯函数：inferStatus / shouldApplyInference / isAutoMarkExpired / resolveAutoFromObservation
+src/service.ts     Service.init + 4 条 exact route + 2 个 tool + 观察器
 src/index.ts       纯导出入口（default = Service 类）
-src/client/*       apply → locale.register + slots.inject(trailing / hover / settings.section / row.action / menu.item)
-scripts/build-client.mjs   TS compiler API 生成 lib/client.js（CJS closure factory）
-tests/*.test.mjs   canonical 断言（node:test + shim），*.test.ts 为薄壳
+src/client/*       apply → locale.register + slots.inject（trailing / hover / settings.section / row.action / menu.item）
+scripts/build-client.mjs   TypeScript compiler API 生成 lib/client.js（CJS closure factory）
+tests/*.test.mjs   canonical 断言（node:test + 自建 shim），*.test.ts 是薄壳
+docs/              调研、架构、计划、验收、发布与项目记忆
 ```
 
-- 持久态只能是 `ctx.storageDomain`（host-side sidecar，不进模型输入、不进 session log）。
-- Host→Client 只能是 `ctx.connection.fetch.register(ConnectionFetchRoute)`；**不用标准 Typert Remote**（需主仓库 `generate-typert.ts` 产物）。
-- Client 只能是 `ctx.slots.inject` + 组件内 `fetch()`；**不用 `useProjection` / `ctx.remote`**。
-- `ctx.slots` 的声明合并来自 `@deepseek-ai/dsh-client-ui-renderer/client`；`ClientContext` 从 `@deepseek-ai/cordis` 别名导入（locale 包内部同名类型未导出）。
+新代码放哪：Host 侧逻辑进 `src/service.ts` 或新建 `src/*.ts` 并在 `src/index.ts` 导出；纯判断写进 `src/inference.ts`；Client 组件放 `src/client/`，文案进 `src/client/locales.ts`（8 种语言必须 key 一致）；测试一律写 `tests/*.test.mjs`，同名的 `.test.ts` 只做 re-import。
 
-## 技术栈（V2 实测）
+## 硬规则（必须遵守）
 
-| 项 | 选型 | 依据 |
-|---|---|---|
-| 语言 | TypeScript ESM（`strict`, `noImplicitAny`） | `docs/user/develop/basic/index.md` |
-| 框架 | `@deepseek-ai/cordis` `Service` + `[Service.init]` | `packages/session/session-projection-cache/src/index.ts:105-123` |
-| 持久化 | `@deepseek-ai/dsh-storage-domain` `defineDomain` / `domainTable` | `docs/subsystems/storage.md:5,145-171` |
-| 工具 | `@deepseek-ai/dsh-tools` `defineTool` | `packages/core/tools/src/schema.ts:555-557` |
-| Host→Client | `@deepseek-ai/dsh-client-connection` `ctx.connection.fetch` | `packages/client/connection/src/rpc.ts:146-166` |
-| Config | `@deepseek-ai/schemastery` `z.natural().required()` | `docs/user/develop/basic/config.md:9-31` |
-| 记录校验 | `zod 4.4.3`（与 dsh-storage-domain 内嵌版本对齐） | `domainTable<K,V>(schema: ZodType<V>)` 需同源 |
-| Client UI | React 18 + CSS Modules + `--dsw-*` tokens + `ctx.slots.inject` | `packages/client/AGENTS.md`；`platform.ts:8-15` 白名单 |
-| Client 服务注册 | `ctx.inject(['connection'], (childCtx) => childCtx.effect(...))` | `packages/bundle/web-app/src/index.ts:219`；`cordis/lib/types/registry.d.ts:111,185` |
-| Client 构建 | TypeScript compiler API 进程内 `transpileModule` | 绕开 Windows 沙箱 `spawn EPERM` |
-| 测试 | `node --test --test-isolation=none` + 自建 Vitest 风格 shim | Vitest/Vite 配置加载同样触发 esbuild spawn |
-| 前端验收 | CDP（`.drafts/cdp.mjs`）+ 真实 GUI 几何/截图断言 | 只看 DOM 字符串会漏掉 0×0 布局缺陷 |
-| 浮层配色 | 不碰宿主卡的表面与宿主行文字（`[class*='card']:has([data-status-slot])` 里只留 `cursor: default`）；插件自己的文字读 `--dsw-alias-hovercard-label-primary/secondary/tertiary`，兜底 `--dsw-static-neutral-bluish-*`；状态图标用主题别名；徽标用主题别名 | 官方 `--dsw-alias-hovercard-bg` 在 light/dark 两套配色里都取 `--dsw-static-neutral-bluish-850`，设计文档写明「该表面在两套配色中均保持深色」（`ui-primitives/HoverCard.module.css:9-19`、`ui-workspace/.../Rows.module.css:410-444`）；1.0.3–1.1.0 自绘白底割裂、1.1.1 只改面板被否决、1.1.2–1.3.1-rc.4 覆盖整卡在浅色主题下变白底配近白字（用户报的白卡），1.3.1-rc.5 起不再重绘 |
-| 提示气泡 | 一律用宿主 `@deepseek-ai/dsh-client-ui-primitives` 的 `Tooltip`（`side="bottom"`，徽标/行内图标 300ms，8 格与看板标题 400ms，看板标题 `onlyWhenClipped`）；禁止原生 `title=` | 原生 `title` 由操作系统绘制，不跟 `--dsw-*` 令牌、不跟界面语言、位置不可控（用户反馈「tooltip 在目标上面 好奇怪」）；官方 `Tooltip.module.css` 的 13px/20px + `--dsw-alias-tooltip-bg` 才是宿主口径 |
-| Rust | 不引入 | 见 `docs/research/05-rust-feasibility.md` |
+1. **网络优先**：遇到问题先搜索已有方案再动手，问题拆成原子化关键词检索（`research` 工具除外），避开内容农场与云厂商营销站，优先官方文档、规范原文、上游仓库源码与 issue。措辞禁用词表在 `CONTRIBUTING.md` §7.1，检索细则在 §7.2。
+2. **事实源唯一**：DSH 官方 API、行为、契约一律以 `.research/dsh-repo/` 的文件:行号为准；外部网页只用于竞品、市场与社区实践，不得用来断言官方行为。
+3. **不写自定义会话事件**：不要新增 `SessionEventMap` 事件，持久态只走 `ctx.storageDomain`。仓库外 bundle 写会话事件会造成「写入成功、下次打开整份日志拒读」的延迟失败，依据 `.research/dsh-repo/packages/session/session-persistence/src/storage-contract.ts:75-80`。要持久化标记，就用 `defineDomain` 加 `domainTable`。
+4. **通道只有两条**：Host 到 Client 只走 `ctx.connection.fetch.register` 的 exact route，Client 只走 `ctx.slots.inject` 加组件内 `fetch()`；不要用标准 Typert Remote，也不要用 `useProjection` / `ctx.remote`（两者都需要主仓库 `generate-typert.ts` 的产物）。
+5. **Client 侧规范**：文案走 typed locale dictionary 加 `t`（8 种语言 key 必须一致）；样式只用 `--dsw-*` 令牌，零字面颜色；Config 字段一律 `.required()`，不硬编码默认值；不新增 `as unknown` 断言；每个导出有 JSDoc，文件结尾恰好一个换行。
+6. **不重绘宿主悬停卡**：那张卡上只允许 `cursor: default` 一条声明，插件文字读 `--dsw-alias-hovercard-label-*` 并用 `--dsw-static-neutral-bluish-*` 兜底；卡内提示只用宿主 `Tooltip`，禁止原生 `title=`。完整契约与验收口径见 `docs/research/19-hover-card-contract.md`。
+7. **智能体团队分工**：把目标拆成互不依赖、可单独验收的原子任务再分别派发，不要按线性顺序一个人做完。每个派发单写清五项：输入、产出、验收判据、写入范围白名单、时间预算。`AGENTS.md`、`README.md`、`CHANGELOG.md`、`package.json` 由主会话独占。子代理完成后主会话必须按判据逐条复核并自己跑测试，不得只凭子代理结论判定通过；看产物文件修改时间判断是否真在工作，10 分钟无改动先询问，30 分钟无改动中断并接手。
+8. **工作纪律与安全**：每步在正文最前面写一行 `⏵ <正在做的事>`（不超过 20 字），切换任务必须更新；常用命令用 `rtk` wrap 省 token；临时脚本与中间产物放 `$env:TEMP/.drafts/<会话id>/`，可复用代码才落盘到仓库；仓库文档禁止出现任何凭据、口令、内网地址与凭据占位符（含其语法形式、变量名、片段与描述），改完文档推送前先 `git grep` 核对；删除文件或杀进程前先说明目的、影响与风险并等用户确认，批量删除优先用 `send2trash`；正式版本必须等用户实际前端验收通过后才能发布，之前只发 `-rc.N` 预版本。
 
-## 开发回路与可靠命令
+## 更深文档（何时读）
 
-1. `pnpm run typecheck` / `pnpm run build` / `pnpm run test` 三条裸命令已验证 EXIT=0（130 项测试 / 30 套件全绿）。前提是 `pnpm-workspace.yaml` 里 `storeDir: ./.pnpm-store` + `verifyDepsBeforeRun: false` 生效。
-2. 若 pnpm 全局 store 又报 SQLite 错，退回 `pnpm --config.verify-deps-before-run=false --config.store-dir="<workspace>/.pnpm-store" run <script>`，或直接调 `node_modules/.bin/tsc` / `node scripts/build-client.mjs` / `node --test --test-isolation=none tests/*.test.mjs`。
-3. 安装依赖一律带 `--ignore-scripts --store-dir "<workspace>/.pnpm-store" --node-linker=hoisted`（本机 npm 日志目录 EPERM、pnpm isolated 传递依赖解析不到）。
-4. scratch 本地开发：生成绝对路径 `cordis.yml`，`pnpm dsh web --patch <generated>` → 独立实例端口 **3080**；现有 Web GUI 是 **55101**，不要替换。
-5. 发布：`pnpm pack` 出 tarball（1.3.0-rc.3 为 98,666 B（含 LICENSE 后重打为 99,452 B，1.3.0 转正时以这个为基线），1.3.0-rc.2 为 98,388 B，1.3.0-rc.1 为 93,874 B，1.2.3 为 83,281 B，1.2.3-rc.2 为 82,987 B，1.2.3-rc.1 为 81,880 B，1.2.2 为 74,526 B，1.2.1 为 70,353 B，1.2.0 为 70,350 B，1.1.6 为 55,310 B，1.1.5 为 55,313 B，1.1.4 为 55,335 B，1.1.3 为 55,284 B，1.1.2 为 56,921 B，1.1.0 为 56,007 B，1.0.3 为 47,725 B）→ `dsh plugin --profile <name> add ./dsh-session-status-marker-*.tgz`；或直接 `add dsh-session-status-marker` 从 npm 装。npm 发布走 staged publishing：命令输出 `+ name@version` 只代表请求被接受，registry 先公开 `0.0.0-stage`，约 11 分钟后 `latest` 才变到真实版本；判据见 `docs/project-memory.md` §6 教训 28。**`engines.dsh` 下限写带预发布标志的比较器（`>=0.2.2-rc.1`），不要写 `>=0.2.2`**——npm semver 里预发布版本不匹配不带预发布标志的范围（教训 33）。GitHub 推送用 `git remote set-url origin https://x-access-token:$tok@github.com/<owner>/<repo>.git`（`$tok = gh auth token`），SSH 被沙箱拦。**发布政策（用户 2026-11-20 指定）：正式版本（stable，不带 prerelease 标记的 GitHub Release / npm dist-tag latest）必须在用户实际前端验收通过之后才能发布；用户验收之前只能发预版本——版本号带 `-rc.N` 后缀、GitHub Release 勾 prerelease、npm 用 `1.2.3-rc.1` 形式发布且不动 latest。**
-6. 运行时自检：`cordis_inspect_query` 查服务/tool/route/slot；`dsh --profile <name> --dump-config` 核 `application: applied`。不要手写 profile 的 `package.json` / `cordis.patch.yml` 绕过验证。
-7. **真实集成测试走 dev4090**（`ssh dev4090`，Windows/PowerShell）：打包版没有 `dsh` shim，用 `DeepSeek Harness.exe` + `ELECTRON_RUN_AS_NODE=1 --expose-internals` 跑 asar 内 `@deepseek-ai/dsh-desktop-host/lib/cli.js`；`DSH_HOME` 指向 `%TEMP%\.drafts\dsh-session-marker\dsh-home` 做隔离。`--from-default-profile web` 会覆盖 profile 且丢掉已装 bundle，之后必须重装；起服务用 `--profile <name> --no-open --port <n>`（`web` 是 profile 名不是子命令，`--web-port` 不存在）。远程命令分隔用 `;` 不用 `&`；诊断脚本先落 .ps1 再 scp 执行，别内联 `$node -e`。
-8. **前端改动必须在真实页面复核**：只跑 typecheck/单测不算验收。改 client 侧要走一遍「`pnpm pack` → scp → 停 3099（按端口找 PID，进程名是 `DeepSeek Harness.exe`）→ `dsh plugin add` → 本地后台作业跑 `ssh dev4090 "cmd /c start-web2.cmd"` → 刷新页面 → 读 `getBoundingClientRect()` 与截图」。远程 Edge 必须带 `--blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4`，否则 `sidebar.session.row.hover` 不展开。CDP 对「切换开关」型按钮会重复投递 click，这类按钮用页面内单次 `element.click()`。
-9. **诊断服务注册问题先看 route 状态码**：同源 `fetch('/api/<plugin>.<verb>')` 得到 404 说明 exact route 没注册（`rpc-host.ts:207-232` 未命中即 404），此时优先怀疑 `ctx.get('service')` 在 `[Service.init]` 时机拿到 undefined，改用 `ctx.inject`。
+| 文档 | 何时读 |
+|---|---|
+| `docs/architecture.md` | 要改 Host 与 Client 之间的通道、持久化方式或槽位挂载时 |
+| `docs/research/19-hover-card-contract.md` | 要动悬停卡、状态格、提示气泡或行内图标时 |
+| `docs/implementation-plan.md` | 要知道每项功能的实现顺序、中途纠正与已知限制时 |
+| `docs/acceptance-and-regression.md` | 要复核真实页面、查历史验收记录或升级回归时 |
+| `docs/release-process.md` | 要发版、判版本号、选 dist-tag 或回退时 |
+| `docs/project-memory.md` | 要查已验证的技术事实、环境事实与历史教训时 |
+| `docs/research/20-phase-chronology.md` | 要查 Phase 1 到 19 的版本编年史与逐轮实测数字时 |
+| `docs/research/11-agent-team-practices.md` | 要派发子代理、写派发单或定验收判据时 |
+| `docs/research/18-agents-md-practices.md` | 要改本文件、判断某条规则该不该写进主文件时 |
+| `CONTRIBUTING.md` | 要提交代码、写变更记录或查措辞禁用词（§7.1）与网络检索细则（§7.2）时 |
+| `docs/distribution-plan.md` | 要往目录站或社区投放时 |
 
-## 代码风格（对齐 DSH 主仓库要求）
+## 安全与审批边界
 
-- `strict: true`、`noImplicitAny`；禁止新增 `as unknown` 断言。
-- 每个导出必须有 JSDoc（`verify-export-jsdoc`）；文件结尾恰好一个换行。
-- `Waterfall listeners MUST call next()`（`framework/events.md:23-106`）。
-- `Switch on discriminant tags`（closed union 用 assertNever，merge-extensible 走 documented default；`inferStatus` 的 default 返回 `null`）。
-- `Misconfiguration fails loud`；Config 字段用 `z` 的 `.required()`，**不硬编码默认值**（`config.md:76-94`）。
-- Client 组件所有文案走 typed locale dictionary + `t`（`src/client/locales.ts` 的 8 种语言 key-identical，新增语言必须补齐全部键，否则按 `FALLBACK_LOCALE='en'` 回退成英文）；样式只用 `--dsw-*` tokens，零字面颜色。
-- `window.__ModuleLoader__.load({id, factory})` 的 Browser bundle 里，裸 `require()` 只能取 `packages/client/web/src/platform.ts:8-15` 的 `PLATFORM_MODULES` 白名单。
+- **always do**：改完文档、推送前先 `git grep` 核对没有凭据与占位符；每次升级 DSH 后用 `--dump-config` 核对 `application: applied`；改过 `src/client/` 就走一遍真实页面验收。
+- **ask first**：删除文件（先说明目的、影响与风险，优先用 `send2trash`）；发布正式版本（stable 版本必须在用户实际前端验收通过之后）；动任何端口上正在运行的进程；改 `package.json` 的依赖区间。
+- **never do**：把真实 token、密钥、口令、内网地址凭据或任何凭据占位符写进仓库；在正在用的 GUI profile 上装本插件；跳过测试直接打包发布。
 
-## 已知环境约束（本机实测）
+## 已知坑
 
-- `$DSH_HOME` 指向本机 DeepSeek Harness 的安装/持久化目录（示例：`<user-home>/AppData/Local/scoop/persist/deepsek-harness-pre`，注意拼写 `deepsek`）。
-- 打包版源码在 `app.asar` 单文件内，需按 asar header pickle 抽取；不要把它当目录访问。
-- git clone / curl.exe 走代理失败（`SEC_E_NO_CREDENTIALS`）；Node fetch + `NODE_USE_ENV_PROXY=1` 成功；api.github.com SSRF 拦截（198.18.0.185）。
-- Scoop 全局 pnpm store 的 `index.db`（3.36 GB）不可读；`pnpm-workspace.yaml` 把 store 指向工作区并关闭预检。
-- Windows 沙箱禁止 named-pipe spawn：esbuild service、Vitest/Vite 配置加载、`node --test` 默认隔离全部报 `spawn EPERM`；已用 TS compiler API + `--test-isolation=none` 绕开。
-- Web GUI **55101** vs scratch **3080**，二者不同。
-- 测试机 **dev4090**：IP 与登录用户名按本机 SSH 配置（`ssh dev4090`）解析，密钥走 SSH 配置，不在文档中记录；scoop `versions/deepseek-harness-pre 0.2.2-rc.1`，无 `dsh` shim。测试 home 用 `%TEMP%\.drafts\dsh-session-marker\dsh-home`，可随时整体废弃，不影响该机真实配置。
+- **Windows 沙箱禁止 named-pipe spawn**：esbuild service、Vitest/Vite 配置加载、`node --test` 默认隔离都会报 `spawn EPERM`。已用 TypeScript compiler API 与 `--test-isolation=none` 绕开，不要换回 esbuild 或默认隔离。
+- **pnpm 全局 store 的 `index.db` 不可读**：`pnpm-workspace.yaml` 已把 store 指向工作区并关闭预检；若又报 SQLite 错，按 `docs/project-memory.md` §5 换调用方式（直接调 `node_modules/.bin/tsc` 等）。
+- **前端只看 DOM 字符串不算验收**：会漏掉 0×0 布局缺陷，必须读 `getBoundingClientRect()` 并截图；触屏下宿主会隐藏行内 slot，入口只有菜单项。
+- **exact route 返回 404**：说明路由没注册，优先怀疑 `[Service.init]` 时机拿到 `undefined`，改用 `ctx.inject`。
 
-## 任务进度看板
+## 计划与决策的位置
 
-Phase 1 Core 已完成：Host + Client 源码、`lib/client.js`、全套 docs 修订、AGENTS/README/项目记忆同步。
-Phase 2 已完成：8 个官方风格 inline SVG 图标 + locale 一致性断言 + 样式契约断言；测试合计 72 项全绿（含 `tests/marks.test.mjs` 的共享读取器 5 例、`tests/theme.test.mjs` 的主题化 10 例、`tests/i18n.test.mjs` 的 8 语言字典 11 例、`tests/overview.test.mjs` 的状态总览 5 例）。
-Phase 3 部分完成（真实 GUI 前端验收，2026-11-11）：侧栏行尾标记、hover card 8 格选择、状态改写与清除、连续三次重启后标记仍在、模型通过 `set_session_status` 自主标记，全部在 dev4090 的真实页面上用 CDP 复核并截图。这一轮修掉三个只在真实页面上暴露的缺陷：exact route 未注册（`ctx.get('connection')` 时机问题 → 改 `ctx.inject`）、图标查表键与 glyph id 不一致、未标记会话没有可点的状态格 + 图标 0×0 + active 格前景色吃掉图标。
-Phase 4 已完成（1.0.0）：`src/client/marks.ts` 全页共享列表定时读取（`Config.refreshIntervalMs` 默认 2000ms）+ 本地写透，标记写入后无需刷新页面；客户端订阅统一走 `useMark()`。
-Phase 4.1 已完成（1.0.1）：悬停卡文字与按钮改用 `--dsw-static-*` 静态色板。DSH 官方悬停浮层在浅色和深色主题下都用同一个固定深色底，主题别名在浅色主题下会解析成接近黑色，文字因此看不清。徽标仍用 `--dsw-alias-state-*` 主题别名跟随主题切换。
-Phase 5 已完成（1.0.2，用户 2026-11-12 反馈）：① 复制误触 — 内容区根节点接管 `onClick`/`onKeyDown` 并 `stopPropagation()`，不再冒泡到官方 HoverCard 的复制处理器（`packages/client/ui-primitives/src/HoverCard.tsx:293-303` 在 `onClick` 复制、`:304` 在 Enter/Space 也复制）；② 鼠标挪开点不到 — 内容区加透明命中区 `.root::before` 跨过锚点到浮层的 8px 间隙，指针经过它冒泡到宿主 `onPointerEnter` 取消 200ms 宽限关闭（`pointer-grace.ts:8` + `HoverCard.tsx:326-336`）；③ 语言不同步 — `src/client/locales.ts` 补齐 Shell 全部 8 种语言并以 `DICTIONARIES` 一次注册（此前只有 zh/en，切到其余 6 种按 `FALLBACK_LOCALE='en'` 回退）；④ 主题不同步 — 卡片表面是官方固定深色，文字与状态色保持静态，改由交互面响应主题（悬停/选中格与按钮悬停底色用随主题变化的 `--dsw-alias-tooltip-key-bg`）；⑤ 图标内边距 — 格子 22px `border-box` + 2px 内边距 + 2px 间距 = 190px，稳定单行。根容器自身还有 6px/8px 内边距，官方卡 212px 内容宽扣掉后可用约 196px，dev4090 真实页面复核发现 197px（3px 间距）会让第八格换行，故收窄到 2px。真实页面已复核八格同一行、点按钮不再误触复制。测试 66 项全绿。调研见 `docs/research/08-hover-interaction.md`。
-Phase 6 已完成（1.0.3）：悬停卡表面改为覆盖整张卡片并自绘 `--dsw-alias-bg-layer-2`（浅色主题白色、深色主题深灰），文字与状态图标颜色改回主题别名（`--dsw-alias-label-primary` / `--dsw-alias-label-secondary` / `--dsw-alias-state-*-primary`，与徽标一致），交互面改用 `--dsw-alias-interactive-bg-hover` / `--dsw-alias-interactive-bg-active`。桥接命中区因根节点负边距外扩收窄为 8px。**前端真实页面验收已完成**（`ui-theme preference: system` + `prefers-color-scheme` 两主题截图 `.drafts/shots/v103-system-{light,dark}-picker.png`）；语言持久化根因是 dev4090 的 `cordis.patch.yml` 带 UTF-8 BOM 导致 config-editor 写入被拒，移除 BOM 后语言与主题跨重启保持（环境侧修复，非插件缺陷）。
-Phase 7 已完成（1.1.0，竞品评估后落地 P0 跨会话状态总览）：新 Host 路由 `GET /api/session-status-marker.overview`（8 状态分组、组内按更新时间降序、`ctx.sessionTitle.get` 关联标题、缺失/抛错回退 null），设置页 `settings.section` 新组件 `StatusOverview.tsx`（mount + 轮询 + 可见性感知，全 `--dsw-alias-*`），8 语言各补 6 键。`static inject` 增 `sessions`/`sessionTitle`（`declare module '@deepseek-ai/cordis'` 合并 Context，未加依赖），client 侧本地声明 `settings.section` SlotMap entry（未装 `dsh-client-ui-settings`）。**真实页面验收**：dev4090 设置页出现 `Session status` 入口，按状态分组带计数、标题关联真实会话「标记会话为完成」、mutate 后 3 秒内自动更新；明暗两主题均随 DSH 主题变化，截图 `.drafts/shots/v110-overview-{light,dark,titled}.png`。72 项测试全绿，tgz 56,007 B。设计见 `docs/research/09-status-overview.md`。
-Phase 8 已被 Phase 9 取代（1.1.1 的方案被用户否决）：1.1.1 让整卡留在深色，浅色主题下仍是黑色浮窗，不满足「跟随 DSH 主题」。
-Phase 9 已完成（1.1.2，用户「light 这回也是黑色浮窗，你哪里看出通过了」）：从 slot 用 `:has([data-status-slot])` 覆盖**宿主整张卡**——卡片背景变量 `--dsw-hovercard-bg` 指向 `--dsw-alias-bg-layer-2`，宿主标题/路径/时间/状态行指向 `--dsw-alias-label-primary/secondary`；我们面板透明、状态图标与 hover/active 全用主题别名。属性选择器在 CSS-module 构建中不被哈希，`:has()` + `!important` 特异性高于官方样式，只命中含我们 slot 的那张卡。**真实页面验收**：light 整卡 `rgb(255,255,255)` 白底标题近黑、dark 整卡 `rgb(44,44,46)` 深灰标题近白，8 格单行，截图 `.drafts/shots/v112-{light,dark}-picker.png`（已目检）。73 项测试全绿，tgz 56,921 B（放宽 engines 下限后）。
-Phase 10 已完成（1.1.3，用户「为什么项目介绍里放什么架构红线、完整证据与取舍、明禁是啥意思，docs 可以不用放到 npm 仓库里面」）：`README.md` 重写为面向使用者的说明——先讲插件做什么、怎么用、八种状态各自用在哪，再给安装与配置；内部实现术语（`SessionEventMap`、`ctx.storageDomain`、exact route、sidecar、`ignorable` 等）全部从 README 移除，只在「开发」一节保留一句「独立安装包、数据不进会话日志」的白话说明。README 里所有链接改成 GitHub 绝对地址（此前 `./docs/...` 在 npm 页面会指向不存在的 `npmjs.com/package/.../docs/...`），并引用两张真实界面截图 `docs/images/hover-{light,dark}.png`（`raw.githubusercontent.com` 绝对地址）。npm 包内容不变：`package.json` 的 `files` 仍只有 `lib/`、`locale/`、`cordis.patch.yml`、`icon.svg`，`docs/` 与截图不入包。73 项测试全绿，tgz 55,284 B。
-Phase 11 已完成（1.1.4~1.1.6，2026-11-18~19）：1.1.4 预览图改局部裁切 + README 去 AI 味润色（`lieflat-less-ai-tone` skill 完整流程）；1.1.5 恢复 `engines.dsh` 下限到 `>=0.2.2-rc.1`（侧栏徽标依赖 0.2.2-rc.1 才引入的 `sidebar.session.row.trailing` 槽位）+ README 补侧栏图标预览图；1.1.6 依赖声明归位——`peerDependencies` 区间化到 `>=0.2.2-rc.1 <0.3.0`、`zod`/`@deepseek-ai/schemastery` 按官方范式移入 `dependencies`、`devDependencies` 从 30 项瘦身到 14 项。三者均无运行时行为改动，typecheck/build EXIT=0、73 项测试全绿。
-Phase 12 已发布并复核（1.2.0，2026-11-19，dev4090 真实 GUI 七项复核全部 PASS）：悬停卡对已标记会话直接常显 8 格状态选择（去掉「修改状态」展开步骤）；新增会话行快捷操作 `sidebar.workspaces.session.row.action`（id `session-status-row-action`，行内状态选择器）与菜单入口 `sidebar.workspaces.session.menu.item`（id `session-status-menu-item`，`role=menuitem`，选中后关闭菜单），作为不依赖悬停的触屏/键盘入口；新增 `rowActionOrder`/`menuItemOrder` 配置（默认 300）——Host 经 `webserver/index-inject` 推页面全局 `__DSH_SESSION_MARKER_CONFIG__`（`BootPluginRow` 无 per-entry config，官方 index-inject 模式）；`list` 路由支持 `?since=<revision>` 条件刷新（unchanged 跳重绘，可见性恢复/首次订阅全量读取）；`awaiting-answer` 色改用 `--dsw-alias-label-secondary`；`set_session_status` 工具描述重写（WHEN TO USE / WHEN NOT TO USE / DO NOT USE FOR / USAGE / EXAMPLES）；整卡主题接管同时覆盖 `--dsw-alias-hovercard-bg` + `--dsw-hovercard-bg`（新构建画卡用前者）；`engines.dsh` = `>=0.2.2 <0.3.0`。95 项测试 / 23 套件全绿（目录形式另计入 4 个 .test.ts 薄壳报告 99/23），tgz 70,350 B。**发布与复核记录**：提交 `27e06d1`+`24e70be`+tag `v1.2.0`、GitHub Release 附 tgz、npm shasum `b7fb2b8bc331f3d79cf0d466d70e6a9550096f3a`（latest=1.2.0）；dev4090 DSH 0.2.2-rc.5 npm 源安装，七项复核全 PASS（8 格单行防误触 / 行操作排官方归档置顶后 / 菜单选中自动关 / 条件刷新 323ms 无闪烁 / 全局注入正确 / cardBg light 白 dark 深 / awaiting-answer 用 label-secondary），截图 `.drafts/shots/v120-rc5-{light,dark}-picker.png`，详见 `docs/acceptance-and-regression.md` §3.17。
-Phase 13 已完成（1.2.1 与 rc.3 桌面端故障调查，2026-11-19）：① 1.2.1 修 engines 拒装（`>=0.2.2` 不匹配任何 `0.2.2-rc.x`，npm semver 预发布规则，教训 33）；② 用户报桌面 rc.3「图标全无、点击出现已复制」——dev4090（同为 rc.3）CLI 安装 CDP 全流程验收全过 + rc3-repro 子代理独立复现，**插件代码无缺陷**；真正根因是用户桌面 desktop profile 的孤儿安装（bundles/patch 层全无、node_modules 残留 1.2.1，`operations.jsonl` 显示 1.2.0 两次 incompatible-version 失败 + 1.2.1 enable applied 未落盘 + 最终 remove）；③ 处置：npm deprecate 1.2.0/1.2.1（granular token 不可 unpublish，教训 36）、dist-tag latest 回指 1.1.6、GitHub Release 补故障说明标 prerelease；④ 新增教训 34（rc.3 CLI「Already up to date」分支不写 bundles，必须 remove 后重新 add）与 35（桌面 plugin-manager 失败路径留孤儿依赖、市场装完默认 enabled:false 要点「立即启用」）。
-Phase 14 已完成（1.2.2，用户四点反馈，2026-11-20）：①行内入口从 22×18「状态」文字按钮改 24×24 官方 iconButton 规格 + 随状态变化的状态图标（未标记显示清单图标）；②行内面板从行内下方展开一排格子改 214px 卡片浮窗（bg-layer-2 表面、radius-lg、大阴影）；③`StatusPicker` 加 `showSummary`（摘要行 + 备注行截 64 字符 + 清除按钮），触屏（悬停卡忽略 touch 指针）由此可达备注与清除；④菜单项补 14px 前置图标并对齐官方 `.item` 字号（34px 高、13px/20px）；⑤`icon.svg` 改 36×36 填充渐变（浅色背景不再黑色勾）。**用户桌面「已复制」复发经 `git show v1.2.1:src/client/HoverCard.tsx` 核对为激活层未更新（旧 client.js 残留），非 1.2.1 代码缺陷**。102 项测试全绿（新增 `tests/touch-icon.test.mjs` 6 例），tgz 74,526 B；dev4090（rc.3）真实页面复核通过：trigger 24×24/16px svg/无文字、浮窗 214×91/8 格单行/白底、摘要「Manual: Done/Blocked」、备注行真实渲染、明暗两主题随主题切换、点文本区与格子均无复制、触屏模拟面板可达，截图 `.drafts/shots/v122b-panel-{light,note,dark}.png`。发布：提交 `6719b57`+`b86dbb6`+tag `v1.2.2`、GitHub Release 附 tgz、npm `+ dsh-session-status-marker@1.2.2`（integrity sha512-2m2Nbk8xCLCR6）。
-Phase 15 已完成（1.2.3-rc.1，用户 2026-11-20 三点反馈，**仅发预版本待用户验收**）：①悬停卡整卡防复制守卫 — 新增 `src/client/copyGuard.ts`（`useCardCopyGuard()` 在 document 上以 capture 注册 click/keydown：target 在含 `[data-status-slot]` 的官方卡内、不在我们 slot 内且非交互元素时 `stopPropagation()`，keydown 只拦 Enter/Space；React 17+ 合成事件绑在 root container，原生 capture 先触发故官方卡 onClick 不再执行），挂在 `HoverCard.tsx` 组件体首行，官方卡空白处点击不再出现「已复制」；②单一浮层 — `src/client/RowAction.tsx` 加 `useHoverCardOpen()`（MutationObserver 观察 document.body），`showPicker = expanded && !cardOpen`，悬停卡打开时行内面板让位不再两个浮窗并存；③市场元数据 8 语言 — 新增 `locale/{zh,ja,es,fr,de,ru,pt}.json`（只含 `meta.title`/`meta.description`，官方 `readPluginMeta` 扫描 locale/ 全部 json 且忽略其余键）。tsconfig 加 DOM lib、build-client MODULES 加 copyGuard。111 项测试 / 27 套件全绿（新增 `tests/copy-guard.test.mjs` 9 例），tgz 81,880 B；dev4090（rc.3）真实页面验收通过：浅/深两主题下悬停卡标题与空白处点击 `copied:false`、拖选文本不触发复制、悬停卡打开时行内 popover 只有一个、行内面板含摘要/备注/清除，截图 `.drafts/shots/v123-{card-guard,panel-light,dark-card}.png`。发布遵循**发布政策**：GitHub Release 勾 prerelease（tag `v1.2.3-rc.1`）、npm 用 `--tag rc` 发布（`dist-tags.rc=1.2.3-rc.1`，latest 保持 1.2.2）。提交 `586bbb9`+`151ff5c`。
-Phase 16 已完成（1.2.3-rc.2，用户「点击图标还是有下面一排，这一排删掉，点击图标出现右侧floating」）：**删除行内自建浮层**，行内图标改为只负责打开宿主悬停卡。原因有两条：①`Rows.module.css:340-359` 的 `@media (hover: none)` 把 `.rowQuickActions > [data-slot] > :not(.pinnedAction)` 设为 `display:none`，而 `pinnedAction` 是宿主内部哈希类（只出现在 `PinSession.tsx:37`），我们的 slot 拿不到，触屏本来就看不到行内图标，1.2.2 的行内面板只在桌面出现、与悬停卡重复；②官方 `HoverCard` 没有受控 open 属性，但卡根 span 监听 `onPointerEnter`（`HoverCard.tsx:326-336`），React 由原生 `pointerover` 合成该事件，所以点击时向所在行派发一个 `pointerover`（`pointerType:'mouse'`、`bubbles/cancelable/composed`、`pointerId:1`、`isPrimary:true`、`relatedTarget:null`）就能让宿主自己打开卡片。实现：`src/client/RowAction.tsx` 的 `useRowCardTrigger()` 在 `document` 上以 capture 注册 `pointerdown` 与 `click`，命中 `[data-status-action]` 时 `stopPropagation()`（必须绑在 document——React 合成事件监听在 root container，绑在按钮上拦不住宿主的 `onPointerDownCapture/onClickCapture` 与整卡复制），click 再调 `openRowCard()` 派发 `pointerover`。`action.module.css` 删除 `.popover` 整段。**真实页面验收**：点行内图标后 822ms 卡片打开（822ms 是宿主自己的 800ms 停留计时，与鼠标悬停同一延迟）、`popover:0` 只有一个浮层、`copied:false`、再点图标不会关卡、点标题与卡底空白均 `copied:false`，截图 `.drafts/shots/v123rc2-row.png`。111 项测试全绿，tgz 82,987 B。同轮新增 `docs/release-process.md`（版本规划与发布流程）与 `CONTRIBUTING.md`（提交规范与协作规范），以及 `docs/research/10-release-and-versioning.md`、`docs/research/11-agent-team-practices.md` 两份调研。
-Phase 17 已完成（1.2.3 正式版，用户「这个版本验收通过 可以派上线了」）：把 1.2.3-rc.2 的内容原样转正，只有版本号、CHANGELOG 段落与 README 安装说明变化。提交 `03cd352`、附注标签 `v1.2.3`、GitHub Release 452333466（非 prerelease，附 83,281 B tgz）、npm `latest` 切到 1.2.3（`rc` 保留 1.2.3-rc.2，shasum `53a08556a319c56547190536e7d2a7b9c66a5f36`），111 项测试全绿。验收记录 `docs/acceptance-and-regression.md` §3.22。插件市场的已装列表描述由第三方 `dshmarket` 渲染，它只读包 `package.json` 的字符串 `description`，不读 `locale/*.json`，仓库内改不了；官方「插件」页读 locale meta，我们的 8 语言已生效。桌面端走同一套 Web UI，可直接用。详见 `docs/implementation-plan.md` §2 与 `docs/acceptance-and-regression.md` §3.4、§3.6、§3.9、§3.10、§3.11、§3.17、§3.20。
-Phase 18 进行中（1.3.0-rc.1，用户 2026-11-20 五类需求）：①样式——`done` 状态色改成功绿、`feedback` 改紫色（对齐官方 `StateDot.module.css:17-19` 的 `data-state="done"` 用 success），`feedback` 文案改「待反馈」，悬停卡整卡 `cursor: default` 而状态格与按钮保持手型（官方 `.copyable` 只给整卡手型图标），点状态格改乐观更新消除延迟；②文档——README 八状态表补颜色语义与用法图例；③性能——`marksRevision` 改双路 FNV-1a 16 位摘要（原来把整份快照文本塞进 URL 与未变化响应），`list` 在 `since` 命中时回 `unchanged` 且不回传 revision；`overview` 记忆化评估后不做并记录理由；④逻辑——`StatusPicker` 支持手动输入备注（`setSessionNote` + 8 语言 `hover.noteEdit/noteSave/noteCancel`），`MARK_SOURCES` 增 `agent`，`set_session_status` 写入 `source:'agent'`，`shouldApplyInference` 改为 `current.source !== 'auto'` 即不覆盖，看板新增「未标记会话」区块（按创建时间降序取 20 条）并用可选 `ctx.sessionQuery.readTitleSnapshots` 补冷会话标题解决「未命名会话」。122 项测试 / 28 套件全绿，tgz 93,874 B；dev4090 已装 1.3.0-rc.1，真实页面验收由子代理 `verify-130` 执行。按发布政策只发 `-rc.1` 预版本，待用户验收通过再转正。**rc.1 验收暴露三处问题后做了 1.3.0-rc.2**：①`overview` 路由返回空的 400（只从可选 session-query 取未标记会话，宿主套餐没提供该引擎就整体抛错）→ 冷标题与未标记区块各自独立降级，候选来源扩为「内存里已加载会话 + 磁盘会话头（可选 `ctx.sessionPersistence.list()`）+ 跨语料清单（可选 `sessionQuery.listSessions()`）」三路合并，畸形记录丢弃；②悬停卡缺「编辑备注」入口 → 卡片「清除」旁新增「编辑备注」内联输入（Enter 保存 / Escape 取消）；③切换状态会清空备注（原固定传 `note: null`）→ 悬停卡与行内面板都沿用 `previous?.note ?? null`。**130 项测试 / 30 套件全绿**，tgz 98,388 B，dev4090 已装，由子代理 `verify-130c` 做终验。**rc.2 终验又暴露两个缺陷后做了 1.3.0-rc.3**：看板所有条目标题显示「未命名会话」、未标记区块计数为 0——根因是 cordis 的 context 代理只暴露 `static inject` 声明过的服务，直接读 `this.ctx.sessionQuery` 一类未声明属性得到 `undefined` 且不抛错，rc.2 的三路候选因此全空；改为经 `ctx.reflect.get(name)` 取并收敛到私有方法 `#optionalService`（取值失败返回 `undefined`），修复后真实页面 `overview` 返回 200、1684 B、`unmarked.count=7`、已标记 4 条中 3 条显示真实标题。130 项测试 / 30 套件全绿，tgz 98,666 B。
-
-Phase 19 进行中（1.3.1-rc.5，用户 2026-11-25~26 两轮反馈）：①**悬停卡浅色主题白底白字**——根因是 1.1.2 起把宿主卡的表面变量 `--dsw-alias-hovercard-bg` 指到 `--dsw-alias-bg-layer-2`（浅色主题下解析成白色），而宿主在卡里画的标题/路径/时间/状态行用的是 `--dsw-alias-hovercard-label-*`（固定浅色）。rc.5 起不再重绘宿主卡表面与宿主行文字，`[class*='card']:has([data-status-slot])` 里只保留 `cursor: default`，插件自己的文字改读 `--dsw-alias-hovercard-label-*` 并带 `--dsw-static-neutral-bluish-*` 兜底（页面正文色落在深底上会灰到看不清）。依据是官方调色板里这张卡两套配色都取 `--dsw-static-neutral-bluish-850`，设计文档写明「该表面在两套配色中均保持深色」。②**卡内提示气泡位置与样式**——原实现是原生 `title=`，由操作系统绘制，不读 `--dsw-*` 令牌、不跟界面语言，位置固定在目标上方，用户因此问「为什么 tooltip 在目标上面 好奇怪」。现在徽标、行内图标、八格、看板标题全部换成宿主 `@deepseek-ai/dsh-client-ui-primitives` 的 `Tooltip`，统一 `side="bottom"`（徽标与行内图标 300 毫秒、八格与看板标题 400 毫秒，看板标题另加 `onlyWhenClipped`），并新增 peerDependency 与 `tests/tooltip.test.mjs`。③**设置页看板大量「未命名会话」**——宿主投影缓存的 `cachedSnapshot(meta)` 只接受能见证日志生命周期（`formatVersion`/`createdAt`/`cwd`/`isSeeded`）的会话头，插件此前只传 `{ id }`，一条也命中不了；现在 `#persistedHeaders()` 保留完整会话头、`#cachedTitles()` 用完整 meta 查询，真实数据上 217 条标记里 216 条能见证、170 条取到标题。真实页面（隔离实例，浅色主题）实测：卡 244×198、背景仍是宿主深底 `rgb(44,44,46)`、标题 `rgb(255,255,255)` 14px/20px、八格同一行且 22×22、状态气泡落在格子下方 8 像素、气泡样式与宿主 Tooltip 一致（13px/20px、内边距 `3px 7px`、圆角 8px），截图 `.drafts/shots/rc5-card-light.png`、`rc5-card-dark.png`、`rc5-tip-light.png`。④**设置页来回切换后看板停在「加载中」**——设置外壳每次只渲染当前分节（`ui-settings-general` 的 `SettingsRoot` 用 `renderSlot('settings.section', …, { only: active })`），离开再回来会重新挂载整个分节，新实例从空状态起，要等自己第一次响应才出内容；会话量大时空窗很长，读起来就是一直加载。现在最后一次成功的数据存在模块作用域的 `cachedBoard` 里，重挂载直接画出上次的看板并在后台刷新，`?since=` 的 revision 一并保留；首次加载改成看板区域内的四行占位条（`css.skeletonRow`），标签栏与配置页全程可用；刷新失败保留已有行、顶部单行提示（`css.stale`），不再整页替换。208 项测试 / 47 套件全绿，`typecheck`、`build` 退出码 0。按发布政策仍只发预版本，等用户真机验收后再决定转正。
-
-## 悬停卡交互约束
-
-- 内容区**根节点**必须接管 `onClick` 与 `onKeyDown` 并 `stopPropagation()`（当前实现是 `HoverCard.tsx` 里的 `guard` 对象 spread 到每个根 div）。官方 HoverCard 把整张卡注册成 `role="button"` 并在 `onClick` 与 Enter/Space `onKeyDown` 里复制会话标题（`packages/client/ui-primitives/src/HoverCard.tsx:290-304`），复制后整卡内容被替换成提示文字，所以只给单个 `button` 加 stop 不够，点标签/备注同样会误触。
-- 官方 `onPointerDownCapture` 与 `onClickCapture` 由卡片持有（`HoverCard.tsx:343-344`），组件不能靠 `onPointerEnter` 维持打开；跨间隙保持打开靠 `.root::before` 命中区冒泡到宿主 `onPointerEnter` 触发 `cancelClose()`。不要删掉这条规则。
-- 悬停卡**不重绘宿主卡的表面与宿主行文字**（1.3.1-rc.5 起，最终口径，取代 1.1.2–1.3.1-rc.4 的「整卡跟随主题」）。事实依据：官方调色板里 `--dsw-alias-hovercard-bg` 在 light/dark 两套配色下都取 `--dsw-static-neutral-bluish-850`，官方设计文档原文写明「该表面在两套配色中均保持深色」；配套文字是 `--dsw-alias-hovercard-label-primary/secondary/tertiary`，同样是深底上的浅字。1.1.2–1.3.1-rc.4 用 `[class*='card']:has([data-status-slot])` 把这组别名指到 `--dsw-alias-bg-layer-2`（light 下是 `#fff`）与 `--dsw-alias-label-*`（页面正文色），才出现用户看到的白底配近白字。现在那张卡上只允许一条声明：`cursor: default`（宿主 `.copyable` 给整卡手型，读文字时不该像按钮）。插件自己的文字读 `--dsw-alias-hovercard-label-*`，兜底用静态色 `--dsw-static-neutral-bluish-300` / `-00`，不许再用 `--dsw-alias-label-*`（页面正文色落在深底上会灰到看不清）。hover/active 仍用 `--dsw-alias-interactive-bg-*`（低透明度叠加，深底上成立）。验收读 `cardBg`：**两套主题都必须是宿主深色（约 `rgb(44,44,46)`），浅色主题下读到白色即失败**。不要回退到「整卡跟随主题」或负边距自绘白底（1.0.3–1.1.0 割裂）。
-- 卡内一切提示气泡必须用宿主 `ui-primitives` 的 `Tooltip`（1.3.1-rc.5 起）：原生 `title=` 由操作系统绘制，是方的、不跟 DSH 令牌、不跟界面语言，位置也不受控。契约测试禁止再出现 `title=`（`tests/theme.test.mjs`、`tests/tooltip.test.mjs`），气泡统一 `side="bottom"`；徽标与行内图标 `delayMs={300}`，8 格与看板标题 `delayMs={400}`，看板标题另加 `onlyWhenClipped`（没有截断就不弹）。
-- **行内图标不拥有面板**（1.2.3-rc.2 起）：会话行右侧那个 24×24 状态图标只负责把宿主悬停卡打开，不要再给它配自己的 popover，否则同一条行上会同时出现两个浮层。实现方式是在 `document` 上以 capture 拦 `pointerdown` 与 `click`（命中 `[data-status-action]` 时 `stopPropagation()`），click 时向 `from.closest('[class*="sessionRow"], [class*="projectRow"], [class*="searchResultRow"]')` 派发一个 `pointerover`（`pointerType:'mouse'`）让宿主 `onPointerEnter` 自己开卡。必须绑在 `document`：React 合成事件监听在 root container 上，绑在按钮自身拦不住宿主的 `onPointerDownCapture/onClickCapture`（`dismissFromAnchor` 会在卡片已开时把它关掉）与整卡复制。宿主在 `@media (hover:none)` 下会把我们的行内 slot 隐藏（`.rowQuickActions > [data-slot] > :not(.pinnedAction)`），触屏的入口是 `sidebar.workspaces.session.menu.item` 那个菜单项，不要再试图给触屏补行内面板。
-- compact 悬停卡宿主不注册 Escape（`HoverCard.tsx:156-167` 只为 preview/inline 注册），WCAG 1.4.13 的 Dismissible 在这个分支不可达，只能做到 Hoverable 与 Persistent，不要在文档里声称已满足 Dismissible。
+- 决策沿革与取舍理由：`docs/project-memory.md` §2。
+- 实现顺序、中途纠正与已知限制：`docs/implementation-plan.md` §2、§3。
+- 发布记录与当前版本状态：`docs/release-process.md` §10；真实页面验收记录：`docs/acceptance-and-regression.md` §3。
+- 一句话现状：当前版本 1.3.1-rc.5（预版本，待用户真机验收）；Phase 1 到 19 的编年史在 `docs/research/20-phase-chronology.md`，本文件不再重复。

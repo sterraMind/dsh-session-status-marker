@@ -127,6 +127,10 @@ export function StatusPicker({ sessionId, t, onPicked, itemRole, showSummary = f
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
+  // Which cell the pointer or focus is on; `null` falls back to the mark's own
+  // status so leaving the rail restores the label. The single bubble below is
+  // anchored to the whole rail, so it does not travel with the pointer.
+  const [hoveredStatus, setHoveredStatus] = useState<StatusEnum | null>(null)
 
   /** Keep clicks and keys away from the host row and its hover-card copy handler. */
   function stop(event: SyntheticEvent): void {
@@ -219,6 +223,11 @@ export function StatusPicker({ sessionId, t, onPicked, itemRole, showSummary = f
           ? t('hover.agent', { status: t(STATUS_META[mark.status].labelKey) })
           : t('hover.manual', { status: t(STATUS_META[mark.status].labelKey) })
 
+  /** What the one rail-wide bubble names: the cell under the pointer or focus,
+   * or the mark's own status when the pointer sits between cells. */
+  const tipStatus = hoveredStatus ?? mark?.status ?? null
+  const tipLabel = tipStatus === null ? t('hover.empty') : t(STATUS_META[tipStatus].labelKey)
+
   return (
     <span className={showSummary ? css.panel : undefined} onClick={stop} onKeyDown={stop}>
       {summary !== null && <span className={css.panelSummary}>{summary}</span>}
@@ -238,18 +247,32 @@ export function StatusPicker({ sessionId, t, onPicked, itemRole, showSummary = f
           </span>
         )
       })()}
-      <span
-        className={css.grid}
-        role={itemRole === 'menuitem' ? 'menu' : undefined}
-        onClick={stop}
-        onKeyDown={stop}
-      >
-        {STATUS_VALUES.map((status) => {
-          const meta = STATUS_META[status]
-          const active = status === mark?.status
-          return (
-            <Tooltip key={status} label={t(meta.labelKey)} side="bottom" delayMs={400}>
+      {/* One bubble for the whole rail: anchored to the grid and centered on
+        * it, so crossing the eight cells only swaps the text. Per-cell bubbles
+        * followed the pointer in 24px steps and read as glued to the cursor. */}
+      <Tooltip label={tipLabel} side="bottom" align="center" gap={8} delayMs={300}>
+        <span
+          className={css.grid}
+          role={itemRole === 'menuitem' ? 'menu' : undefined}
+          onClick={stop}
+          onKeyDown={stop}
+          // The rail owns the "no cell" state: clearing it per cell made the
+          // label flash the mark's own status for a frame while the pointer
+          // crossed the gap between two cells.
+          onPointerLeave={() => setHoveredStatus(null)}
+          onBlur={(event) => {
+            // Focus moving between cells stays inside the rail; only a real
+            // exit clears the label.
+            if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
+            setHoveredStatus(null)
+          }}
+        >
+          {STATUS_VALUES.map((status) => {
+            const meta = STATUS_META[status]
+            const active = status === mark?.status
+            return (
               <button
+                key={status}
                 type="button"
                 role={itemRole}
                 className={[css.cell, active && css.active].filter(Boolean).join(' ')}
@@ -257,14 +280,25 @@ export function StatusPicker({ sessionId, t, onPicked, itemRole, showSummary = f
                 aria-pressed={active}
                 disabled={busy}
                 style={{ color: meta.hoverTone }}
-                onClick={() => { pick(status) }}
+                onPointerEnter={() => setHoveredStatus(status)}
+                onFocus={() => setHoveredStatus(status)}
+                onClick={(event) => {
+                  // The host tooltip withdraws its bubble on the anchor's click
+                  // (`ui-primitives/src/Tooltip.tsx:255-261`). The bubble is
+                  // anchored to the rail, and the pointer never leaves the rail
+                  // after a click, so the tooltip would not raise it again
+                  // until the pointer left and re-entered. Stopping the click
+                  // here keeps the bubble alive.
+                  event.stopPropagation()
+                  pick(status)
+                }}
               >
                 <span className={css.iconCell} dangerouslySetInnerHTML={{ __html: ICONS[meta.icon] ?? '' }} />
               </button>
-            </Tooltip>
-          )
-        })}
-      </span>
+            )
+          })}
+        </span>
+      </Tooltip>
       {showSummary && !editing && (
         <span className={css.panelActions}>
           <button type="button" className={css.editBtn} disabled={busy} onClick={startEdit}>{t('hover.noteEdit')}</button>

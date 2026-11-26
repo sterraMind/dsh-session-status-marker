@@ -35,10 +35,11 @@
  */
 
 import { useEffect, useId, useState } from 'react'
-import type { KeyboardEvent, SyntheticEvent } from 'react'
+import type { SyntheticEvent } from 'react'
 import css from './overview.module.css'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { SegmentedTabs, type SegmentedTab } from '@deepseek-ai/dsh-client-ui-primitives'
 import { STATUS_META } from '../contracts.js'
 import type { OverviewResponse, StatusGroup, UnmarkedSessions } from '../contracts.js'
 
@@ -157,14 +158,19 @@ function GroupBlock({ group, t }: { group: StatusGroup; t: StatusOverviewInjecte
       <ul className={css.list}>
         {group.entries.map((entry) => (
           <li key={entry.sessionId} className={css.row}>
-            <Tooltip label={entry.title ?? entry.sessionId} side="bottom" portal delayMs={400} onlyWhenClipped>
-              <span className={css.rowTitle}>
-                {entry.title ?? t('overview.noTitle')}
-              </span>
-            </Tooltip>
+            {/* The right column always carries the update time, so a reader
+              * can scan one column for "when". The note is a second line under
+              * the title instead of sharing that column. */}
+            <div className={css.rowMain}>
+              <Tooltip label={entry.title ?? entry.sessionId} side="bottom" portal delayMs={400} onlyWhenClipped>
+                <span className={css.rowTitle}>
+                  {entry.title ?? t('overview.noTitle')}
+                </span>
+              </Tooltip>
+              {entry.note ? <span className={css.rowNote}>{entry.note}</span> : null}
+            </div>
             <span className={css.rowMeta}>
-              {entry.note ? entry.note.slice(0, 48) : ''}
-              {entry.note ? ' · ' : ''}{t('overview.updatedAt', { time: formatTime(entry.updatedAtMs) })}
+              {t('overview.updatedAt', { time: formatTime(entry.updatedAtMs) })}
             </span>
           </li>
         ))}
@@ -183,11 +189,13 @@ function UnmarkedBlock({ unmarked, t }: { unmarked: UnmarkedSessions; t: StatusO
       <ul className={css.list}>
         {unmarked.entries.map((entry) => (
           <li key={entry.sessionId} className={css.row}>
-            <Tooltip label={entry.title ?? entry.sessionId} side="bottom" portal delayMs={400} onlyWhenClipped>
-              <span className={css.rowTitle}>
-                {entry.title ?? t('overview.noTitle')}
-              </span>
-            </Tooltip>
+            <div className={css.rowMain}>
+              <Tooltip label={entry.title ?? entry.sessionId} side="bottom" portal delayMs={400} onlyWhenClipped>
+                <span className={css.rowTitle}>
+                  {entry.title ?? t('overview.noTitle')}
+                </span>
+              </Tooltip>
+            </div>
             <span className={css.rowMeta}>
               {t('overview.updatedAt', { time: formatTime(entry.updatedAtMs) })}
             </span>
@@ -446,12 +454,7 @@ function ConfigPanel({ t, config }: ConfigPanelProps) {
 }
 
 /** The two pages of this section, in tab order. */
-const TABS = [
-  { id: 'overview', labelKey: 'overview.nav' },
-  { id: 'config', labelKey: 'config.tab' },
-] as const
-
-type TabId = (typeof TABS)[number]['id']
+type TabId = 'overview' | 'config'
 
 export function StatusOverview(props: StatusOverviewProps) {
   const { t, fetchOverview, config } = props
@@ -466,49 +469,18 @@ export function StatusOverview(props: StatusOverviewProps) {
   }
   const guard = { onClick: stop, onKeyDown: stop }
 
-  /**
-   * Roving tab stop plus arrow/Home/End selection, mirroring the shell's
-   * `SegmentedTabs` so the page behaves like the tabs elsewhere in the panel.
-   */
-  function onTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number): void {
-    let next: number
-    switch (event.key) {
-      case 'ArrowLeft': next = (index + TABS.length - 1) % TABS.length; break
-      case 'ArrowRight': next = (index + 1) % TABS.length; break
-      case 'Home': next = 0; break
-      case 'End': next = TABS.length - 1; break
-      default: return
-    }
-    event.preventDefault()
-    const nextTab: (typeof TABS)[number] | undefined = TABS[next]
-    if (nextTab === undefined) return
-    // Focus follows selection, and only the selected tab is a tab stop.
-    const tablist = event.currentTarget.parentElement
-    tablist?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
-    setTab(nextTab.id)
-  }
+  // The host's own SegmentedTabs owns the roving tab stop, the arrow/Home/End
+  // keys, and the sliding indicator; the panels below stay ours, matched by
+  // `panelId`.
+  const tabItems: [SegmentedTab<TabId>, ...SegmentedTab<TabId>[]] = [
+    { value: 'overview', label: t('overview.nav'), id: `${tabsId}-overview`, panelId: `${tabsId}-overview-panel` },
+    { value: 'config', label: t('config.tab'), id: `${tabsId}-config`, panelId: `${tabsId}-config-panel` },
+  ]
 
   return (
     <div className={css.page} {...guard}>
       <div className={css.title}>{t('overview.title')}</div>
-      <div role="tablist" aria-label={t('overview.nav')} className={css.tabList}>
-        {TABS.map((item, index) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            id={`${tabsId}-${item.id}`}
-            className={tab === item.id ? css.tabSelected : css.tab}
-            aria-selected={tab === item.id}
-            aria-controls={`${tabsId}-${item.id}-panel`}
-            tabIndex={tab === item.id ? 0 : -1}
-            onClick={() => { setTab(item.id) }}
-            onKeyDown={(event) => { onTabKeyDown(event, index) }}
-          >
-            {t(item.labelKey)}
-          </button>
-        ))}
-      </div>
+      <SegmentedTabs items={tabItems} value={tab} onChange={setTab} label={t('overview.nav')} />
       <div
         role="tabpanel"
         id={`${tabsId}-overview-panel`}

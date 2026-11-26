@@ -58,6 +58,7 @@ import {
   shouldApplyFallback,
   isAutoMarkExpired,
   observationOf,
+  resolveAutoFromObservation,
   shouldRecordObservation,
 } from './inference.js'
 
@@ -646,13 +647,19 @@ export class SessionStatusService extends Service {
   /**
    * Effective mark after lazy expiry of automatic rows. A manual row is never
    * expired. Expired rows are removed through the durable write chain.
+   *
+   * An automatic row the log has moved past is resolved to what the log showed
+   * last (see {@link resolveAutoFromObservation}); explicit rows are returned
+   * untouched.
    */
   async effectiveMark(sessionId: string): Promise<MarkRecord | null> {
     const row = this.getMark(sessionId)
     if (row === null) return null
-    if (!isAutoMarkExpired(row, Date.now(), this.config.autoExpireMs)) return row
-    await this.#table().delete(sessionId)
-    return null
+    if (isAutoMarkExpired(row, Date.now(), this.config.autoExpireMs)) {
+      await this.#table().delete(sessionId)
+      return null
+    }
+    return resolveAutoFromObservation(row)
   }
 
   /**
@@ -665,13 +672,17 @@ export class SessionStatusService extends Service {
    * nobody has touched. Expiry is applied here, in one place, so the two read
    * paths cannot drift apart. Rows are not deleted on read; the next write or
    * `.state` read of that session removes them.
+   *
+   * Automatic rows the log has moved past are resolved here exactly as
+   * {@link effectiveMark} resolves them, so a sidebar badge and the hover card
+   * can never disagree about the same session.
    */
   #effectiveRows(): MarkRecord[] {
     const now = Date.now()
     const rows: MarkRecord[] = []
     for (const [, row] of this.listAll()) {
       if (isAutoMarkExpired(row, now, this.config.autoExpireMs)) continue
-      rows.push(row)
+      rows.push(resolveAutoFromObservation(row))
     }
     return rows
   }
@@ -858,6 +869,11 @@ export class SessionStatusService extends Service {
    * pass. `subagent/start` and `subagent/end` are absent from
    * {@link OBSERVED_EVENT_VALUES} on purpose — they carry no readable state,
    * only the running counter that `#bumpSubagents` maintains.
+   *
+   * The row it writes comes from `effectiveMark`, which first applies
+   * {@link resolveAutoFromObservation}. So a correction that the log already
+   * proved becomes the stored row, and the retention window of an automatic row
+   * starts from the correction time rather than from the interrupted turn.
    */
   async #recordObservation(session: Session, event: SessionEvent): Promise<void> {
     const observed = observationOf(event)

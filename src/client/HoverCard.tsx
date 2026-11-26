@@ -59,6 +59,11 @@ export function SessionStatusHover({ sessionId, t }: HoverProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
+  // Which cell the pointer or focus is on. `null` means "no cell": the bubble
+  // then names the mark's own status, so leaving the rail restores the label
+  // instead of blanking it. One bubble is anchored to the whole rail below, so
+  // its position stays put while the pointer crosses from cell to cell.
+  const [hoveredStatus, setHoveredStatus] = useState<StatusEnum | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -129,6 +134,8 @@ export function SessionStatusHover({ sessionId, t }: HoverProps) {
   // one. The heading below doubles as the label the change button used to carry.
   // Clicking a cell keeps whatever note the mark already carries, so switching
   // status never silently drops the user's note.
+  const tipStatus = hoveredStatus ?? mark?.status ?? null
+  const tipLabel = tipStatus === null ? t('hover.empty') : t(STATUS_META[tipStatus].labelKey)
   return (
     <div ref={rootRef} className={css.root} data-mark={mark ? 'present' : 'absent'} {...slotAnchor} {...guard}>
       <div className={css.label}>
@@ -141,25 +148,53 @@ export function SessionStatusHover({ sessionId, t }: HoverProps) {
               : t('hover.manual', { status: t(meta!.labelKey) })}
       </div>
       {mark?.note && !editing && <div className={css.note}>{t('hover.note', { note: mark.note.slice(0, 64) })}</div>}
-      <div className={css.grid}>
-        {STATUS_VALUES.map((s) => {
-          const m = STATUS_META[s]
-          const active = s === mark?.status
-          return (
-            <Tooltip key={s} label={t(m.labelKey)} side="bottom" delayMs={400}>
+      {/* One bubble for the whole rail: it is anchored to the 190px grid and
+       * stays centered there, so moving across the eight 22px cells only swaps
+       * the text. Per-cell bubbles travelled with the pointer in 24px steps and
+       * read as glued to the cursor. */}
+      <Tooltip label={tipLabel} side="bottom" align="center" gap={8} delayMs={300}>
+        <div
+          className={css.grid}
+          // The rail owns the "no cell" state, not the cells: leaving one cell
+          // for the next one used to clear the label for a frame, so the bubble
+          // flashed the mark's own status while the pointer crossed the gap.
+          onPointerLeave={() => setHoveredStatus(null)}
+          onBlur={(event) => {
+            // Focus moving between cells stays inside the rail; only a real
+            // exit clears the label.
+            if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
+            setHoveredStatus(null)
+          }}
+        >
+          {STATUS_VALUES.map((s) => {
+            const m = STATUS_META[s]
+            const active = s === mark?.status
+            return (
               <button
+                key={s}
                 className={[css.cell, active && css.active].filter(Boolean).join(' ')}
                 aria-label={t(m.labelKey)}
                 aria-pressed={active}
                 style={{ color: m.hoverTone }}
-                onClick={() => { void handleSet(s, mark?.note ?? null) }}
+                onPointerEnter={() => setHoveredStatus(s)}
+                onFocus={() => setHoveredStatus(s)}
+                onClick={(event) => {
+                  // The host tooltip withdraws its bubble on the anchor's click
+                  // (`ui-primitives/src/Tooltip.tsx:255-261`). The bubble is
+                  // anchored to the rail, and the pointer never leaves the rail
+                  // after a click, so the tooltip would not raise it again
+                  // until the pointer left and re-entered the row. Stopping the
+                  // click here keeps the bubble alive.
+                  event.stopPropagation()
+                  void handleSet(s, mark?.note ?? null)
+                }}
               >
                 <span className={css.iconCell} dangerouslySetInnerHTML={{ __html: ICONS[m.icon] ?? '' }} />
               </button>
-            </Tooltip>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      </Tooltip>
       {editing && (
         <div className={css.noteEditor}>
           <input
